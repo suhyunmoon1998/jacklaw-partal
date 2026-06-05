@@ -137,13 +137,6 @@ export default function VerifyPage() {
             <p className="text-gray-500 text-sm mb-1">A 6-digit code was sent to</p>
             <p className="text-black font-semibold text-base mb-5">{maskPhone(pending.phone)}</p>
 
-            {/* Development-only OTP display */}
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-6">
-              <p className="text-amber-800 text-xs font-semibold">DEVELOPMENT MODE — Mock Code</p>
-              <p className="text-amber-900 text-3xl font-bold tracking-[0.4em] mt-1">{pending.otp}</p>
-              <p className="text-amber-600 text-xs mt-1">Remove before production.</p>
-            </div>
-
             <form onSubmit={handleVerify} className="space-y-6">
               <div>
                 <label className="label text-center block mb-3">Verification Code</label>

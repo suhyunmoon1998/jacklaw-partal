@@ -62,13 +62,6 @@ function AdminLogin({ onLogin }: { onLogin: () => void }) {
           <p className="text-white font-semibold text-lg mb-1">Sign In</p>
           <p className="text-white/40 text-xs mb-5">Internal access only · Law Offices of Jack D. Josephson, APC</p>
 
-          {/* Dev mode hint */}
-          <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 mb-5">
-            <p className="text-amber-400 text-xs font-semibold mb-0.5">DEVELOPMENT MODE</p>
-            <p className="text-amber-300/70 text-xs">
-              Demo password: <code className="text-amber-300 font-mono">jacklaw</code>
-            </p>
-          </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
@@ -686,12 +679,6 @@ export default function AdminPage() {
         </div>
       </header>
 
-      {/* Dev warning */}
-      <div className="bg-amber-50 border-b border-amber-200 px-4 py-2">
-        <p className="text-amber-800 text-xs text-center">
-          <strong>Development Mode:</strong> Data is stored in browser localStorage. In production, replace with a real database and role-based access control.
-        </p>
-      </div>
 
       <main className="flex-1 px-4 py-6 max-w-6xl mx-auto w-full">
         {/* New submission alert banner */}

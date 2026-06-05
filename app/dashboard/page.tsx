@@ -106,7 +106,7 @@ export default function DashboardPage() {
             onClick={() => router.push('/questionnaire')}
             className="w-full bg-white border-2 border-transparent hover:border-gold active:bg-gray-50 rounded-2xl p-5 text-left flex items-center gap-4 transition-all shadow-sm group"
           >
-            <div className="w-13 h-13 w-12 h-12 bg-gold/10 rounded-xl flex items-center justify-center shrink-0 group-hover:bg-gold group-active:bg-gold transition-colors">
+            <div className="w-12 h-12 bg-gold/10 rounded-xl flex items-center justify-center shrink-0 group-hover:bg-gold group-active:bg-gold transition-colors">
               <svg className="w-6 h-6 text-gold group-hover:text-white group-active:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
               </svg>

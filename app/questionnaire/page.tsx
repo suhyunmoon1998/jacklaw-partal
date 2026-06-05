@@ -195,6 +195,8 @@ export default function QuestionnairePage() {
         completedSections: newState.completedSections,
         submitted: newState.submitted,
       }),
+    }).catch(() => {
+      console.error('Failed to save questionnaire state')
     })
   }, [session])
 

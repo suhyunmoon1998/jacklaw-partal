@@ -39,13 +39,20 @@ export default function DocumentsPage() {
       form.append('clientId', session.clientId)
       form.append('category', selectedCategory)
       const res = await fetch('/api/documents', { method: 'POST', body: form })
-      const { document } = await res.json()
-      if (document) newDocs.push(document)
+      if (res.ok) {
+        const { document } = await res.json()
+        if (document) newDocs.push(document)
+      }
     }
     setDocuments(prev => [...newDocs, ...prev])
 
-    setSuccessMsg(`${files.length} file${files.length !== 1 ? 's' : ''} added successfully.`)
-    setTimeout(() => setSuccessMsg(''), 4000)
+    if (newDocs.length > 0) {
+      setSuccessMsg(`${newDocs.length} file${newDocs.length !== 1 ? 's' : ''} uploaded successfully.`)
+      setTimeout(() => setSuccessMsg(''), 4000)
+    } else {
+      setSuccessMsg('Upload failed. Please try again.')
+      setTimeout(() => setSuccessMsg(''), 4000)
+    }
     setUploading(false)
 
     // Reset both file inputs

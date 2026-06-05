@@ -135,12 +135,6 @@ export default function LoginPage() {
             </form>
           </div>
 
-          {/* Demo hint */}
-          <div className="mt-6 p-4 bg-amber-50 border border-amber-200 rounded-xl">
-            <p className="text-amber-800 text-xs font-semibold mb-1">DEMO — Test Phone Numbers</p>
-            <p className="text-amber-700 text-xs">Client A: <strong>555-0001</strong> (Wage &amp; Hour)</p>
-            <p className="text-amber-700 text-xs">Client B: <strong>555-0002</strong> (Wrongful Termination)</p>
-          </div>
 
           <div className="mt-6 bg-red-50 border border-red-200 rounded-xl p-4">
             <p className="text-red-700 text-xs font-semibold text-center">

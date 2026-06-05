@@ -9,7 +9,6 @@
  */
 
 import { Session, QuestionnaireState, UploadedDocument, MockClient } from '@/types'
-import { MOCK_CLIENTS } from '@/lib/mockData'
 
 const SESSION_KEY = 'jlp_session'
 const SESSION_DURATION_MS = 24 * 60 * 60 * 1000 // 24 hours
@@ -190,9 +189,6 @@ export function getCustomClients(): MockClient[] {
   }
 }
 
-export function getAllClients(): MockClient[] {
-  return [...MOCK_CLIENTS, ...getCustomClients()]
-}
 
 export function addCustomClient(data: { name: string; phone: string; caseType: string }): MockClient {
   const client: MockClient = {
