@@ -1,0 +1,39 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run *)",
+      "Bash(echo \"PID: $!\")",
+      "Bash(sleep 5 && cat /tmp/nextjs-dev.log)",
+      "Read(//private/tmp/**)",
+      "Bash(open http://localhost:3000)",
+      "Bash(find /var/folders -name \"*.png\" -newer /tmp 2>/dev/null | head -10 && find ~/Downloads -name \"*.png\" 2>/dev/null | head -10)",
+      "Read(//private/var/folders/**)",
+      "Read(//Users/davidmun/Downloads/**)",
+      "Bash(find /var/folders -name \"*.png\" -newer /tmp 2>/dev/null | grep -v \"tccd\\\\|Passbook\" | head -20 && find ~/Library/Caches -name \"*.png\" -newer /tmp 2>/dev/null | head -10 2>/dev/null)",
+      "Read(//Users/davidmun/Library/Caches/**)",
+      "Bash(pkill -f \"next dev\")",
+      "Bash(npx tsc *)",
+      "Bash(lsof -iTCP -sTCP:LISTEN -n -P)",
+      "Bash(awk '{print $9}')",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/client)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/admin)",
+      "Bash(curl -s http://localhost:3000)",
+      "Bash(curl -s http://localhost:3000/client)",
+      "Bash(npx next *)",
+      "Bash(xargs ls -la)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" -H \"x-admin-key: jacklaw\" \"http://localhost:3000/api/admin/clients\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" -H \"x-admin-key: admin2024\" \"http://localhost:3000/api/admin/clients\")",
+      "Bash(curl -s -H \"x-admin-key: jacklaw\" \"http://localhost:3000/api/admin/clients\")",
+      "Bash(curl -s -H \"x-admin-key: jacklaw\" \"http://localhost:3000/api/admin/documents?clientId=client-1780679515419\")",
+      "Bash(curl -s -X POST http://localhost:3000/api/documents -F clientId=client-1780679515419 -F category=Paystubs)",
+      "Bash(curl -s -X POST http://localhost:3000/api/clients/lookup -H 'Content-Type: application/json' -d '{\"phone\":\"8082084090\"}')",
+      "Bash(python3 -m json.tool)",
+      "Bash(curl -s -X POST http://localhost:3000/api/clients/lookup -H 'Content-Type: application/json' -d '{\"phone\":\"0000000000\"}')",
+      "Bash(curl -s -o /dev/null -w '%{http_code}' -H 'x-admin-key: jacklaw' http://localhost:3000/api/admin/clients)",
+      "Bash(curl -s -o /dev/null -w '%{http_code}' -H 'x-admin-key: wrongpass' http://localhost:3000/api/admin/clients)",
+      "Bash(curl -s -X POST http://localhost:3000/api/documents -F clientId=client-1780679515419 -F category=Paystubs -F 'file=@/etc/hostname;type=text/plain')",
+      "Bash(curl -v -X POST http://localhost:3000/api/documents -F clientId=client-1780679515419 -F category=Paystubs -F file=@/tmp/test_paystub.txt)"
+    ]
+  }
+}

@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500">
+  <!-- Black background -->
+  <rect width="500" height="500" fill="#0A0A0A"/>
+
+  <!-- Cream border frame -->
+  <rect x="22" y="22" width="456" height="456" fill="none" stroke="#CFC0A8" stroke-width="8"/>
+
+  <!-- Fist (upper-right, partially breaking out of frame) -->
+  <g transform="translate(298, -18)">
+    <!-- Wrist/arm -->
+    <rect x="28" y="158" width="90" height="80" rx="22" fill="#EDE0C4"/>
+    <!-- Palm -->
+    <rect x="8" y="92" width="140" height="85" rx="22" fill="#EDE0C4"/>
+    <!-- Index finger -->
+    <rect x="10" y="22" width="30" height="82" rx="15" fill="#EDE0C4"/>
+    <!-- Middle finger -->
+    <rect x="45" y="8" width="30" height="96" rx="15" fill="#EDE0C4"/>
+    <!-- Ring finger -->
+    <rect x="80" y="8" width="30" height="96" rx="15" fill="#EDE0C4"/>
+    <!-- Pinky -->
+    <rect x="115" y="22" width="28" height="80" rx="14" fill="#EDE0C4"/>
+    <!-- Thumb (left side) -->
+    <rect x="-8" y="100" width="24" height="52" rx="12" fill="#EDE0C4" transform="rotate(-20, 4, 126)"/>
+
+    <!-- Outlines -->
+    <rect x="28" y="158" width="90" height="80" rx="22" fill="none" stroke="#111" stroke-width="3.5"/>
+    <rect x="8" y="92" width="140" height="85" rx="22" fill="none" stroke="#111" stroke-width="3.5"/>
+    <rect x="10" y="22" width="30" height="82" rx="15" fill="none" stroke="#111" stroke-width="3"/>
+    <rect x="45" y="8" width="30" height="96" rx="15" fill="none" stroke="#111" stroke-width="3"/>
+    <rect x="80" y="8" width="30" height="96" rx="15" fill="none" stroke="#111" stroke-width="3"/>
+    <rect x="115" y="22" width="28" height="80" rx="14" fill="none" stroke="#111" stroke-width="3"/>
+    <rect x="-8" y="100" width="24" height="52" rx="12" fill="none" stroke="#111" stroke-width="3" transform="rotate(-20, 4, 126)"/>
+
+    <!-- Knuckle lines -->
+    <path d="M 18 92 Q 25 85 32 92" fill="none" stroke="#111" stroke-width="2.5" stroke-linecap="round"/>
+    <path d="M 53 88 Q 60 81 67 88" fill="none" stroke="#111" stroke-width="2.5" stroke-linecap="round"/>
+    <path d="M 88 88 Q 95 81 102 88" fill="none" stroke="#111" stroke-width="2.5" stroke-linecap="round"/>
+    <path d="M 121 92 Q 128 86 135 92" fill="none" stroke="#111" stroke-width="2.5" stroke-linecap="round"/>
+  </g>
+
+  <!-- Orange text: 866 -->
+  <text
+    x="210"
+    y="180"
+    text-anchor="middle"
+    font-family="Impact, 'Arial Black', 'Helvetica Neue', Arial, sans-serif"
+    font-size="138"
+    font-weight="900"
+    fill="#E07820"
+    letter-spacing="-3"
+  >866</text>
+
+  <!-- Orange text: JACK -->
+  <text
+    x="240"
+    y="310"
+    text-anchor="middle"
+    font-family="Impact, 'Arial Black', 'Helvetica Neue', Arial, sans-serif"
+    font-size="138"
+    font-weight="900"
+    fill="#E07820"
+    letter-spacing="-3"
+  >JACK</text>
+
+  <!-- Orange text: LAW -->
+  <text
+    x="240"
+    y="440"
+    text-anchor="middle"
+    font-family="Impact, 'Arial Black', 'Helvetica Neue', Arial, sans-serif"
+    font-size="138"
+    font-weight="900"
+    fill="#E07820"
+    letter-spacing="-3"
+  >LAW</text>
+</svg>

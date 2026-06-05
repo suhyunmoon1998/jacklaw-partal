@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(echo \"test paystub content\")",
+      "Bash(curl -s -X POST http://localhost:3000/api/documents -F clientId=client-1780679515419 -F category=Paystubs -F file=@/tmp/test_paystub.txt)",
+      "Bash(curl -s -H 'x-admin-key: jacklaw' http://localhost:3000/api/admin/clients)",
+      "Bash(python3 -c ' *)",
+      "Bash(curl -s -H 'x-admin-key: jacklaw' http://localhost:3000/api/admin/documents?clientId=client-1780679515419)",
+      "Bash(curl -s http://localhost:3000/admin)",
+      "Bash(curl -s -X POST http://localhost:3000/api/admin/clients -H 'Content-Type: application/json' -H 'x-admin-key: jacklaw' -d '{\"name\":\"Test Client\",\"phone\":\"3105550099\",\"caseType\":\"Wrongful Termination\"}')",
+      "Bash(curl -s -X DELETE http://localhost:3000/api/admin/clients?id=client-1780681505705 -H 'x-admin-key: jacklaw')",
+      "Bash(curl -s -X DELETE \"http://localhost:3000/api/documents?id=3\")",
+      "Bash(curl -s -X DELETE \"http://localhost:3000/api/documents?id=2\")",
+      "Bash(echo \"test file content\")",
+      "Bash(curl -s -X POST http://localhost:3000/api/documents -F clientId=client-1780679515419 -F category=Paystubs -F file=@/tmp/test_doc.txt)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code} %{redirect_url}\" http://localhost:3000/api/documents/4/view)",
+      "Bash(curl -s -X DELETE \"http://localhost:3000/api/documents?id=4\")",
+      "Bash(git -C /Users/davidmun/Desktop/jacklaw-portal status)",
+      "Bash(git init *)",
+      "Bash(git add *)"
+    ]
+  }
+}
