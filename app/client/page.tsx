@@ -5,8 +5,7 @@ import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import {
   normalizePhone,
-  generateMockOTP,
-  storePendingVerification,
+  setSession,
   getSession,
   formatPhone,
 } from '@/lib/auth'
@@ -45,9 +44,8 @@ export default function LoginPage() {
     const { client } = await res.json()
 
     if (client) {
-      const otp = generateMockOTP()
-      storePendingVerification(normalized, client.id, otp, client.name, client.case_type ?? '')
-      router.push('/verify')
+      setSession({ clientId: client.id, phone: normalized, name: client.name, caseType: client.case_type ?? '' })
+      router.replace('/dashboard')
     } else {
       setError('We could not find your file. Please contact the office.')
     }
