@@ -864,6 +864,19 @@ export default function AdminPage() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
             </svg>
           </button>
+          <button
+            onClick={() => router.push('/admin/gfrog-responses')}
+            className="flex-1 flex items-center gap-2 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-2xl px-4 py-3 text-left transition-colors"
+          >
+            <span className="text-lg">✍️</span>
+            <div className="flex-1 min-w-0">
+              <p className="font-semibold text-purple-900 text-sm">Generate Responses</p>
+              <p className="text-xs text-purple-700">From intake answers</p>
+            </div>
+            <svg className="w-4 h-4 text-purple-700 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
         </div>
 
         {/* New submission alert banner */}
