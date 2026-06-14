@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { INTAKE_SECTIONS, IntakeSection } from '@/lib/intakeFormData'
 import { AnswerValue, Question } from '@/types'
+import { addSubmissionNotification } from '@/lib/auth'
 
 function QuestionInput({
   question,
@@ -213,15 +214,27 @@ export default function IntakePage() {
     try {
       // In a real app, this would send to a backend
       // For now, we'll just store it and show success
+      const submissionId = `intake-${Date.now()}`
       const submissionData = {
+        id: submissionId,
         timestamp: new Date().toISOString(),
         answers,
+        reviewed: false,
       }
 
       // Store submission locally for demonstration
       const submissions = JSON.parse(localStorage.getItem('intake_submissions') || '[]')
       submissions.push(submissionData)
       localStorage.setItem('intake_submissions', JSON.stringify(submissions))
+
+      // Create notification for admin
+      const clientName = String(answers.legal_name || 'New Client')
+      addSubmissionNotification({
+        clientId: submissionId,
+        clientName,
+        caseType: 'Intake Form',
+        submittedAt: submissionData.timestamp,
+      })
 
       // Clear the draft
       localStorage.removeItem('intake_form_draft')

@@ -696,6 +696,43 @@ export default function AdminPage() {
     URL.revokeObjectURL(url)
   }
 
+  const handleAddClientFromIntake = (submission: IntakeSubmission) => {
+    const answers = submission.answers
+    const clientName = String(answers.legal_name || 'New Client')
+    const phone = String(answers.phone_number || '')
+
+    if (!phone.trim()) {
+      alert('Phone number is required from intake form to add client.')
+      return
+    }
+
+    // Check if client with same phone already exists
+    const existing = allClients.find(c => c.phone.replace(/\D/g, '') === phone.replace(/\D/g, ''))
+    if (existing) {
+      alert(`Client "${existing.name}" with this phone number already exists.`)
+      return
+    }
+
+    // Use the API to add client
+    fetch('/api/admin/clients', {
+      method: 'POST',
+      headers: { 'x-admin-key': MOCK_ADMIN_PASSWORD },
+      body: JSON.stringify({
+        name: clientName,
+        phone: phone,
+        caseType: 'Employment Law', // Default case type
+      }),
+    }).then(res => {
+      if (res.ok) {
+        fetchClients()
+        setSelectedSubmission(null)
+        alert(`Client "${clientName}" added successfully!`)
+      } else {
+        alert('Failed to add client. Please try again.')
+      }
+    })
+  }
+
   const handleViewClient = async (client: AdminClient) => {
     const [qRes, docsRes] = await Promise.all([
       fetch(`/api/admin/questionnaire?clientId=${client.id}`, { headers: { 'x-admin-key': MOCK_ADMIN_PASSWORD } }),
@@ -1260,31 +1297,42 @@ export default function AdminPage() {
               </div>
 
               {/* Action buttons */}
-              <div className="flex gap-3 pt-4 border-t border-gray-100">
+              <div className="space-y-2">
                 <button
-                  onClick={() => {
-                    handleReviewSubmission(selectedSubmission.id)
-                    setSelectedSubmission(null)
-                  }}
-                  className="flex-1 bg-gold hover:bg-gold-dark text-white py-3 rounded-xl font-semibold transition-colors active:scale-[0.97]"
+                  onClick={() => handleAddClientFromIntake(selectedSubmission)}
+                  className="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-xl font-semibold transition-colors active:scale-[0.97] flex items-center justify-center gap-2"
                 >
-                  {selectedSubmission.reviewed ? 'Update Notes' : 'Mark as Reviewed'}
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  Add Client from Intake
                 </button>
-                <button
-                  onClick={() => {
-                    handleDeleteSubmission(selectedSubmission.id)
-                    setSelectedSubmission(null)
-                  }}
-                  className="flex-1 border-2 border-red-200 text-red-400 hover:bg-red-50 py-3 rounded-xl font-semibold transition-colors active:scale-[0.97]"
-                >
-                  Delete
-                </button>
-                <button
-                  onClick={() => setSelectedSubmission(null)}
-                  className="flex-1 border-2 border-gray-200 text-gray-700 hover:bg-gray-50 py-3 rounded-xl font-semibold transition-colors active:scale-[0.97]"
-                >
-                  Close
-                </button>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => {
+                      handleReviewSubmission(selectedSubmission.id)
+                      setSelectedSubmission(null)
+                    }}
+                    className="flex-1 bg-gold hover:bg-gold-dark text-white py-3 rounded-xl font-semibold transition-colors active:scale-[0.97]"
+                  >
+                    {selectedSubmission.reviewed ? 'Update Notes' : 'Mark as Reviewed'}
+                  </button>
+                  <button
+                    onClick={() => {
+                      handleDeleteSubmission(selectedSubmission.id)
+                      setSelectedSubmission(null)
+                    }}
+                    className="flex-1 border-2 border-red-200 text-red-400 hover:bg-red-50 py-3 rounded-xl font-semibold transition-colors active:scale-[0.97]"
+                  >
+                    Delete
+                  </button>
+                  <button
+                    onClick={() => setSelectedSubmission(null)}
+                    className="flex-1 border-2 border-gray-200 text-gray-700 hover:bg-gray-50 py-3 rounded-xl font-semibold transition-colors active:scale-[0.97]"
+                  >
+                    Close
+                  </button>
+                </div>
               </div>
             </div>
           </div>
