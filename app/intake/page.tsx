@@ -4,8 +4,10 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { INTAKE_SECTIONS, IntakeSection } from '@/lib/intakeFormData'
+import { INTAKE_SECTIONS_ES } from '@/lib/intakeFormDataEs'
 import { AnswerValue, Question } from '@/types'
 import { addSubmissionNotification } from '@/lib/auth'
+import { useLanguage } from '@/lib/i18n'
 
 function QuestionInput({
   question,
@@ -147,6 +149,8 @@ function isVisible(q: Question, answers: Record<string, AnswerValue>): boolean {
 
 export default function IntakePage() {
   const router = useRouter()
+  const { lang, setLang, t } = useLanguage()
+  const sections = lang === 'es' ? INTAKE_SECTIONS_ES : INTAKE_SECTIONS
   const [answers, setAnswers] = useState<Record<string, AnswerValue>>({})
   const [submitSuccess, setSubmitSuccess] = useState(false)
   const [submitError, setSubmitError] = useState('')
@@ -279,11 +283,11 @@ export default function IntakePage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
             </div>
-            <h2 className="text-2xl font-bold text-black mb-2">Thank You!</h2>
+            <h2 className="text-2xl font-bold text-black mb-2">{t('intake_thanks')}</h2>
             <p className="text-gray-600 mb-4">
-              Your intake form has been submitted successfully. We will review your information and contact you shortly.
+              {t('intake_success')}
             </p>
-            <p className="text-sm text-gray-500">Redirecting you home…</p>
+            <p className="text-sm text-gray-500">{t('intake_redirecting')}</p>
           </div>
         </main>
       </div>
@@ -293,23 +297,49 @@ export default function IntakePage() {
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col animate-fade-in">
       {/* Header */}
-      <header className="bg-black py-6 px-4 text-center border-b border-white/10">
-        <Image src="/logo.png" alt="866 JACK LAW" width={60} height={60} className="rounded-sm mx-auto mb-3" priority />
-        <p className="text-white/50 text-sm">Law Offices of Jack D. Josephson, APC</p>
+      <header className="bg-black py-6 px-4 border-b border-white/10">
+        <div className="max-w-3xl mx-auto flex items-center justify-between">
+          <div className="flex-1 text-center">
+            <Image src="/logo.png" alt="866 JACK LAW" width={60} height={60} className="rounded-sm mx-auto mb-3" priority />
+            <p className="text-white/50 text-sm">Law Offices of Jack D. Josephson, APC</p>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setLang('en')}
+              className={`px-3 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                lang === 'en'
+                  ? 'bg-gold text-white'
+                  : 'bg-white/10 text-white hover:bg-white/20'
+              }`}
+            >
+              English
+            </button>
+            <button
+              onClick={() => setLang('es')}
+              className={`px-3 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                lang === 'es'
+                  ? 'bg-gold text-white'
+                  : 'bg-white/10 text-white hover:bg-white/20'
+              }`}
+            >
+              Español
+            </button>
+          </div>
+        </div>
       </header>
 
       <main className="flex-1 px-4 py-8 max-w-3xl mx-auto w-full">
         {/* Title */}
         <div className="mb-8 animate-slide-up">
-          <h1 className="text-3xl font-bold text-black mb-2">Client Information Form</h1>
+          <h1 className="text-3xl font-bold text-black mb-2">{t('intake_title')}</h1>
           <p className="text-gray-600">
-            Please provide detailed information about your situation. The more detail you provide, the better we can assist you.
+            {t('intake_subtitle')}
           </p>
         </div>
 
         {/* Sections */}
         <div className="space-y-4 mb-8">
-          {INTAKE_SECTIONS.map((section, idx) => {
+          {sections.map((section, idx) => {
             const visibleQuestions = section.questions.filter(q => isVisible(q, answers))
             if (visibleQuestions.length === 0) return null
 
@@ -397,10 +427,10 @@ export default function IntakePage() {
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                 </svg>
-                Submitting…
+                {lang === 'es' ? 'Enviando…' : 'Submitting…'}
               </span>
             ) : (
-              'Submit Form'
+              t('intake_submit')
             )}
           </button>
 
@@ -409,22 +439,21 @@ export default function IntakePage() {
             disabled={isSubmitting}
             className="w-full py-4 border-2 border-gray-300 text-gray-700 rounded-xl font-semibold transition-all duration-150 hover:border-gray-400 active:scale-[0.97]"
           >
-            Save Draft
+            {t('intake_save_draft')}
           </button>
 
           <button
             onClick={() => router.push('/')}
             className="w-full text-gray-400 text-sm py-3 transition-colors hover:text-gray-600"
           >
-            Cancel
+            {t('intake_cancel')}
           </button>
         </div>
 
         {/* Privacy Notice */}
         <div className="mt-8 p-4 bg-blue-50 border border-blue-200 rounded-xl">
           <p className="text-blue-800 text-xs">
-            <strong>Privacy:</strong> All information you provide is confidential and protected by attorney-client privilege.
-            Your answers will only be viewed by our legal team.
+            <strong>{lang === 'es' ? 'Privacidad:' : 'Privacy:'}</strong> {t('intake_privacy')}
           </p>
         </div>
       </main>

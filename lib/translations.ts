@@ -96,6 +96,17 @@ export const en = {
   reveal_answer: 'Reveal Answer',
   your_answer: 'Your Answer',
   study_tip: 'Study tip: Review cards marked for review regularly.',
+
+  // Intake Form
+  intake_title: 'Client Information Form',
+  intake_subtitle: 'Please provide detailed information about your situation. The more detail you provide, the better we can assist you.',
+  intake_submit: 'Submit Form',
+  intake_save_draft: 'Save Draft',
+  intake_cancel: 'Cancel',
+  intake_privacy: 'Privacy: All information you provide is confidential and protected by attorney-client privilege. Your answers will only be viewed by our legal team.',
+  intake_thanks: 'Thank You!',
+  intake_success: 'Your intake form has been submitted successfully. We will review your information and contact you shortly.',
+  intake_redirecting: 'Redirecting you home…',
 }
 
 export const es: typeof en = {
@@ -196,4 +207,15 @@ export const es: typeof en = {
   reveal_answer: 'Revelar Respuesta',
   your_answer: 'Tu Respuesta',
   study_tip: 'Consejo de estudio: Revisa regularmente las tarjetas marcadas para revisión.',
+
+  // Intake Form
+  intake_title: 'Formulario de Información del Cliente',
+  intake_subtitle: 'Por favor proporcione información detallada sobre su situación. Cuanto más detalle proporcione, mejor podremos ayudarle.',
+  intake_submit: 'Enviar Formulario',
+  intake_save_draft: 'Guardar Borrador',
+  intake_cancel: 'Cancelar',
+  intake_privacy: 'Privacidad: Toda la información que proporcione es confidencial y está protegida por el privilegio abogado-cliente. Sus respuestas solo serán vistas por nuestro equipo legal.',
+  intake_thanks: '¡Gracias!',
+  intake_success: 'Su formulario de información ha sido enviado exitosamente. Revisaremos su información y nos comunicaremos con usted en breve.',
+  intake_redirecting: 'Redirigiendo a inicio…',
 }
