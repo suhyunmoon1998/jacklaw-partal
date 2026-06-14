@@ -218,28 +218,8 @@ export default function IntakePage() {
     })
   }
 
-  const validateRequired = (): boolean => {
-    for (const section of INTAKE_SECTIONS) {
-      for (const q of section.questions) {
-        if (!q.required) continue
-        if (!isVisible(q, answers)) continue
-        const val = answers[q.id]
-        const isEmpty = !val || (Array.isArray(val) && val.length === 0) || val === ''
-        if (isEmpty) {
-          setSubmitError(`Please fill in: "${q.label}"`)
-          return false
-        }
-      }
-    }
-    return true
-  }
-
   const handleSubmit = async () => {
     setSubmitError('')
-
-    if (!validateRequired()) {
-      return
-    }
 
     setIsSubmitting(true)
 
