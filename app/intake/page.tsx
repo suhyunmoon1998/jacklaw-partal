@@ -156,23 +156,51 @@ export default function IntakePage() {
   const [submitError, setSubmitError] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set())
+  const [userEmail, setUserEmail] = useState<string>('')
+  const [emailSubmitted, setEmailSubmitted] = useState(false)
+  const [emailInput, setEmailInput] = useState('')
 
   // Load from localStorage on mount
   useEffect(() => {
-    const saved = localStorage.getItem('intake_form_draft')
-    if (saved) {
-      try {
-        setAnswers(JSON.parse(saved))
-      } catch (err) {
-        console.error('Failed to load draft:', err)
+    const savedEmail = localStorage.getItem('intake_user_email')
+    if (savedEmail) {
+      setUserEmail(savedEmail)
+      setEmailSubmitted(true)
+      const draftKey = `intake_form_draft_${savedEmail}`
+      const saved = localStorage.getItem(draftKey)
+      if (saved) {
+        try {
+          setAnswers(JSON.parse(saved))
+        } catch (err) {
+          console.error('Failed to load draft:', err)
+        }
       }
     }
   }, [])
 
   // Auto-save to localStorage
   useEffect(() => {
-    localStorage.setItem('intake_form_draft', JSON.stringify(answers))
-  }, [answers])
+    if (emailSubmitted && userEmail) {
+      const draftKey = `intake_form_draft_${userEmail}`
+      localStorage.setItem(draftKey, JSON.stringify(answers))
+    }
+  }, [answers, emailSubmitted, userEmail])
+
+  const handleEmailSubmit = () => {
+    const email = emailInput.trim()
+    if (!email) {
+      setSubmitError(lang === 'es' ? 'Por favor ingrese su correo electrónico' : 'Please enter your email address')
+      return
+    }
+    if (!email.includes('@')) {
+      setSubmitError(lang === 'es' ? 'Por favor ingrese un correo válido' : 'Please enter a valid email address')
+      return
+    }
+    setUserEmail(email)
+    setEmailSubmitted(true)
+    localStorage.setItem('intake_user_email', email)
+    setSubmitError('')
+  }
 
   const handleAnswerChange = (id: string, val: AnswerValue) => {
     setAnswers(prev => ({ ...prev, [id]: val }))
@@ -241,7 +269,10 @@ export default function IntakePage() {
       })
 
       // Clear the draft
-      localStorage.removeItem('intake_form_draft')
+      if (userEmail) {
+        const draftKey = `intake_form_draft_${userEmail}`
+        localStorage.removeItem(draftKey)
+      }
 
       setSubmitSuccess(true)
       setAnswers({})
@@ -329,17 +360,88 @@ export default function IntakePage() {
       </header>
 
       <main className="flex-1 px-4 py-8 max-w-3xl mx-auto w-full">
-        {/* Title */}
-        <div className="mb-8 animate-slide-up">
-          <h1 className="text-3xl font-bold text-black mb-2">{t('intake_title')}</h1>
-          <p className="text-gray-600">
-            {t('intake_subtitle')}
-          </p>
-        </div>
+        {!emailSubmitted ? (
+          // Email input screen
+          <div className="flex items-center justify-center min-h-[400px]">
+            <div className="max-w-md w-full animate-slide-up">
+              <div className="text-center mb-8">
+                <h2 className="text-2xl font-bold text-black mb-2">
+                  {lang === 'es' ? '¡Bienvenido!' : 'Welcome!'}
+                </h2>
+                <p className="text-gray-600 text-sm">
+                  {lang === 'es'
+                    ? 'Ingrese su correo electrónico para guardar su progreso'
+                    : 'Enter your email to save your progress'}
+                </p>
+              </div>
 
-        {/* Sections */}
-        <div className="space-y-4 mb-8">
-          {sections.map((section, idx) => {
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+                <label className="label">{lang === 'es' ? 'Correo Electrónico' : 'Email Address'}</label>
+                <input
+                  type="email"
+                  value={emailInput}
+                  onChange={e => {
+                    setEmailInput(e.target.value)
+                    setSubmitError('')
+                  }}
+                  placeholder={lang === 'es' ? 'su@correo.com' : 'your@email.com'}
+                  className="input-field mb-4"
+                  onKeyPress={e => e.key === 'Enter' && handleEmailSubmit()}
+                />
+                <p className="text-xs text-gray-400 mb-4">
+                  {lang === 'es'
+                    ? 'Si ya tiene un formulario guardado, su progreso se cargará automáticamente.'
+                    : 'If you have a saved form, your progress will load automatically.'}
+                </p>
+
+                {submitError && (
+                  <div className="mb-4 bg-red-50 border border-red-200 rounded-xl p-3">
+                    <p className="text-red-700 text-sm">{submitError}</p>
+                  </div>
+                )}
+
+                <button
+                  onClick={handleEmailSubmit}
+                  className="btn-primary w-full"
+                >
+                  {lang === 'es' ? 'Continuar' : 'Continue'}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* Title */}
+            <div className="mb-6 animate-slide-up flex items-start justify-between">
+              <div className="flex-1">
+                <h1 className="text-3xl font-bold text-black mb-2">{t('intake_title')}</h1>
+                <p className="text-gray-600 text-sm">
+                  {t('intake_subtitle')}
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setEmailSubmitted(false)
+                  setUserEmail('')
+                  setEmailInput('')
+                  localStorage.removeItem('intake_user_email')
+                }}
+                className="text-xs text-gray-400 hover:text-gray-600 transition-colors px-3 py-1 border border-gray-200 rounded-lg"
+              >
+                {lang === 'es' ? 'Cambiar' : 'Change'}
+              </button>
+            </div>
+
+            {/* Current user email */}
+            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-xl">
+              <p className="text-xs text-blue-700">
+                <strong>{lang === 'es' ? 'Guardado como:' : 'Saved as:'}</strong> {userEmail}
+              </p>
+            </div>
+
+            {/* Sections */}
+            <div className="space-y-4 mb-8">
+              {sections.map((section, idx) => {
             const visibleQuestions = section.questions.filter(q => isVisible(q, answers))
             if (visibleQuestions.length === 0) return null
 
@@ -450,12 +552,14 @@ export default function IntakePage() {
           </button>
         </div>
 
-        {/* Privacy Notice */}
-        <div className="mt-8 p-4 bg-blue-50 border border-blue-200 rounded-xl">
-          <p className="text-blue-800 text-xs">
-            <strong>{lang === 'es' ? 'Privacidad:' : 'Privacy:'}</strong> {t('intake_privacy')}
-          </p>
-        </div>
+            {/* Privacy Notice */}
+            <div className="mt-8 p-4 bg-blue-50 border border-blue-200 rounded-xl">
+              <p className="text-blue-800 text-xs">
+                <strong>{lang === 'es' ? 'Privacidad:' : 'Privacy:'}</strong> {t('intake_privacy')}
+              </p>
+            </div>
+          </>
+        )}
       </main>
 
       {/* Footer */}
