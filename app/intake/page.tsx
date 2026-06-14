@@ -310,10 +310,13 @@ export default function IntakePage() {
       {/* Header */}
       <header className="bg-black py-6 px-4 border-b border-white/10">
         <div className="max-w-3xl mx-auto flex items-center justify-between">
-          <div className="flex-1 text-center">
+          <button
+            onClick={() => router.push('/')}
+            className="flex-1 text-center hover:opacity-80 transition-opacity"
+          >
             <Image src="/logo.png" alt="866 JACK LAW" width={60} height={60} className="rounded-sm mx-auto mb-3" priority />
             <p className="text-white/50 text-sm">Law Offices of Jack D. Josephson, APC</p>
-          </div>
+          </button>
           <div className="flex gap-2">
             <button
               onClick={() => setLang('en')}

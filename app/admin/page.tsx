@@ -696,6 +696,17 @@ export default function AdminPage() {
     URL.revokeObjectURL(url)
   }
 
+  const handleShareClientLink = (client: AdminClient) => {
+    const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://jacklaw-portal.vercel.app'
+    const reminderLink = `${baseUrl}/client?clientId=${client.id}`
+
+    navigator.clipboard.writeText(reminderLink).then(() => {
+      alert(`Link copied to clipboard!\n\n${reminderLink}`)
+    }).catch(() => {
+      alert(`Copy this link and send it to the client:\n\n${reminderLink}`)
+    })
+  }
+
   const handleAddClientFromIntake = (submission: IntakeSubmission) => {
     const answers = submission.answers
     const clientName = String(answers.legal_name || 'New Client')
@@ -791,7 +802,10 @@ export default function AdminPage() {
       {/* Header */}
       <header className="bg-black border-b border-white/10">
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
+          <button
+            onClick={() => router.push('/')}
+            className="flex items-center gap-3 hover:opacity-80 transition-opacity"
+          >
             <Image src="/logo.png" alt="866 JACK LAW" width={40} height={40} className="rounded-sm" />
             <div>
               <div className="flex items-center gap-2">
@@ -800,7 +814,7 @@ export default function AdminPage() {
               </div>
               <p className="text-white/40 text-xs">Internal Management Panel</p>
             </div>
-          </div>
+          </button>
           <div className="flex items-center gap-3">
             {/* Notification bell */}
             <button
@@ -963,6 +977,12 @@ export default function AdminPage() {
                   </div>
                   <div className="flex gap-2">
                     <button
+                      onClick={() => handleShareClientLink(client)}
+                      className="flex-1 text-center text-sm font-medium text-blue-600 py-2 border border-blue-200 rounded-xl transition-all duration-150 hover:bg-blue-600 hover:text-white hover:border-blue-600 active:scale-[0.97]"
+                    >
+                      Share Link
+                    </button>
+                    <button
                       onClick={() => handleViewClient(client)}
                       className="flex-1 text-center text-sm font-medium text-gold py-2 border border-gold/30 rounded-xl transition-all duration-150 hover:bg-gold hover:text-white hover:border-gold active:scale-[0.97]"
                     >
@@ -1043,6 +1063,16 @@ export default function AdminPage() {
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-all duration-150">
+                          <button
+                            onClick={() => handleShareClientLink(client)}
+                            className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white transition-all duration-150 active:scale-[0.97] flex items-center gap-1"
+                            title="Share reminder link"
+                          >
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C9.589 12.438 11.236 12 13 12s3.411.438 4.316 1.342m0 0h5.364a2 2 0 012 2v3.5a2 2 0 01-2 2H3.364a2 2 0 01-2-2v-3.5a2 2 0 012-2h5.364zm7.324-12H9.652a2 2 0 00-2 2v12a2 2 0 002 2h6.348a2 2 0 002-2V3a2 2 0 00-2-2z" />
+                            </svg>
+                            Share
+                          </button>
                           <button onClick={() => handleViewClient(client)} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-gold/10 text-gold hover:bg-gold hover:text-white transition-all duration-150 active:scale-[0.97]">
                             View →
                           </button>
@@ -1289,10 +1319,32 @@ export default function AdminPage() {
               {/* Submission answers preview */}
               <div>
                 <p className="text-xs text-gray-400 uppercase tracking-wider font-semibold mb-3">Submission Data</p>
-                <div className="bg-gray-50 rounded-xl border border-gray-200 p-4 max-h-48 overflow-y-auto">
-                  <pre className="text-xs text-gray-600 font-mono whitespace-pre-wrap break-words">
-                    {JSON.stringify(selectedSubmission.answers, null, 2)}
-                  </pre>
+                <div className="bg-gray-50 rounded-xl border border-gray-200 overflow-hidden">
+                  <div className="max-h-96 overflow-y-auto">
+                    {Object.entries(selectedSubmission.answers).map(([key, value], idx) => {
+                      // Convert snake_case to Title Case
+                      const label = key
+                        .split('_')
+                        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+                        .join(' ')
+
+                      const displayValue = Array.isArray(value)
+                        ? value.join(', ')
+                        : String(value || '(empty)')
+
+                      return (
+                        <div
+                          key={key}
+                          className={`px-4 py-3 border-b border-gray-200 last:border-b-0 ${
+                            idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'
+                          }`}
+                        >
+                          <p className="text-xs font-semibold text-gray-500 mb-1">{label}</p>
+                          <p className="text-sm text-gray-700 break-words">{displayValue}</p>
+                        </div>
+                      )
+                    })}
+                  </div>
                 </div>
               </div>
 

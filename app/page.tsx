@@ -96,17 +96,7 @@ export default function PortalHome() {
             </div>
           </button>
 
-          {/* Emergency notice */}
-          <div className="mt-8 bg-red-950/60 border border-red-800/40 rounded-xl p-4">
-            <p className="text-red-400 text-xs font-semibold text-center">
-              Do not use this portal for emergencies.
-            </p>
-            <p className="text-red-500/70 text-xs text-center mt-1">
-              For urgent matters, call our office directly.
-            </p>
-          </div>
-
-          <div className="mt-6 text-center">
+          <div className="mt-8 text-center">
             <a
               href="tel:+18668225529"
               className="inline-flex items-center gap-2 text-gold/70 hover:text-gold text-sm font-medium transition-colors"
