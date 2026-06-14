@@ -4,9 +4,11 @@ import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Header from '@/components/Header'
 import { getSession, getQuestionnaireState } from '@/lib/auth'
+import { useLanguage } from '@/lib/i18n'
 
 export default function SubmittedPage() {
   const router = useRouter()
+  const { t } = useLanguage()
 
   useEffect(() => {
     const s = getSession()
@@ -32,24 +34,14 @@ export default function SubmittedPage() {
               </svg>
             </div>
 
-            <h2 className="text-2xl font-bold text-navy mb-3">Thank You!</h2>
-            <p className="text-gray-600 leading-relaxed mb-2">
-              Your questionnaire has been submitted successfully.
-            </p>
-            <p className="text-gray-500 text-sm leading-relaxed mb-8">
-              Our team will review your information and be in touch.
-              Please continue to upload any documents that may support your case.
-            </p>
+            <h2 className="text-2xl font-bold text-navy mb-3">{t('submitted_heading')}</h2>
+            <p className="text-gray-600 leading-relaxed mb-2">{t('submitted_msg')}</p>
+            <p className="text-gray-500 text-sm leading-relaxed mb-8">{t('submitted_sub')}</p>
 
             <div className="bg-orange-50 border border-gold/30 rounded-xl p-4 mb-6 text-left">
-              <p className="text-navy text-sm font-semibold mb-1">What happens next?</p>
+              <p className="text-navy text-sm font-semibold mb-1">{t('what_next')}</p>
               <ul className="space-y-1.5">
-                {[
-                  'Our attorney will review your intake answers.',
-                  'We may contact you to schedule a consultation.',
-                  'You can upload additional documents at any time.',
-                  'Your information remains strictly confidential.',
-                ].map(step => (
+                {[t('next_step_1'), t('next_step_2'), t('next_step_3'), t('next_step_4')].map(step => (
                   <li key={step} className="flex items-start gap-2 text-sm text-gray-600">
                     <svg className="w-4 h-4 text-gold shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
                       <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
@@ -65,13 +57,13 @@ export default function SubmittedPage() {
                 onClick={() => router.push('/documents')}
                 className="btn-primary"
               >
-                Upload Documents
+                {t('upload_docs_btn')}
               </button>
               <button
                 onClick={() => router.push('/dashboard')}
                 className="btn-secondary"
               >
-                Return to Dashboard
+                {t('return_dashboard')}
               </button>
             </div>
           </div>

@@ -6,6 +6,7 @@ import Header from '@/components/Header'
 import { getSession } from '@/lib/auth'
 import { DOCUMENT_CATEGORIES } from '@/lib/mockData'
 import { Session, UploadedDocument } from '@/types'
+import { useLanguage } from '@/lib/i18n'
 
 export default function DocumentsPage() {
   const [session, setSession] = useState<Session | null>(null)
@@ -16,6 +17,7 @@ export default function DocumentsPage() {
   const fileRef = useRef<HTMLInputElement>(null)
   const cameraRef = useRef<HTMLInputElement>(null)
   const router = useRouter()
+  const { t } = useLanguage()
 
   useEffect(() => {
     const s = getSession()
@@ -89,10 +91,8 @@ export default function DocumentsPage() {
 
       <main className="flex-1 px-4 py-6 max-w-2xl mx-auto w-full">
         <div className="mb-6">
-          <h2 className="text-2xl font-bold text-navy">Upload Documents</h2>
-          <p className="text-gray-500 text-sm mt-1">
-            Upload any documents that may be helpful to your case.
-          </p>
+          <h2 className="text-2xl font-bold text-navy">{t('docs_title')}</h2>
+          <p className="text-gray-500 text-sm mt-1">{t('docs_subtitle')}</p>
         </div>
 
         {/* Privacy notice */}
@@ -102,8 +102,7 @@ export default function DocumentsPage() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
             </svg>
             <p className="text-navy text-sm">
-              <strong>Your documents are confidential.</strong> All files are protected by attorney-client privilege.
-              In production, files are encrypted and stored securely — never shared without your consent.
+              <strong>{t('docs_private')}</strong>
             </p>
           </div>
         </div>
@@ -114,7 +113,7 @@ export default function DocumentsPage() {
 
           {/* Category selector */}
           <div className="mb-4">
-            <label className="label">Document Category</label>
+            <label className="label">{t('doc_category')}</label>
             <select
               value={selectedCategory}
               onChange={e => setSelectedCategory(e.target.value)}
@@ -151,7 +150,7 @@ export default function DocumentsPage() {
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
               </svg>
-              <p className="text-navy font-medium">Processing…</p>
+              <p className="text-navy font-medium">{t('processing')}</p>
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-3">
@@ -168,8 +167,8 @@ export default function DocumentsPage() {
                   </svg>
                 </div>
                 <div className="text-center">
-                  <p className="text-sm font-semibold text-gray-700 group-hover:text-navy transition-colors">Take Photo</p>
-                  <p className="text-xs text-gray-400 mt-0.5">Use camera</p>
+                  <p className="text-sm font-semibold text-gray-700 group-hover:text-navy transition-colors">{t('take_photo')}</p>
+                  <p className="text-xs text-gray-400 mt-0.5">{t('use_camera')}</p>
                 </div>
               </button>
 
@@ -185,8 +184,8 @@ export default function DocumentsPage() {
                   </svg>
                 </div>
                 <div className="text-center">
-                  <p className="text-sm font-semibold text-gray-700 group-hover:text-navy transition-colors">Select File</p>
-                  <p className="text-xs text-gray-400 mt-0.5">PDF, doc, image</p>
+                  <p className="text-sm font-semibold text-gray-700 group-hover:text-navy transition-colors">{t('select_file')}</p>
+                  <p className="text-xs text-gray-400 mt-0.5">{t('file_types')}</p>
                 </div>
               </button>
             </div>
@@ -206,7 +205,7 @@ export default function DocumentsPage() {
         {documents.length > 0 && (
           <div className="card mb-6">
             <h3 className="font-semibold text-navy mb-4">
-              Uploaded Documents ({documents.length})
+              {t('uploaded_docs_title')} ({documents.length})
             </h3>
             <div className="space-y-4">
               {DOCUMENT_CATEGORIES.map(cat => {
@@ -251,8 +250,8 @@ export default function DocumentsPage() {
 
         {/* Document checklist */}
         <div className="card">
-          <h3 className="font-semibold text-navy mb-1">Helpful Documents to Gather</h3>
-          <p className="text-sm text-gray-500 mb-4">Don&apos;t worry if you don&apos;t have all of these. Upload what you have.</p>
+          <h3 className="font-semibold text-navy mb-1">{t('helpful_docs')}</h3>
+          <p className="text-sm text-gray-500 mb-4">{t('helpful_docs_sub')}</p>
           <div className="space-y-1.5">
             {DOCUMENT_CATEGORIES.map(cat => {
               const uploaded = (byCategory[cat] ?? []).length > 0
@@ -279,7 +278,7 @@ export default function DocumentsPage() {
             onClick={() => router.push('/dashboard')}
             className="btn-secondary"
           >
-            Back to Dashboard
+            {t('back_to_dashboard')}
           </button>
         </div>
       </main>

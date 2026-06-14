@@ -1,0 +1,226 @@
+import { QuestionnaireSection } from '@/types'
+
+export const QUESTIONNAIRE_SECTIONS_ES: QuestionnaireSection[] = [
+  {
+    id: 'contact',
+    title: 'Información de Contacto',
+    questions: [
+      { id: 'full_name', label: 'Nombre Legal Completo', type: 'text', required: true, placeholder: 'Como aparece en su identificación' },
+      { id: 'dob', label: 'Fecha de Nacimiento', type: 'date', required: true },
+      { id: 'address', label: 'Dirección', type: 'text', required: true },
+      { id: 'city_state_zip', label: 'Ciudad, Estado, Código Postal', type: 'text', required: true },
+      { id: 'alt_phone', label: 'Número de Teléfono Alternativo', type: 'phone', placeholder: '(555) 000-0000' },
+      { id: 'email', label: 'Correo Electrónico', type: 'text', placeholder: 'usted@ejemplo.com' },
+      { id: 'preferred_language', label: 'Idioma Preferido', type: 'select', options: ['Inglés', 'Español', 'Otro'] },
+    ],
+  },
+  {
+    id: 'employer',
+    title: 'Información del Empleador',
+    questions: [
+      { id: 'employer_name', label: 'Nombre del Empleador / Empresa', type: 'text', required: true },
+      { id: 'employer_address', label: 'Dirección del Empleador', type: 'text' },
+      { id: 'employer_city_state', label: 'Ciudad, Estado', type: 'text' },
+      { id: 'supervisor_name', label: 'Nombre del Supervisor / Gerente', type: 'text' },
+      { id: 'supervisor_phone', label: 'Teléfono del Supervisor (si lo sabe)', type: 'phone', placeholder: '(555) 000-0000' },
+      { id: 'hr_contact', label: 'Nombre o Departamento de Recursos Humanos', type: 'text' },
+      { id: 'industry', label: 'Tipo de Negocio / Industria', type: 'text', placeholder: 'Ej: Restaurante, Comercio, Construcción' },
+    ],
+  },
+  {
+    id: 'dates_worked',
+    title: 'Fechas de Trabajo',
+    questions: [
+      { id: 'start_date', label: 'Fecha en que Comenzó a Trabajar', type: 'date', required: true },
+      { id: 'still_employed', label: '¿Sigue trabajando ahí?', type: 'yes_no', required: true },
+      { id: 'end_date', label: 'Si no, ¿cuál fue su último día de trabajo?', type: 'date', showIf: { questionId: 'still_employed', value: 'no' } },
+      { id: 'employment_type', label: 'Tipo de Empleo', type: 'select', options: ['Tiempo Completo', 'Tiempo Parcial', 'Temporal / Estacional', 'Agencia de Personal', 'Contrato', 'Otro'] },
+    ],
+  },
+  {
+    id: 'position',
+    title: 'Puesto y Responsabilidades',
+    questions: [
+      { id: 'job_title', label: 'Su Título de Trabajo', type: 'text', required: true },
+      { id: 'job_duties', label: 'Describa Sus Responsabilidades', type: 'textarea', required: true, placeholder: '¿Qué hacía en un día típico?' },
+      { id: 'classification', label: '¿Fue clasificado como empleado o contratista independiente?', type: 'select', options: ['Empleado', 'Contratista Independiente', 'No estoy seguro'] },
+      { id: 'misclassified', label: '¿Cree que fue clasificado incorrectamente como contratista independiente?', type: 'yes_no' },
+      { id: 'exempt', label: '¿Le dijeron que era un empleado "exento" o "asalariado" sin derecho a horas extra?', type: 'yes_no' },
+    ],
+  },
+  {
+    id: 'pay_rate',
+    title: 'Salario',
+    questions: [
+      { id: 'pay_type', label: '¿Cómo le pagaban?', type: 'select', required: true, options: ['Por Hora', 'Salario Fijo', 'Comisión', 'Por Pieza', 'Por Día', 'Otro'] },
+      { id: 'hourly_rate', label: 'Tarifa por Hora (si aplica)', type: 'text', placeholder: 'Ej: $18.00 por hora' },
+      { id: 'salary_amount', label: 'Monto del Salario (si aplica)', type: 'text', placeholder: 'Ej: $60,000 al año' },
+      { id: 'received_tips', label: '¿Recibía propinas?', type: 'yes_no' },
+      { id: 'pay_changed', label: '¿Cambió su salario en algún momento durante su empleo?', type: 'yes_no' },
+      { id: 'pay_change_notes', label: 'Describa los cambios en su salario', type: 'textarea', showIf: { questionId: 'pay_changed', value: 'yes' } },
+    ],
+  },
+  {
+    id: 'schedule',
+    title: 'Horario',
+    questions: [
+      { id: 'days_per_week', label: '¿Cuántos días por semana trabajaba normalmente?', type: 'select', options: ['1', '2', '3', '4', '5', '6', '7'] },
+      { id: 'hours_per_day', label: '¿Cuántas horas por día trabajaba normalmente?', type: 'text', placeholder: 'Ej: 9 horas por día' },
+      { id: 'schedule_type', label: '¿Cómo era su horario?', type: 'select', options: ['Regular (mismos días/horas cada semana)', 'Turnos Rotativos', 'Disponibilidad', 'Irregular / Variable', 'Otro'] },
+      { id: 'schedule_notes', label: 'Describa su horario típico de trabajo', type: 'textarea', placeholder: 'Ej: Lunes a Viernes, 7am a 4pm' },
+    ],
+  },
+  {
+    id: 'timekeeping',
+    title: 'Control de Horas',
+    questions: [
+      { id: 'timekeeping_method', label: '¿Cómo registraba su empleador sus horas de trabajo?', type: 'select', options: ['Reloj / Escáner de Tarjeta', 'Biométrico (huella digital / reconocimiento facial)', 'Hojas de Tiempo en Papel', 'Hojas de Tiempo Electrónicas / App', 'El Gerente Registraba las Horas', 'Sin Control Formal', 'Otro'] },
+      { id: 'clock_in_out', label: '¿Usted personalmente marcaba entrada y salida?', type: 'yes_no' },
+      { id: 'employer_altered', label: '¿Su empleador alguna vez cambió, alteró o eliminó sus registros de tiempo?', type: 'yes_no' },
+      { id: 'alteration_details', label: 'Describa qué pasó con sus registros de tiempo', type: 'textarea', showIf: { questionId: 'employer_altered', value: 'yes' } },
+    ],
+  },
+  {
+    id: 'meal_breaks',
+    title: 'Descansos para Comer',
+    questions: [
+      { id: 'meal_break_provided', label: '¿Se le proporcionó un descanso ininterrumpido de 30 minutos para comer?', type: 'yes_no', required: true },
+      { id: 'meal_break_5hrs', label: '¿Se le daban descansos para comer cuando trabajaba más de 5 horas?', type: 'yes_no' },
+      { id: 'meal_break_10hrs', label: '¿Se le proporcionó un segundo descanso para comer cuando trabajaba más de 10 horas?', type: 'yes_no' },
+      { id: 'meal_break_interrupted', label: '¿Sus descansos para comer fueron interrumpidos o acortados por el trabajo?', type: 'yes_no' },
+      { id: 'meal_break_pressure', label: '¿Le presionaron, exigieron o esperaban que saltara los descansos para comer?', type: 'yes_no' },
+      { id: 'meal_premium_paid', label: '¿Le pagaron una hora de pago extra ("pago premium") por descansos perdidos o tardíos?', type: 'yes_no' },
+    ],
+  },
+  {
+    id: 'rest_breaks',
+    title: 'Descansos',
+    questions: [
+      { id: 'rest_break_provided', label: '¿Se le proporcionaron descansos pagados de 10 minutos?', type: 'yes_no', required: true },
+      { id: 'rest_break_frequency', label: '¿Se le daban descansos aproximadamente cada 4 horas trabajadas?', type: 'yes_no' },
+      { id: 'rest_break_skipped', label: '¿Regularmente se saltaba los descansos?', type: 'yes_no' },
+      { id: 'rest_break_pressure', label: '¿Le presionaban o esperaban que se saltara los descansos?', type: 'yes_no' },
+      { id: 'rest_premium_paid', label: '¿Le pagaron una hora de pago extra por descansos perdidos?', type: 'yes_no' },
+    ],
+  },
+  {
+    id: 'overtime',
+    title: 'Horas Extra',
+    questions: [
+      { id: 'worked_over_8', label: '¿Trabajaba regularmente más de 8 horas en un solo día?', type: 'yes_no' },
+      { id: 'worked_over_12', label: '¿Trabajaba regularmente más de 12 horas en un solo día?', type: 'yes_no' },
+      { id: 'worked_over_40', label: '¿Trabajaba regularmente más de 40 horas a la semana?', type: 'yes_no' },
+      { id: 'paid_overtime', label: '¿Le pagaban tiempo y medio (1.5x) por horas extra?', type: 'yes_no' },
+      { id: 'paid_double_time', label: '¿Le pagaban doble tiempo (2x) por horas más allá de 12 en un día?', type: 'yes_no' },
+      { id: 'overtime_notes', label: '¿Alguna nota adicional sobre horas extra u horas trabajadas?', type: 'textarea' },
+    ],
+  },
+  {
+    id: 'final_wages',
+    title: 'Salario Final',
+    questions: [
+      { id: 'separation_type', label: '¿Cómo terminó su empleo (o sigue activo)?', type: 'select', options: ['Sigo Empleado', 'Fui Despedido', 'Renuncié', 'Fui Dado de Baja', 'Terminó el Contrato', 'Otro'] },
+      { id: 'final_wages_timely', label: 'Si fue separado, ¿le pagaron su salario final el último día de trabajo?', type: 'yes_no' },
+      { id: 'final_wages_date', label: '¿Cuándo le pagaron su salario final? (si lo sabe)', type: 'date' },
+      { id: 'wages_still_owed', label: '¿Cree que aún le deben salarios no pagados?', type: 'yes_no' },
+      { id: 'wages_owed_estimate', label: 'Cantidad estimada que aún le deben (si la sabe)', type: 'text', placeholder: 'Ej: aproximadamente $3,500', showIf: { questionId: 'wages_still_owed', value: 'yes' } },
+    ],
+  },
+  {
+    id: 'wage_statements',
+    title: 'Talones de Pago',
+    questions: [
+      { id: 'received_paystubs', label: '¿Recibió un talón de pago cada período de pago?', type: 'yes_no' },
+      { id: 'paystubs_accurate', label: '¿Eran correctas las horas y el salario en sus talones de pago?', type: 'yes_no' },
+      { id: 'paystub_issues', label: '¿Qué información faltaba o era incorrecta en sus talones? (Seleccione todas las que apliquen)', type: 'multiselect', options: ['Nombre / dirección del empleador', 'Nombre o número de empleado', 'Salario bruto', 'Salario neto', 'Total de horas trabajadas', 'Tarifa de pago por hora', 'Deducciones detalladas', 'Fechas del período de pago', 'Nada faltaba / No aplica'] },
+      { id: 'have_paystubs', label: '¿Todavía tiene copias de sus talones de pago?', type: 'yes_no' },
+    ],
+  },
+  {
+    id: 'reimbursements',
+    title: 'Reembolsos / Herramientas / Uniformes',
+    questions: [
+      { id: 'paid_for_tools', label: '¿Pagó de su bolsillo por herramientas, equipo o materiales necesarios para su trabajo?', type: 'yes_no' },
+      { id: 'tools_reimbursed', label: '¿Le reembolsaron estos gastos?', type: 'yes_no', showIf: { questionId: 'paid_for_tools', value: 'yes' } },
+      { id: 'uniform_required', label: '¿Le exigían usar un uniforme específico?', type: 'yes_no' },
+      { id: 'uniform_paid_by_you', label: '¿Usted pagó por su propio uniforme?', type: 'yes_no', showIf: { questionId: 'uniform_required', value: 'yes' } },
+      { id: 'drove_for_work', label: '¿Usaba su vehículo personal para trabajar?', type: 'yes_no' },
+      { id: 'mileage_reimbursed', label: '¿Le reembolsaban el millaje?', type: 'yes_no', showIf: { questionId: 'drove_for_work', value: 'yes' } },
+      { id: 'other_expenses', label: 'Describa cualquier otro gasto de bolsillo relacionado con el trabajo', type: 'textarea' },
+    ],
+  },
+  {
+    id: 'wrongful_termination',
+    title: 'Despido Injustificado',
+    questions: [
+      { id: 'was_terminated', label: '¿Fue despedido o forzado a renunciar?', type: 'yes_no' },
+      { id: 'reason_given_for_termination', label: '¿Qué razón le dieron para su despido?', type: 'textarea', showIf: { questionId: 'was_terminated', value: 'yes' } },
+      { id: 'believe_wrongful', label: '¿Cree que fue despedido injusta o ilegalmente?', type: 'yes_no' },
+      { id: 'wrongful_reason_belief', label: '¿Por qué cree que el despido fue ilegal?', type: 'textarea', showIf: { questionId: 'believe_wrongful', value: 'yes' } },
+      { id: 'received_written_warnings', label: '¿Recibió advertencias escritas antes del despido?', type: 'yes_no' },
+    ],
+  },
+  {
+    id: 'retaliation',
+    title: 'Represalias',
+    questions: [
+      { id: 'made_complaint', label: '¿Reportó una violación, presentó una queja u objetó algo que consideraba ilegal o incorrecto?', type: 'yes_no' },
+      { id: 'complaint_subject', label: '¿Sobre qué reportó o se quejó?', type: 'textarea', showIf: { questionId: 'made_complaint', value: 'yes' } },
+      { id: 'negative_after_complaint', label: '¿Le pasó algo negativo después de presentar la queja?', type: 'yes_no' },
+      { id: 'retaliation_description', label: 'Describa qué acciones negativas ocurrieron', type: 'textarea', showIf: { questionId: 'negative_after_complaint', value: 'yes' } },
+    ],
+  },
+  {
+    id: 'disability_leave',
+    title: 'Discapacidad / Licencia Médica / Embarazo',
+    questions: [
+      { id: 'took_medical_leave', label: '¿Tomó licencia médica o por discapacidad en algún momento?', type: 'yes_no' },
+      { id: 'leave_approved', label: '¿Su empleador aprobó su licencia?', type: 'yes_no', showIf: { questionId: 'took_medical_leave', value: 'yes' } },
+      { id: 'leave_denied_retaliated', label: '¿Le negaron la licencia o le castigaron por tomarla?', type: 'yes_no', showIf: { questionId: 'took_medical_leave', value: 'yes' } },
+      { id: 'requested_accommodation', label: '¿Solicitó una adaptación laboral por discapacidad?', type: 'yes_no' },
+      { id: 'accommodation_denied', label: '¿Su solicitud de adaptación fue negada o ignorada?', type: 'yes_no', showIf: { questionId: 'requested_accommodation', value: 'yes' } },
+      { id: 'was_pregnant', label: '¿Estuvo embarazada durante su empleo?', type: 'yes_no' },
+      { id: 'pregnancy_different_treatment', label: '¿La trataron diferente debido a su embarazo?', type: 'yes_no', showIf: { questionId: 'was_pregnant', value: 'yes' } },
+    ],
+  },
+  {
+    id: 'harassment',
+    title: 'Acoso / Discriminación',
+    questions: [
+      { id: 'experienced_harassment', label: '¿Experimentó acoso o discriminación en el lugar de trabajo?', type: 'yes_no' },
+      { id: 'harassment_type', label: '¿Qué tipo de acoso o discriminación? (Seleccione todas las que apliquen)', type: 'multiselect', options: ['Raza / Color', 'Origen Nacional / Ascendencia', 'Sexo / Género', 'Acoso Sexual', 'Embarazo', 'Edad (40 años o más)', 'Discapacidad Física o Mental', 'Religión', 'Orientación Sexual', 'Identidad / Expresión de Género', 'Estatus Militar o Veterano', 'Otro'], showIf: { questionId: 'experienced_harassment', value: 'yes' } },
+      { id: 'harassment_description', label: 'Describa lo que sucedió, incluyendo fechas si las recuerda', type: 'textarea', showIf: { questionId: 'experienced_harassment', value: 'yes' } },
+      { id: 'reported_to_employer', label: '¿Reportó el acoso o la discriminación a su empleador o a Recursos Humanos?', type: 'yes_no', showIf: { questionId: 'experienced_harassment', value: 'yes' } },
+      { id: 'employer_response', label: '¿Cómo respondió su empleador a su reporte?', type: 'textarea', showIf: { questionId: 'reported_to_employer', value: 'yes' } },
+    ],
+  },
+  {
+    id: 'witnesses',
+    title: 'Testigos',
+    questions: [
+      { id: 'has_witnesses', label: '¿Hay testigos que vieron lo que pasó y pueden apoyar sus afirmaciones?', type: 'yes_no' },
+      { id: 'witness_list', label: 'Liste los testigos e información de contacto (si la conoce)', type: 'textarea', helpText: 'Incluya nombre, relación con usted y qué fue lo que presenciaron. No es necesario tener toda esta información.', showIf: { questionId: 'has_witnesses', value: 'yes' } },
+      { id: 'coworkers_same_issues', label: '¿Otros compañeros de trabajo experimentaron los mismos problemas o similares?', type: 'yes_no' },
+      { id: 'coworkers_details', label: 'Describa lo que sabe sobre las experiencias de otros compañeros', type: 'textarea', showIf: { questionId: 'coworkers_same_issues', value: 'yes' } },
+    ],
+  },
+  {
+    id: 'documents_available',
+    title: 'Documentos que Tiene',
+    questions: [
+      { id: 'available_documents', label: '¿Cuáles de los siguientes documentos tiene actualmente? (Seleccione todos los que apliquen)', type: 'multiselect', options: ['Talones de Pago', 'Formularios W-2', 'Formularios 1099', 'Registros de Tiempo / Hojas de Horas', 'Horarios de Trabajo', 'Mensajes de Texto', 'Correos Electrónicos', 'Carta de Despido', 'Notas Médicas / Expedientes Médicos', 'Fotografías o Videos', 'Manual del Empleado o Políticas', 'Contrato de Empleo u Oferta de Trabajo', 'Evaluaciones de Desempeño', 'Cartas de Advertencia / Reportes', 'Otros Documentos'] },
+      { id: 'documents_notes', label: '¿Alguna nota sobre sus documentos?', type: 'textarea', helpText: 'Por ejemplo: "Tengo talones de pago de enero 2024 a diciembre 2024 pero nada antes de eso."' },
+    ],
+  },
+  {
+    id: 'additional',
+    title: 'Información Adicional',
+    questions: [
+      { id: 'prior_agency_complaints', label: '¿Ha presentado alguna queja ante una agencia gubernamental (ej. DLSE, DFEH/CRD, EEOC, Comisionado de Trabajo)?', type: 'yes_no' },
+      { id: 'agency_complaint_details', label: 'Describa la queja, nombre de la agencia y resultado si lo conoce', type: 'textarea', showIf: { questionId: 'prior_agency_complaints', value: 'yes' } },
+      { id: 'prior_attorneys', label: '¿Ha consultado o contratado a otros abogados sobre este asunto?', type: 'yes_no' },
+      { id: 'statute_of_limitations', label: '¿Sabe si hay fechas límite próximas para sus reclamaciones?', type: 'yes_no' },
+      { id: 'additional_notes', label: '¿Hay algo más que quiera que sepamos sobre su situación?', type: 'textarea', helpText: 'Por favor comparta cualquier otra información que pueda ser importante para su caso. No hay respuestas incorrectas.', placeholder: 'Cualquier otro detalle que considere importante...' },
+    ],
+  },
+]

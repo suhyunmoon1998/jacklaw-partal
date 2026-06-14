@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next'
 import './globals.css'
+import Providers from '@/components/Providers'
 
 export const metadata: Metadata = {
   title: 'JACKLAW Client Portal | Law Offices of Jack D. Josephson, APC',
@@ -26,7 +27,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body className="min-h-screen bg-white">
-        {children}
+        <Providers>{children}</Providers>
       </body>
     </html>
   )

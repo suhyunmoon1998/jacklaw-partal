@@ -27,7 +27,14 @@
       "Bash(vercel --prod)",
       "Bash(vercel env *)",
       "Skill(code-review)",
-      "Skill(code-review:*)"
+      "Skill(code-review:*)",
+      "Bash(node -e \"require\\('puppeteer'\\)\")",
+      "Read(//Applications/**)",
+      "Bash(node -e \"require\\('pdfkit'\\)\")",
+      "Bash(npm install *)",
+      "Bash(node -e \"require\\('pdfkit'\\); console.log\\('ok'\\)\")",
+      "Bash(node scripts/generate-manual.js)",
+      "Bash(open /Users/davidmun/Desktop/jacklaw-portal/JackLaw_Portal_Manual.pdf)"
     ]
   }
 }

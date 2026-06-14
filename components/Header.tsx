@@ -3,6 +3,7 @@
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { clearSession } from '@/lib/auth'
+import { useLanguage } from '@/lib/i18n'
 
 interface HeaderProps {
   showLogout?: boolean
@@ -13,6 +14,7 @@ interface HeaderProps {
 
 export default function Header({ showLogout, showBack, backHref, subtitle }: HeaderProps) {
   const router = useRouter()
+  const { lang, setLang, t } = useLanguage()
 
   const handleLogout = () => {
     clearSession()
@@ -41,7 +43,7 @@ export default function Header({ showLogout, showBack, backHref, subtitle }: Hea
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
-              Back
+              {t('back')}
             </button>
           )}
         </div>
@@ -63,14 +65,21 @@ export default function Header({ showLogout, showBack, backHref, subtitle }: Hea
           </div>
         </div>
 
-        {/* Right: Logout or spacer */}
-        <div className="w-20 flex justify-end">
+        {/* Right: Language toggle + Logout */}
+        <div className="flex items-center gap-3 justify-end" style={{ minWidth: '5rem' }}>
+          <button
+            onClick={() => setLang(lang === 'en' ? 'es' : 'en')}
+            className="text-white/50 hover:text-gold text-xs font-bold tracking-wider transition-all duration-150 border border-white/20 hover:border-gold/50 px-2 py-1 rounded-lg active:scale-[0.93]"
+            aria-label="Toggle language"
+          >
+            {lang === 'en' ? 'ES' : 'EN'}
+          </button>
           {showLogout && (
             <button
               onClick={handleLogout}
-              className="text-white/60 hover:text-white text-sm font-medium transition-colors"
+              className="text-white/60 hover:text-white text-sm font-medium transition-all duration-150 active:scale-[0.93]"
             >
-              Log out
+              {t('logout')}
             </button>
           )}
         </div>

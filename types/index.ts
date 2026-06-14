@@ -66,3 +66,23 @@ export interface AdminSession {
   authenticated: boolean
   expiresAt: number
 }
+
+export interface Flashcard {
+  id: string
+  front: string
+  back: string
+}
+
+export interface FlashcardDeck {
+  id: string
+  title: string
+  description: string
+  cards: Flashcard[]
+  createdAt: string
+}
+
+export interface CardProgress {
+  cardId: string
+  status: 'new' | 'learning' | 'known'
+  lastReviewedAt?: string
+}

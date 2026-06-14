@@ -3,20 +3,16 @@
 import { useState, useEffect } from 'react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
-import {
-  normalizePhone,
-  setSession,
-  getSession,
-  formatPhone,
-} from '@/lib/auth'
+import { normalizePhone, setSession, getSession, formatPhone } from '@/lib/auth'
+import { useLanguage } from '@/lib/i18n'
 
 export default function LoginPage() {
   const [phone, setPhone] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const router = useRouter()
+  const { lang, setLang, t } = useLanguage()
 
-  // Redirect if already logged in
   useEffect(() => {
     const session = getSession()
     if (session) router.replace('/dashboard')
@@ -35,7 +31,6 @@ export default function LoginPage() {
     setLoading(true)
 
     const normalized = normalizePhone(phone)
-
     const res = await fetch('/api/clients/lookup', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -47,46 +42,40 @@ export default function LoginPage() {
       setSession({ clientId: client.id, phone: normalized, name: client.name, caseType: client.case_type ?? '' })
       router.replace('/dashboard')
     } else {
-      setError('We could not find your file. Please contact the office.')
+      setError(t('not_found'))
     }
 
     setLoading(false)
   }
 
   return (
-    <div className="min-h-screen bg-white flex flex-col">
-      {/* Header */}
+    <div className="min-h-screen bg-white flex flex-col animate-fade-in">
       <header className="bg-black py-8 px-4 text-center border-b border-white/10">
         <div className="flex flex-col items-center gap-3">
-          <Image
-            src="/logo.png"
-            alt="866 JACK LAW"
-            width={120}
-            height={120}
-            className="rounded-sm"
-            priority
-          />
+          <Image src="/logo.png" alt="866 JACK LAW" width={120} height={120} className="rounded-sm animate-slide-up" priority />
           <div>
             <p className="text-white/60 text-sm font-medium">Law Offices of Jack D. Josephson, APC</p>
             <p className="text-gold/90 text-xs mt-0.5 tracking-wider uppercase">Client Portal</p>
           </div>
+          {/* Language toggle */}
+          <button
+            onClick={() => setLang(lang === 'en' ? 'es' : 'en')}
+            className="mt-1 text-white/40 hover:text-gold text-xs font-bold tracking-wider border border-white/20 hover:border-gold/40 px-3 py-1 rounded-full transition-colors"
+          >
+            {lang === 'en' ? 'Español' : 'English'}
+          </button>
         </div>
       </header>
 
-      {/* Main */}
       <main className="flex-1 flex items-start justify-center px-4 pt-8 pb-16 bg-gray-50">
         <div className="w-full max-w-md">
-          <div className="card">
-            <h2 className="text-xl font-semibold text-navy mb-1">Welcome</h2>
-            <p className="text-gray-500 text-sm mb-8">
-              Enter the phone number you provided to our office to access your portal.
-            </p>
+          <div className="card animate-slide-up stagger-1">
+            <h2 className="text-xl font-semibold text-navy mb-1">{t('welcome')}</h2>
+            <p className="text-gray-500 text-sm mb-8">{t('welcome_sub')}</p>
 
             <form onSubmit={handleSubmit} className="space-y-5" noValidate>
               <div>
-                <label htmlFor="phone" className="label">
-                  Phone Number
-                </label>
+                <label htmlFor="phone" className="label">{t('phone_label')}</label>
                 <input
                   id="phone"
                   type="tel"
@@ -99,9 +88,7 @@ export default function LoginPage() {
                   autoComplete="tel"
                   disabled={loading}
                 />
-                <p className="mt-2 text-xs text-gray-400">
-                  Use the phone number you gave our office.
-                </p>
+                <p className="mt-2 text-xs text-gray-400">{t('phone_hint')}</p>
               </div>
 
               {error && (
@@ -126,21 +113,16 @@ export default function LoginPage() {
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                     </svg>
-                    Checking...
+                    {t('checking')}
                   </span>
-                ) : 'Continue'}
+                ) : t('continue_btn')}
               </button>
             </form>
           </div>
 
-
           <div className="mt-6 bg-red-50 border border-red-200 rounded-xl p-4">
-            <p className="text-red-700 text-xs font-semibold text-center">
-              ⚠ Do not use this portal for emergencies.
-            </p>
-            <p className="text-red-600 text-xs text-center mt-1">
-              For urgent matters, call our office directly.
-            </p>
+            <p className="text-red-700 text-xs font-semibold text-center">{t('emergency')}</p>
+            <p className="text-red-600 text-xs text-center mt-1">{t('emergency_sub')}</p>
           </div>
 
           <p className="text-center text-xs text-gray-400 mt-6">

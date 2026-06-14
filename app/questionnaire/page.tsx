@@ -5,7 +5,9 @@ import { useRouter } from 'next/navigation'
 import Header from '@/components/Header'
 import { getSession, addSubmissionNotification } from '@/lib/auth'
 import { QUESTIONNAIRE_SECTIONS } from '@/lib/questionnaireData'
+import { QUESTIONNAIRE_SECTIONS_ES } from '@/lib/questionnaireDataEs'
 import { AnswerValue, Question, QuestionnaireState, Session } from '@/types'
+import { useLanguage } from '@/lib/i18n'
 
 function isVisible(q: Question, answers: Record<string, AnswerValue>): boolean {
   if (!q.showIf) return true
@@ -16,10 +18,16 @@ function QuestionInput({
   question,
   value,
   onChange,
+  yesLabel,
+  noLabel,
+  selectPlaceholder,
 }: {
   question: Question
   value: AnswerValue
   onChange: (id: string, val: AnswerValue) => void
+  yesLabel: string
+  noLabel: string
+  selectPlaceholder: string
 }) {
   const strVal = typeof value === 'string' ? value : ''
   const arrVal = Array.isArray(value) ? value : []
@@ -39,7 +47,7 @@ function QuestionInput({
                   : 'bg-white text-gray-600 border-gray-200 hover:border-gold/50'
               }`}
             >
-              {opt === 'yes' ? 'Yes' : 'No'}
+              {opt === 'yes' ? yesLabel : noLabel}
             </button>
           ))}
         </div>
@@ -52,7 +60,7 @@ function QuestionInput({
           onChange={e => onChange(question.id, e.target.value)}
           className="input-field appearance-none bg-white"
         >
-          <option value="">Select an option…</option>
+          <option value="">{selectPlaceholder}</option>
           {question.options?.map(opt => (
             <option key={opt} value={opt}>{opt}</option>
           ))}
@@ -158,6 +166,9 @@ export default function QuestionnairePage() {
   const [saving, setSaving] = useState(false)
   const [autoSaved, setAutoSaved] = useState(false)
   const router = useRouter()
+  const { lang, t } = useLanguage()
+
+  const SECTIONS = lang === 'es' ? QUESTIONNAIRE_SECTIONS_ES : QUESTIONNAIRE_SECTIONS
 
   useEffect(() => {
     const s = getSession()
@@ -175,8 +186,8 @@ export default function QuestionnairePage() {
       })
   }, [router])
 
-  const section = QUESTIONNAIRE_SECTIONS[currentSection]
-  const totalSections = QUESTIONNAIRE_SECTIONS.length
+  const section = SECTIONS[currentSection]
+  const totalSections = SECTIONS.length
   const isLastSection = currentSection === totalSections - 1
 
   const handleAnswerChange = useCallback((id: string, val: AnswerValue) => {
@@ -228,7 +239,7 @@ export default function QuestionnairePage() {
       const val = qState.answers[q.id]
       const isEmpty = !val || (Array.isArray(val) && val.length === 0) || val === ''
       if (isEmpty) {
-        setValidationError(`Please answer: "${q.label}"`)
+        setValidationError(t('q_required_error') + ` "${q.label}"`)
         return false
       }
     }
@@ -309,14 +320,14 @@ export default function QuestionnairePage() {
       <div className="sticky top-0 z-10 bg-white border-b border-gray-100 px-4 py-3 shadow-sm">
         <div className="max-w-2xl mx-auto">
           <div className="flex justify-between items-center text-xs text-gray-500 mb-2">
-            <span className="font-semibold text-black">Section {currentSection + 1} <span className="font-normal text-gray-400">of {totalSections}</span></span>
+            <span className="font-semibold text-black">{currentSection + 1} <span className="font-normal text-gray-400">{t('q_section_of')} {totalSections}</span></span>
             <div className="flex items-center gap-2">
               {autoSaved && (
                 <span className="flex items-center gap-1 text-green-600 font-medium transition-opacity">
                   <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
                   </svg>
-                  Saved
+                  {t('q_saved')}
                 </span>
               )}
               <span className="text-gold font-semibold">{progressPct}%</span>
@@ -330,7 +341,7 @@ export default function QuestionnairePage() {
           </div>
           {/* Section dots */}
           <div className="mt-2 flex gap-1 overflow-x-auto pb-0.5 scrollbar-hide">
-            {QUESTIONNAIRE_SECTIONS.map((_, i) => (
+            {SECTIONS.map((_, i) => (
               <div
                 key={i}
                 className={`h-1.5 shrink-0 rounded-full transition-all duration-300 ${
@@ -347,8 +358,8 @@ export default function QuestionnairePage() {
       </div>
 
       <main className="flex-1 px-4 pt-5 pb-36 max-w-2xl mx-auto w-full">
-        {/* Section card */}
-        <div className="card mb-4">
+        {/* Section card — key forces re-animation on section change */}
+        <div key={currentSection} className="card mb-4 animate-section-in">
           <div className="flex items-center gap-3 mb-5 pb-4 border-b border-gray-100">
             <div className="w-9 h-9 bg-gold rounded-xl flex items-center justify-center shrink-0">
               <span className="text-white text-sm font-bold">{currentSection + 1}</span>
@@ -370,6 +381,9 @@ export default function QuestionnairePage() {
                   question={q}
                   value={qState.answers[q.id] ?? (q.type === 'multiselect' ? [] : '')}
                   onChange={handleAnswerChange}
+                  yesLabel={t('q_yes')}
+                  noLabel={t('q_no')}
+                  selectPlaceholder={t('q_select')}
                 />
               </div>
             ))}
@@ -397,14 +411,14 @@ export default function QuestionnairePage() {
             {currentSection > 0 && (
               <button
                 onClick={handlePrev}
-                className="flex-1 py-4 border-2 border-gray-200 text-gray-700 rounded-xl font-semibold text-base hover:border-gray-300 transition-colors active:bg-gray-50"
+                className="flex-1 py-4 border-2 border-gray-200 text-gray-700 rounded-xl font-semibold text-base transition-all duration-150 hover:border-gray-300 hover:shadow-sm active:scale-[0.97] active:bg-gray-50"
               >
-                ← Previous
+                ← {t('q_back')}
               </button>
             )}
             {!isLastSection ? (
               <button onClick={handleNext} className="btn-primary flex-1">
-                Next →
+                {t('q_next')} →
               </button>
             ) : (
               <button
@@ -418,9 +432,9 @@ export default function QuestionnairePage() {
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                     </svg>
-                    Submitting…
+                    {t('q_submitting')}
                   </span>
-                ) : 'Submit Questionnaire'}
+                ) : t('q_save_submit')}
               </button>
             )}
           </div>
@@ -428,7 +442,7 @@ export default function QuestionnairePage() {
             onClick={handleSaveExit}
             className="w-full text-gray-400 text-sm py-1.5 transition-colors hover:text-gray-600 active:text-gray-700"
           >
-            Save & Exit
+            {t('q_saving')}
           </button>
         </div>
       </div>

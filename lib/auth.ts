@@ -221,3 +221,59 @@ export function maskPhone(digits: string): string {
   if (d.length < 4) return '•••-••••'
   return `(•••) •••-${d.slice(-4)}`
 }
+
+// Intake form submission management
+export interface IntakeSubmission {
+  id: string
+  timestamp: string
+  answers: Record<string, unknown>
+  reviewed: boolean
+  notes?: string
+}
+
+const INTAKE_SUBMISSIONS_KEY = 'intake_submissions'
+
+export function getIntakeSubmissions(): IntakeSubmission[] {
+  try {
+    const raw = localStorage.getItem(INTAKE_SUBMISSIONS_KEY)
+    return raw ? JSON.parse(raw) : []
+  } catch {
+    return []
+  }
+}
+
+export function getIntakeSubmissionCount(): number {
+  return getIntakeSubmissions().length
+}
+
+export function markIntakeSubmissionReviewed(submissionId: string, notes?: string): void {
+  const submissions = getIntakeSubmissions()
+  const updated = submissions.map(s =>
+    s.id === submissionId ? { ...s, reviewed: true, notes: notes || s.notes } : s
+  )
+  localStorage.setItem(INTAKE_SUBMISSIONS_KEY, JSON.stringify(updated))
+}
+
+export function deleteIntakeSubmission(submissionId: string): void {
+  const submissions = getIntakeSubmissions().filter(s => s.id !== submissionId)
+  localStorage.setItem(INTAKE_SUBMISSIONS_KEY, JSON.stringify(submissions))
+}
+
+export function exportIntakeSubmissionsAsCSV(): string {
+  const submissions = getIntakeSubmissions()
+  if (submissions.length === 0) return 'ID,Timestamp,Reviewed\n'
+
+  const headers = ['ID', 'Timestamp', 'Reviewed', 'Notes']
+  const rows = submissions.map(s => [
+    s.id,
+    new Date(s.timestamp).toLocaleString('en-US'),
+    s.reviewed ? 'Yes' : 'No',
+    s.notes || '',
+  ])
+
+  const csv = [headers, ...rows].map(row =>
+    row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')
+  ).join('\n')
+
+  return csv
+}

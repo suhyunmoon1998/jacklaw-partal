@@ -11,7 +11,12 @@ import {
   getUnreadNotificationCount,
   markNotificationsRead,
   formatPhone,
+  getIntakeSubmissions,
+  markIntakeSubmissionReviewed,
+  deleteIntakeSubmission,
+  exportIntakeSubmissionsAsCSV,
   type SubmissionNotification,
+  type IntakeSubmission,
 } from '@/lib/auth'
 import { MOCK_ADMIN_PASSWORD } from '@/lib/mockData'
 
@@ -113,7 +118,28 @@ function ClientDetailModal({
 }) {
   const [tab, setTab] = useState<'progress' | 'answers' | 'documents'>('progress')
   const [expandedSection, setExpandedSection] = useState<number | null>(null)
+  const [translatedAnswers, setTranslatedAnswers] = useState<Record<string, string> | null>(null)
+  const [translating, setTranslating] = useState(false)
   const totalSections = QUESTIONNAIRE_SECTIONS.length
+
+  const handleTranslate = async () => {
+    if (translatedAnswers) { setTranslatedAnswers(null); return }
+    setTranslating(true)
+    const result: Record<string, string> = {}
+    for (const [id, val] of Object.entries(qState.answers)) {
+      const text = Array.isArray(val) ? val.join(', ') : String(val)
+      if (!text || text === 'yes' || text === 'no') { result[id] = text; continue }
+      try {
+        const r = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=es|en`)
+        const d = await r.json()
+        result[id] = d.responseData?.translatedText ?? text
+      } catch {
+        result[id] = text
+      }
+    }
+    setTranslatedAnswers(result)
+    setTranslating(false)
+  }
   const completedPct = qState.submitted
     ? 100
     : Math.round((qState.completedSections.length / totalSections) * 100)
@@ -127,9 +153,9 @@ function ClientDetailModal({
     : { label: 'Not Started', cls: 'bg-gray-100 text-gray-500' }
 
   return (
-    <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-2 sm:p-4" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-2 sm:p-4 animate-fade-in" onClick={onClose}>
       <div
-        className="bg-white rounded-2xl w-full max-w-2xl max-h-[95vh] overflow-hidden flex flex-col shadow-2xl"
+        className="bg-white rounded-2xl w-full max-w-2xl max-h-[95vh] overflow-hidden flex flex-col shadow-2xl animate-modal-in"
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
@@ -269,55 +295,77 @@ function ClientDetailModal({
                   <p className="text-gray-500 text-sm">No answers yet.</p>
                 </div>
               ) : (
-                <div className="space-y-3">
-                  {QUESTIONNAIRE_SECTIONS.map((section, idx) => {
-                    const filled = section.questions.filter(q => {
-                      const v = qState.answers[q.id]
-                      return v !== undefined && v !== '' && !(Array.isArray(v) && v.length === 0)
-                    })
-                    if (!filled.length) return null
-                    const isCompleted = qState.completedSections.includes(idx)
-                    const isOpen = expandedSection === idx
-
-                    return (
-                      <div key={section.id} className="border border-gray-100 rounded-xl overflow-hidden">
-                        {/* Section header — clickable to expand */}
-                        <button
-                          className="w-full flex items-center gap-3 px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors text-left"
-                          onClick={() => setExpandedSection(isOpen ? null : idx)}
-                        >
-                          <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0
-                            ${isCompleted ? 'bg-green-500 text-white' : 'bg-amber-400 text-white'}`}>
-                            {isCompleted ? '✓' : idx + 1}
-                          </div>
-                          <span className="flex-1 text-sm font-semibold text-black">{section.title}</span>
-                          <span className="text-xs text-gray-400">{filled.length} answers</span>
-                          <svg className={`w-4 h-4 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                <>
+                  <div className="flex justify-end mb-3">
+                    <button
+                      onClick={handleTranslate}
+                      disabled={translating}
+                      className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors ${
+                        translatedAnswers
+                          ? 'bg-gold text-white border-gold'
+                          : 'bg-white text-gray-600 border-gray-300 hover:border-gold hover:text-gold'
+                      }`}
+                    >
+                      {translating ? (
+                        <>
+                          <svg className="animate-spin h-3 w-3" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                           </svg>
-                        </button>
+                          Translating…
+                        </>
+                      ) : translatedAnswers ? 'Show Original' : 'Translate (ES→EN)'}
+                    </button>
+                  </div>
+                  <div className="space-y-3">
+                    {QUESTIONNAIRE_SECTIONS.map((section, idx) => {
+                      const filled = section.questions.filter(q => {
+                        const v = qState.answers[q.id]
+                        return v !== undefined && v !== '' && !(Array.isArray(v) && v.length === 0)
+                      })
+                      if (!filled.length) return null
+                      const isCompleted = qState.completedSections.includes(idx)
+                      const isOpen = expandedSection === idx
 
-                        {/* Section answers — collapsible */}
-                        {isOpen && (
-                          <div className="divide-y divide-gray-50">
-                            {filled.map(q => {
-                              const val = qState.answers[q.id]
-                              const display = Array.isArray(val)
-                                ? val.map(v => `• ${v}`).join('\n')
-                                : val === 'yes' ? '✓ Yes' : val === 'no' ? '✗ No' : String(val)
-                              return (
-                                <div key={q.id} className="px-4 py-3">
-                                  <p className="text-xs text-gray-400 mb-1">{q.label}</p>
-                                  <p className="text-sm text-gray-800 whitespace-pre-line font-medium">{display}</p>
-                                </div>
-                              )
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
+                      return (
+                        <div key={section.id} className="border border-gray-100 rounded-xl overflow-hidden">
+                          <button
+                            className="w-full flex items-center gap-3 px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors text-left"
+                            onClick={() => setExpandedSection(isOpen ? null : idx)}
+                          >
+                            <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0
+                              ${isCompleted ? 'bg-green-500 text-white' : 'bg-amber-400 text-white'}`}>
+                              {isCompleted ? '✓' : idx + 1}
+                            </div>
+                            <span className="flex-1 text-sm font-semibold text-black">{section.title}</span>
+                            <span className="text-xs text-gray-400">{filled.length} answers</span>
+                            <svg className={`w-4 h-4 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                            </svg>
+                          </button>
+
+                          {isOpen && (
+                            <div className="divide-y divide-gray-50">
+                              {filled.map(q => {
+                                const val = qState.answers[q.id]
+                                const raw = Array.isArray(val)
+                                  ? val.map(v => `• ${v}`).join('\n')
+                                  : val === 'yes' ? '✓ Yes' : val === 'no' ? '✗ No' : String(val)
+                                const display = translatedAnswers ? (translatedAnswers[q.id] ?? raw) : raw
+                                return (
+                                  <div key={q.id} className="px-4 py-3">
+                                    <p className="text-xs text-gray-400 mb-1">{q.label}</p>
+                                    <p className="text-sm text-gray-800 whitespace-pre-line font-medium">{display}</p>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </>
               )}
             </div>
           )}
@@ -417,9 +465,9 @@ function AddClientModal({ onClose, onAdded }: { onClose: () => void; onAdded: ()
   }
 
   return (
-    <div className="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 animate-fade-in" onClick={onClose}>
       <div
-        className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden"
+        className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden animate-modal-in"
         onClick={e => e.stopPropagation()}
       >
         <div className="bg-black px-5 py-4 flex items-center justify-between">
@@ -491,9 +539,9 @@ function NotificationPanel({ onClose }: { onClose: () => void }) {
   const notifications = getSubmissionNotifications()
 
   return (
-    <div className="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 animate-fade-in" onClick={onClose}>
       <div
-        className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden"
+        className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden animate-modal-in"
         onClick={e => e.stopPropagation()}
       >
         <div className="bg-black px-5 py-4 flex items-center justify-between">
@@ -563,6 +611,10 @@ export default function AdminPage() {
   const [showNotifications, setShowNotifications] = useState(false)
   const [showAddClient, setShowAddClient] = useState(false)
   const [allClients, setAllClients] = useState<AdminClient[]>([])
+  const [activeTab, setActiveTab] = useState<'clients' | 'intake'>('clients')
+  const [intakeSubmissions, setIntakeSubmissions] = useState<IntakeSubmission[]>([])
+  const [selectedSubmission, setSelectedSubmission] = useState<IntakeSubmission | null>(null)
+  const [submissionNotes, setSubmissionNotes] = useState('')
   const router = useRouter()
 
   const fetchClients = async () => {
@@ -581,9 +633,16 @@ export default function AdminPage() {
     if (isAuth) {
       setUnreadCount(getUnreadNotificationCount())
       fetchClients()
+      setIntakeSubmissions(getIntakeSubmissions())
     }
     setLoading(false)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (selectedSubmission) {
+      setSubmissionNotes(selectedSubmission.notes || '')
+    }
+  }, [selectedSubmission])
 
   const handleLogout = () => {
     clearAdminSession()
@@ -603,6 +662,38 @@ export default function AdminPage() {
       headers: { 'x-admin-key': MOCK_ADMIN_PASSWORD },
     })
     fetchClients()
+  }
+
+  const handleReviewSubmission = (submissionId: string) => {
+    const submission = intakeSubmissions.find(s => s.id === submissionId)
+    if (submission) {
+      markIntakeSubmissionReviewed(submissionId, submissionNotes)
+      setIntakeSubmissions(prev =>
+        prev.map(s =>
+          s.id === submissionId
+            ? { ...s, reviewed: true, notes: submissionNotes || s.notes }
+            : s
+        )
+      )
+    }
+  }
+
+  const handleDeleteSubmission = (submissionId: string) => {
+    if (!confirm('Delete this intake submission? This cannot be undone.')) return
+    deleteIntakeSubmission(submissionId)
+    setIntakeSubmissions(prev => prev.filter(s => s.id !== submissionId))
+    setSelectedSubmission(null)
+  }
+
+  const handleExportSubmissions = () => {
+    const csv = exportIntakeSubmissionsAsCSV()
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `intake-submissions-${new Date().toISOString().split('T')[0]}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
   }
 
   const handleViewClient = async (client: AdminClient) => {
@@ -625,7 +716,33 @@ export default function AdminPage() {
     return { label: 'Not Started', cls: 'bg-gray-100 text-gray-500' }
   }
 
-  if (loading) return null
+  if (loading) return (
+    <div className="min-h-screen bg-gray-50 flex flex-col">
+      <div className="bg-black h-14 border-b border-white/10" />
+      <main className="flex-1 px-4 py-6 max-w-6xl mx-auto w-full">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
+              <div className="animate-shimmer h-8 w-12 rounded-lg mb-2" />
+              <div className="animate-shimmer h-3 w-20 rounded" />
+            </div>
+          ))}
+        </div>
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-100">
+            <div className="animate-shimmer h-5 w-24 rounded" />
+          </div>
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="px-6 py-4 border-b border-gray-50 flex gap-4">
+              <div className="animate-shimmer h-4 w-32 rounded" />
+              <div className="animate-shimmer h-4 w-24 rounded" />
+              <div className="animate-shimmer h-4 w-16 rounded" />
+            </div>
+          ))}
+        </div>
+      </main>
+    </div>
+  )
   if (!authenticated) return <AdminLogin onLogin={() => { setAuthenticated(true); fetchClients() }} />
 
   const submitted = allClients.filter(c => c.questionnaire.submitted).length
@@ -633,7 +750,7 @@ export default function AdminPage() {
   const totalDocs = allClients.reduce((acc, c) => acc + c.documentCount, 0)
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div className="min-h-screen bg-gray-50 flex flex-col animate-fade-in">
       {/* Header */}
       <header className="bg-black border-b border-white/10">
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
@@ -700,26 +817,61 @@ export default function AdminPage() {
           </button>
         )}
 
-        {/* Page title */}
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-black">Client Overview</h1>
-          <p className="text-gray-500 text-sm mt-1">{allClients.length} registered clients</p>
+        {/* Tabs */}
+        <div className="mb-6 border-b border-gray-200">
+          <div className="flex gap-6">
+            <button
+              onClick={() => setActiveTab('clients')}
+              className={`pb-3 font-semibold transition-colors ${
+                activeTab === 'clients'
+                  ? 'border-b-2 border-gold text-black'
+                  : 'text-gray-500 hover:text-black'
+              }`}
+            >
+              Clients ({allClients.length})
+            </button>
+            <button
+              onClick={() => setActiveTab('intake')}
+              className={`pb-3 font-semibold transition-colors ${
+                activeTab === 'intake'
+                  ? 'border-b-2 border-gold text-black'
+                  : 'text-gray-500 hover:text-black'
+              }`}
+            >
+              Intake Submissions ({intakeSubmissions.length})
+            </button>
+          </div>
         </div>
 
-        {/* Stats */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
-          {[
-            { label: 'Total Clients', value: allClients.length, color: 'text-black' },
-            { label: 'Submitted', value: submitted, color: 'text-green-600' },
-            { label: 'In Progress', value: inProgress, color: 'text-amber-600' },
-            { label: 'Documents', value: totalDocs, color: 'text-gold' },
-          ].map(stat => (
-            <div key={stat.label} className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
-              <p className={`text-3xl font-bold ${stat.color}`}>{stat.value}</p>
-              <p className="text-xs text-gray-400 mt-1">{stat.label}</p>
-            </div>
-          ))}
+        {/* Page title */}
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold text-black">
+            {activeTab === 'clients' ? 'Client Overview' : 'Intake Submissions'}
+          </h1>
+          <p className="text-gray-500 text-sm mt-1">
+            {activeTab === 'clients'
+              ? `${allClients.length} registered clients`
+              : `${intakeSubmissions.length} total submissions · ${intakeSubmissions.filter(s => !s.reviewed).length} unreviewed`}
+          </p>
         </div>
+
+        {/* Clients View */}
+        {activeTab === 'clients' && (
+          <>
+            {/* Stats */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+              {[
+                { label: 'Total Clients', value: allClients.length, color: 'text-black' },
+                { label: 'Submitted', value: submitted, color: 'text-green-600' },
+                { label: 'In Progress', value: inProgress, color: 'text-amber-600' },
+                { label: 'Documents', value: totalDocs, color: 'text-gold' },
+              ].map((stat, i) => (
+                <div key={stat.label} className={`bg-white rounded-2xl border border-gray-100 p-5 shadow-sm hover:shadow-md transition-shadow duration-200 animate-slide-up stagger-${i + 1}`}>
+                  <p className={`text-3xl font-bold ${stat.color}`}>{stat.value}</p>
+                  <p className="text-xs text-gray-400 mt-1">{stat.label}</p>
+                </div>
+              ))}
+            </div>
 
         {/* Client table */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
@@ -755,7 +907,7 @@ export default function AdminPage() {
               const status = getStatus(client)
               const pct = client.questionnaire.submitted ? 100 : Math.round((client.questionnaire.completedSections.length / QUESTIONNAIRE_SECTIONS.length) * 100)
               return (
-                <div key={client.id} className="p-4">
+                <div key={client.id} className="p-4 transition-colors duration-150 hover:bg-gray-50/80 active:bg-gray-100">
                   <div className="flex items-start justify-between mb-3">
                     <div>
                       <p className="font-semibold text-gray-900">{client.name}</p>
@@ -775,13 +927,13 @@ export default function AdminPage() {
                   <div className="flex gap-2">
                     <button
                       onClick={() => handleViewClient(client)}
-                      className="flex-1 text-center text-sm font-medium text-gold hover:text-gold-dark transition-colors py-2 border border-gold/30 rounded-xl hover:bg-gold/5"
+                      className="flex-1 text-center text-sm font-medium text-gold py-2 border border-gold/30 rounded-xl transition-all duration-150 hover:bg-gold hover:text-white hover:border-gold active:scale-[0.97]"
                     >
                       View Details →
                     </button>
                     <button
                       onClick={() => handleDeleteClient(client.id)}
-                      className="px-3 py-2 border border-red-200 text-red-400 rounded-xl hover:bg-red-50 transition-colors"
+                      className="px-3 py-2 border border-red-200 text-red-400 rounded-xl transition-all duration-150 hover:bg-red-500 hover:text-white hover:border-red-500 active:scale-[0.97]"
                       aria-label="Delete client"
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -853,11 +1005,11 @@ export default function AdminPage() {
                         </p>
                       </td>
                       <td className="px-6 py-4">
-                        <div className="flex items-center gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button onClick={() => handleViewClient(client)} className="text-gold hover:text-gold-dark text-sm font-semibold transition-colors">
+                        <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-all duration-150">
+                          <button onClick={() => handleViewClient(client)} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-gold/10 text-gold hover:bg-gold hover:text-white transition-all duration-150 active:scale-[0.97]">
                             View →
                           </button>
-                          <button onClick={() => handleDeleteClient(client.id)} className="text-gray-300 hover:text-red-400 transition-colors" aria-label="Delete">
+                          <button onClick={() => handleDeleteClient(client.id)} className="p-1.5 rounded-lg text-gray-300 hover:bg-red-50 hover:text-red-400 transition-all duration-150 active:scale-[0.97]" aria-label="Delete">
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                             </svg>
@@ -871,6 +1023,154 @@ export default function AdminPage() {
             </table>
           </div>
         </div>
+          </>
+        )}
+
+        {/* Intake Submissions View */}
+        {activeTab === 'intake' && (
+          <>
+            {intakeSubmissions.length === 0 ? (
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-12 text-center">
+                <p className="text-4xl mb-3">📋</p>
+                <p className="text-gray-600 font-medium">No submissions yet</p>
+                <p className="text-sm text-gray-400 mt-1">Intake forms submitted by clients will appear here</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {/* Export button */}
+                <div className="flex justify-end">
+                  <button
+                    onClick={handleExportSubmissions}
+                    className="flex items-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-xl text-sm font-semibold transition-colors"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                    Export as CSV
+                  </button>
+                </div>
+
+                {/* Submissions list */}
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                  {/* Mobile cards */}
+                  <div className="divide-y divide-gray-50 sm:hidden">
+                    {intakeSubmissions.map(submission => (
+                      <div key={submission.id} className="p-4 transition-colors duration-150 hover:bg-gray-50/80">
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex-1">
+                            <p className="font-semibold text-gray-900 text-sm">
+                              {new Date(submission.timestamp).toLocaleDateString('en-US', {
+                                month: 'short', day: 'numeric', year: 'numeric'
+                              })}
+                            </p>
+                            <p className="text-xs text-gray-400 mt-0.5">
+                              {new Date(submission.timestamp).toLocaleTimeString('en-US', {
+                                hour: 'numeric', minute: '2-digit',                               })}
+                            </p>
+                          </div>
+                          <span className={`text-xs font-semibold px-2 py-1 rounded-full ${
+                            submission.reviewed
+                              ? 'bg-green-100 text-green-700'
+                              : 'bg-amber-100 text-amber-700'
+                          }`}>
+                            {submission.reviewed ? 'Reviewed' : 'Unreviewed'}
+                          </span>
+                        </div>
+                        {submission.notes && (
+                          <p className="text-sm text-gray-600 mb-3 p-2 bg-gray-50 rounded border border-gray-200">{submission.notes}</p>
+                        )}
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => setSelectedSubmission(submission)}
+                            className="flex-1 text-center text-sm font-medium text-gold py-2 border border-gold/30 rounded-xl transition-all duration-150 hover:bg-gold hover:text-white active:scale-[0.97]"
+                          >
+                            View Details
+                          </button>
+                          <button
+                            onClick={() => handleDeleteSubmission(submission.id)}
+                            className="px-3 py-2 border border-red-200 text-red-400 rounded-xl transition-all duration-150 hover:bg-red-500 hover:text-white active:scale-[0.97]"
+                            aria-label="Delete"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Desktop table */}
+                  <div className="hidden sm:block">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="bg-gray-50/50 border-b border-gray-100">
+                          {['Submitted', 'Status', 'Notes', ''].map(h => (
+                            <th key={h} className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wider px-6 py-3">
+                              {h}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-50">
+                        {intakeSubmissions.map(submission => (
+                          <tr key={submission.id} className="hover:bg-gray-50/50 transition-colors group">
+                            <td className="px-6 py-4">
+                              <div>
+                                <p className="font-semibold text-gray-900 text-sm">
+                                  {new Date(submission.timestamp).toLocaleDateString('en-US', {
+                                    month: 'short', day: 'numeric', year: 'numeric'
+                                  })}
+                                </p>
+                                <p className="text-xs text-gray-400 mt-0.5">
+                                  {new Date(submission.timestamp).toLocaleTimeString('en-US', {
+                                    hour: 'numeric', minute: '2-digit',                                   })}
+                                </p>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4">
+                              <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${
+                                submission.reviewed
+                                  ? 'bg-green-100 text-green-700'
+                                  : 'bg-amber-100 text-amber-700'
+                              }`}>
+                                {submission.reviewed ? 'Reviewed' : 'Unreviewed'}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4">
+                              <p className="text-sm text-gray-700 max-w-xs truncate">
+                                {submission.notes || '—'}
+                              </p>
+                            </td>
+                            <td className="px-6 py-4">
+                              <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-all duration-150">
+                                <button
+                                  onClick={() => setSelectedSubmission(submission)}
+                                  className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-gold/10 text-gold hover:bg-gold hover:text-white transition-all active:scale-[0.97]"
+                                >
+                                  View →
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteSubmission(submission.id)}
+                                  className="p-1.5 rounded-lg text-gray-300 hover:bg-red-50 hover:text-red-400 transition-all active:scale-[0.97]"
+                                  aria-label="Delete"
+                                >
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                  </svg>
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
+          </>
+        )}
 
         <p className="text-xs text-gray-400 mt-6 text-center">
           JACKLAW Admin Panel · All client data is attorney-client privileged · Internal use only
@@ -898,6 +1198,97 @@ export default function AdminPage() {
           documents={clientData.documents}
           onClose={() => { setSelectedClient(null); setClientData(null) }}
         />
+      )}
+
+      {/* Intake submission detail modal */}
+      {selectedSubmission && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 animate-fade-in">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto animate-slide-up">
+            <div className="sticky top-0 bg-white border-b border-gray-100 px-6 py-4 flex items-center justify-between">
+              <h2 className="font-bold text-lg text-black">Submission Details</h2>
+              <button
+                onClick={() => setSelectedSubmission(null)}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="px-6 py-6 space-y-6">
+              {/* Timestamp and status */}
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-xs text-gray-400 uppercase tracking-wider font-semibold">Submitted</p>
+                  <p className="text-base font-semibold text-black mt-1">
+                    {new Date(selectedSubmission.timestamp).toLocaleDateString('en-US', {
+                      month: 'long', day: 'numeric', year: 'numeric'
+                    })} at {new Date(selectedSubmission.timestamp).toLocaleTimeString('en-US', {
+                      hour: 'numeric', minute: '2-digit',                     })}
+                  </p>
+                </div>
+                <span className={`text-sm font-semibold px-3 py-1.5 rounded-full ${
+                  selectedSubmission.reviewed
+                    ? 'bg-green-100 text-green-700'
+                    : 'bg-amber-100 text-amber-700'
+                }`}>
+                  {selectedSubmission.reviewed ? '✓ Reviewed' : 'Pending Review'}
+                </span>
+              </div>
+
+              {/* Notes editor */}
+              <div>
+                <label className="label">Admin Notes</label>
+                <textarea
+                  value={submissionNotes}
+                  onChange={e => setSubmissionNotes(e.target.value)}
+                  placeholder="Add notes about this submission..."
+                  rows={4}
+                  className="input-field resize-none"
+                />
+              </div>
+
+              {/* Submission answers preview */}
+              <div>
+                <p className="text-xs text-gray-400 uppercase tracking-wider font-semibold mb-3">Submission Data</p>
+                <div className="bg-gray-50 rounded-xl border border-gray-200 p-4 max-h-48 overflow-y-auto">
+                  <pre className="text-xs text-gray-600 font-mono whitespace-pre-wrap break-words">
+                    {JSON.stringify(selectedSubmission.answers, null, 2)}
+                  </pre>
+                </div>
+              </div>
+
+              {/* Action buttons */}
+              <div className="flex gap-3 pt-4 border-t border-gray-100">
+                <button
+                  onClick={() => {
+                    handleReviewSubmission(selectedSubmission.id)
+                    setSelectedSubmission(null)
+                  }}
+                  className="flex-1 bg-gold hover:bg-gold-dark text-white py-3 rounded-xl font-semibold transition-colors active:scale-[0.97]"
+                >
+                  {selectedSubmission.reviewed ? 'Update Notes' : 'Mark as Reviewed'}
+                </button>
+                <button
+                  onClick={() => {
+                    handleDeleteSubmission(selectedSubmission.id)
+                    setSelectedSubmission(null)
+                  }}
+                  className="flex-1 border-2 border-red-200 text-red-400 hover:bg-red-50 py-3 rounded-xl font-semibold transition-colors active:scale-[0.97]"
+                >
+                  Delete
+                </button>
+                <button
+                  onClick={() => setSelectedSubmission(null)}
+                  className="flex-1 border-2 border-gray-200 text-gray-700 hover:bg-gray-50 py-3 rounded-xl font-semibold transition-colors active:scale-[0.97]"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
