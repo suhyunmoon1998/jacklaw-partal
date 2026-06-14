@@ -270,13 +270,8 @@ export default function IntakePage() {
   }
 
   const handleSaveDraft = () => {
-    // Draft is auto-saved, just show confirmation
+    // Draft is auto-saved continuously
     setSubmitError('')
-    const msg = 'Draft saved. You can return to this form anytime.'
-    localStorage.setItem('intake_form_message', msg)
-    setTimeout(() => {
-      localStorage.removeItem('intake_form_message')
-    }, 3000)
   }
 
   if (submitSuccess) {
