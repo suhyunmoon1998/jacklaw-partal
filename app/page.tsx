@@ -75,27 +75,6 @@ export default function PortalHome() {
             </div>
           </button>
 
-          {/* Study Portal */}
-          <button
-            onClick={() => router.push('/study')}
-            className="w-full group relative bg-white/5 hover:bg-white/10 active:bg-white/15 border border-white/10 hover:border-gold/50 rounded-2xl p-6 text-left transition-all"
-          >
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-gold/15 group-hover:bg-gold rounded-xl flex items-center justify-center shrink-0 transition-colors">
-                <svg className="w-6 h-6 text-gold group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6.253v13m0-13C6.5 6.253 2 10.998 2 17s4.5 10.747 10 10.747c5.5 0 10-4.998 10-10.747S17.5 6.253 12 6.253z" />
-                </svg>
-              </div>
-              <div className="flex-1">
-                <p className="text-white font-bold text-base">Study Portal</p>
-                <p className="text-white/40 text-sm mt-0.5">Learn with interactive flashcards</p>
-              </div>
-              <svg className="w-5 h-5 text-white/20 group-hover:text-gold transition-colors shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            </div>
-          </button>
-
           {/* Admin Portal */}
           <button
             onClick={() => router.push('/admin')}
