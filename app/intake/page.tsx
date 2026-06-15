@@ -6,8 +6,9 @@ import Image from 'next/image'
 import { INTAKE_SECTIONS, IntakeSection } from '@/lib/intakeFormData'
 import { INTAKE_SECTIONS_ES } from '@/lib/intakeFormDataEs'
 import { AnswerValue, Question } from '@/types'
-import { addSubmissionNotification } from '@/lib/auth'
+import { addSubmissionNotification, addIntakeSubmission, saveGeneratedGFROGDraft, markGFROGDraftGenerated } from '@/lib/auth'
 import { useLanguage } from '@/lib/i18n'
+import { generateGFROGResponses } from '@/lib/gfrogResponseGenerator'
 
 function QuestionInput({
   question,
@@ -227,25 +228,65 @@ export default function IntakePage() {
       // In a real app, this would send to a backend
       // For now, we'll just store it and show success
       const submissionId = `intake-${Date.now()}`
-      const submissionData = {
-        id: submissionId,
-        timestamp: new Date().toISOString(),
+      const timestamp = new Date().toISOString()
+
+      // Add intake submission using helper function
+      const submission = addIntakeSubmission({
+        timestamp,
         answers,
         reviewed: false,
+      })
+
+      const clientName = String(answers.legal_name || 'New Client')
+
+      // Auto-generate GFROG responses from intake answers
+      try {
+        // Use Common GFROG Starter Set by default (indices 1.1, 2.1-2.13, etc.)
+        const commonInterrogatories = [
+          '1.1',
+          '2.1', '2.2', '2.3', '2.4',
+          '4.1', '4.2',
+          '6.1', '6.2', '6.3', '6.4',
+          '8.1', '8.3',
+          '9.1', '9.2',
+          '10.1', '10.2',
+          '11.1',
+          '12.1', '12.2', '12.3', '12.4', '12.5',
+          '15.1',
+          '16.1',
+        ]
+
+        const gfrogResponses = generateGFROGResponses(
+          `${clientName} Case`,
+          'Plaintiff',
+          '1',
+          commonInterrogatories,
+          answers
+        )
+
+        // Store the generated draft
+        saveGeneratedGFROGDraft({
+          intakeSubmissionId: submission.id,
+          generatedAt: timestamp,
+          matterName: gfrogResponses.matterName,
+          respondingParty: gfrogResponses.respondingParty,
+          setNumber: gfrogResponses.setNumber,
+          responseJson: JSON.stringify(gfrogResponses),
+        })
+
+        // Mark that GFROG draft was generated
+        markGFROGDraftGenerated(submission.id)
+      } catch (err) {
+        console.error('Failed to auto-generate GFROG responses:', err)
+        // Don't fail submission if response generation fails
       }
 
-      // Store submission locally for demonstration
-      const submissions = JSON.parse(localStorage.getItem('intake_submissions') || '[]')
-      submissions.push(submissionData)
-      localStorage.setItem('intake_submissions', JSON.stringify(submissions))
-
       // Create notification for admin
-      const clientName = String(answers.legal_name || 'New Client')
       addSubmissionNotification({
-        clientId: submissionId,
+        clientId: submission.id,
         clientName,
-        caseType: 'Intake Form',
-        submittedAt: submissionData.timestamp,
+        caseType: 'Intake Form Submitted',
+        submittedAt: timestamp,
       })
 
       // Clear the draft

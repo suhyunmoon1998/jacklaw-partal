@@ -229,9 +229,22 @@ export interface IntakeSubmission {
   answers: Record<string, unknown>
   reviewed: boolean
   notes?: string
+  gfrogDraftGenerated?: boolean
+  gfrogDraftGeneratedAt?: string
+}
+
+export interface GeneratedGFROGDraft {
+  id: string
+  intakeSubmissionId: string
+  generatedAt: string
+  matterName: string
+  respondingParty: string
+  setNumber: string
+  responseJson: string // Serialized GFROGResponseSet
 }
 
 const INTAKE_SUBMISSIONS_KEY = 'intake_submissions'
+const GFROG_DRAFTS_KEY = 'gfrog_auto_drafts'
 
 export function getIntakeSubmissions(): IntakeSubmission[] {
   try {
@@ -240,6 +253,16 @@ export function getIntakeSubmissions(): IntakeSubmission[] {
   } catch {
     return []
   }
+}
+
+export function addIntakeSubmission(submission: Omit<IntakeSubmission, 'id'>): IntakeSubmission {
+  const submissions = getIntakeSubmissions()
+  const newSubmission: IntakeSubmission = {
+    ...submission,
+    id: `intake-${Date.now()}`,
+  }
+  localStorage.setItem(INTAKE_SUBMISSIONS_KEY, JSON.stringify([newSubmission, ...submissions]))
+  return newSubmission
 }
 
 export function getIntakeSubmissionCount(): number {
@@ -252,6 +275,47 @@ export function markIntakeSubmissionReviewed(submissionId: string, notes?: strin
     s.id === submissionId ? { ...s, reviewed: true, notes: notes || s.notes } : s
   )
   localStorage.setItem(INTAKE_SUBMISSIONS_KEY, JSON.stringify(updated))
+}
+
+export function markGFROGDraftGenerated(submissionId: string): void {
+  const submissions = getIntakeSubmissions()
+  const updated = submissions.map(s =>
+    s.id === submissionId
+      ? { ...s, gfrogDraftGenerated: true, gfrogDraftGeneratedAt: new Date().toISOString() }
+      : s
+  )
+  localStorage.setItem(INTAKE_SUBMISSIONS_KEY, JSON.stringify(updated))
+}
+
+// Store auto-generated GFROG draft
+export function saveGeneratedGFROGDraft(draft: Omit<GeneratedGFROGDraft, 'id'>): GeneratedGFROGDraft {
+  const drafts = getGeneratedGFROGDrafts()
+  const newDraft: GeneratedGFROGDraft = {
+    ...draft,
+    id: `gfrog-draft-${Date.now()}`,
+  }
+  localStorage.setItem(GFROG_DRAFTS_KEY, JSON.stringify([newDraft, ...drafts]))
+  return newDraft
+}
+
+export function getGeneratedGFROGDrafts(): GeneratedGFROGDraft[] {
+  try {
+    const raw = localStorage.getItem(GFROG_DRAFTS_KEY)
+    return raw ? JSON.parse(raw) : []
+  } catch {
+    return []
+  }
+}
+
+export function getGeneratedGFROGDraftForSubmission(submissionId: string): GeneratedGFROGDraft | null {
+  const drafts = getGeneratedGFROGDrafts()
+  return drafts.find(d => d.intakeSubmissionId === submissionId) || null
+}
+
+export function deleteGeneratedGFROGDraft(draftId: string): void {
+  const drafts = getGeneratedGFROGDrafts()
+  const updated = drafts.filter(d => d.id !== draftId)
+  localStorage.setItem(GFROG_DRAFTS_KEY, JSON.stringify(updated))
 }
 
 export function deleteIntakeSubmission(submissionId: string): void {

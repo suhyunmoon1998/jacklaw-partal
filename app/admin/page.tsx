@@ -15,8 +15,10 @@ import {
   markIntakeSubmissionReviewed,
   deleteIntakeSubmission,
   exportIntakeSubmissionsAsCSV,
+  getGeneratedGFROGDraftForSubmission,
   type SubmissionNotification,
   type IntakeSubmission,
+  type GeneratedGFROGDraft,
 } from '@/lib/auth'
 import { MOCK_ADMIN_PASSWORD } from '@/lib/mockData'
 
@@ -613,6 +615,7 @@ export default function AdminPage() {
   const [allClients, setAllClients] = useState<AdminClient[]>([])
   const [activeTab, setActiveTab] = useState<'clients' | 'intake'>('clients')
   const [intakeSubmissions, setIntakeSubmissions] = useState<IntakeSubmission[]>([])
+  const [viewingGFROGDraft, setViewingGFROGDraft] = useState<GeneratedGFROGDraft | null>(null)
   const [selectedSubmission, setSelectedSubmission] = useState<IntakeSubmission | null>(null)
   const [submissionNotes, setSubmissionNotes] = useState('')
   const router = useRouter()
@@ -1151,50 +1154,64 @@ export default function AdminPage() {
                 <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
                   {/* Mobile cards */}
                   <div className="divide-y divide-gray-50 sm:hidden">
-                    {intakeSubmissions.map(submission => (
-                      <div key={submission.id} className="p-4 transition-colors duration-150 hover:bg-gray-50/80">
-                        <div className="flex items-start justify-between mb-3">
-                          <div className="flex-1">
-                            <p className="font-semibold text-gray-900 text-sm">
-                              {new Date(submission.timestamp).toLocaleDateString('en-US', {
-                                month: 'short', day: 'numeric', year: 'numeric'
-                              })}
-                            </p>
-                            <p className="text-xs text-gray-400 mt-0.5">
-                              {new Date(submission.timestamp).toLocaleTimeString('en-US', {
-                                hour: 'numeric', minute: '2-digit',                               })}
-                            </p>
+                    {intakeSubmissions.map(submission => {
+                      const gfrogDraft = getGeneratedGFROGDraftForSubmission(submission.id)
+                      return (
+                        <div key={submission.id} className="p-4 transition-colors duration-150 hover:bg-gray-50/80">
+                          <div className="flex items-start justify-between mb-3">
+                            <div className="flex-1">
+                              <p className="font-semibold text-gray-900 text-sm">
+                                {new Date(submission.timestamp).toLocaleDateString('en-US', {
+                                  month: 'short', day: 'numeric', year: 'numeric'
+                                })}
+                              </p>
+                              <p className="text-xs text-gray-400 mt-0.5">
+                                {new Date(submission.timestamp).toLocaleTimeString('en-US', {
+                                  hour: 'numeric', minute: '2-digit',                               })}
+                              </p>
+                              {gfrogDraft && (
+                                <span className="text-xs font-semibold text-blue-600 mt-2 block">✓ GFROG responses auto-generated</span>
+                              )}
+                            </div>
+                            <span className={`text-xs font-semibold px-2 py-1 rounded-full ${
+                              submission.reviewed
+                                ? 'bg-green-100 text-green-700'
+                                : 'bg-amber-100 text-amber-700'
+                            }`}>
+                              {submission.reviewed ? 'Reviewed' : 'Unreviewed'}
+                            </span>
                           </div>
-                          <span className={`text-xs font-semibold px-2 py-1 rounded-full ${
-                            submission.reviewed
-                              ? 'bg-green-100 text-green-700'
-                              : 'bg-amber-100 text-amber-700'
-                          }`}>
-                            {submission.reviewed ? 'Reviewed' : 'Unreviewed'}
-                          </span>
+                          {submission.notes && (
+                            <p className="text-sm text-gray-600 mb-3 p-2 bg-gray-50 rounded border border-gray-200">{submission.notes}</p>
+                          )}
+                          <div className="flex gap-2 flex-col">
+                            <button
+                              onClick={() => setSelectedSubmission(submission)}
+                              className="text-center text-sm font-medium text-gold py-2 border border-gold/30 rounded-xl transition-all duration-150 hover:bg-gold hover:text-white active:scale-[0.97]"
+                            >
+                              View Details
+                            </button>
+                            {gfrogDraft && (
+                              <button
+                                onClick={() => setViewingGFROGDraft(gfrogDraft)}
+                                className="text-center text-sm font-medium text-blue-600 py-2 border border-blue-300 rounded-xl transition-all duration-150 hover:bg-blue-600 hover:text-white active:scale-[0.97]"
+                              >
+                                View Generated GFROG Responses
+                              </button>
+                            )}
+                            <button
+                              onClick={() => handleDeleteSubmission(submission.id)}
+                              className="px-3 py-2 border border-red-200 text-red-400 rounded-xl transition-all duration-150 hover:bg-red-500 hover:text-white active:scale-[0.97]"
+                              aria-label="Delete"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
+                          </div>
                         </div>
-                        {submission.notes && (
-                          <p className="text-sm text-gray-600 mb-3 p-2 bg-gray-50 rounded border border-gray-200">{submission.notes}</p>
-                        )}
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => setSelectedSubmission(submission)}
-                            className="flex-1 text-center text-sm font-medium text-gold py-2 border border-gold/30 rounded-xl transition-all duration-150 hover:bg-gold hover:text-white active:scale-[0.97]"
-                          >
-                            View Details
-                          </button>
-                          <button
-                            onClick={() => handleDeleteSubmission(submission.id)}
-                            className="px-3 py-2 border border-red-200 text-red-400 rounded-xl transition-all duration-150 hover:bg-red-500 hover:text-white active:scale-[0.97]"
-                            aria-label="Delete"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                          </button>
-                        </div>
-                      </div>
-                    ))}
+                      )
+                    })}
                   </div>
 
                   {/* Desktop table */}
@@ -1202,7 +1219,7 @@ export default function AdminPage() {
                     <table className="w-full">
                       <thead>
                         <tr className="bg-gray-50/50 border-b border-gray-100">
-                          {['Submitted', 'Status', 'Notes', ''].map(h => (
+                          {['Submitted', 'Status', 'GFROG', ''].map(h => (
                             <th key={h} className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wider px-6 py-3">
                               {h}
                             </th>
@@ -1210,56 +1227,69 @@ export default function AdminPage() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-50">
-                        {intakeSubmissions.map(submission => (
-                          <tr key={submission.id} className="hover:bg-gray-50/50 transition-colors group">
-                            <td className="px-6 py-4">
-                              <div>
-                                <p className="font-semibold text-gray-900 text-sm">
-                                  {new Date(submission.timestamp).toLocaleDateString('en-US', {
-                                    month: 'short', day: 'numeric', year: 'numeric'
-                                  })}
-                                </p>
-                                <p className="text-xs text-gray-400 mt-0.5">
-                                  {new Date(submission.timestamp).toLocaleTimeString('en-US', {
-                                    hour: 'numeric', minute: '2-digit',                                   })}
-                                </p>
-                              </div>
-                            </td>
-                            <td className="px-6 py-4">
-                              <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${
-                                submission.reviewed
-                                  ? 'bg-green-100 text-green-700'
-                                  : 'bg-amber-100 text-amber-700'
-                              }`}>
-                                {submission.reviewed ? 'Reviewed' : 'Unreviewed'}
-                              </span>
-                            </td>
-                            <td className="px-6 py-4">
-                              <p className="text-sm text-gray-700 max-w-xs truncate">
-                                {submission.notes || '—'}
-                              </p>
-                            </td>
-                            <td className="px-6 py-4">
-                              <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-all duration-150">
-                                <button
-                                  onClick={() => setSelectedSubmission(submission)}
-                                  className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-gold/10 text-gold hover:bg-gold hover:text-white transition-all active:scale-[0.97]"
-                                >
-                                  View →
-                                </button>
-                                <button
-                                  onClick={() => handleDeleteSubmission(submission.id)}
-                                  className="p-1.5 rounded-lg text-gray-300 hover:bg-red-50 hover:text-red-400 transition-all active:scale-[0.97]"
-                                  aria-label="Delete"
-                                >
-                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                  </svg>
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
+                        {intakeSubmissions.map(submission => {
+                          const gfrogDraft = getGeneratedGFROGDraftForSubmission(submission.id)
+                          return (
+                            <tr key={submission.id} className="hover:bg-gray-50/50 transition-colors group">
+                              <td className="px-6 py-4">
+                                <div>
+                                  <p className="font-semibold text-gray-900 text-sm">
+                                    {new Date(submission.timestamp).toLocaleDateString('en-US', {
+                                      month: 'short', day: 'numeric', year: 'numeric'
+                                    })}
+                                  </p>
+                                  <p className="text-xs text-gray-400 mt-0.5">
+                                    {new Date(submission.timestamp).toLocaleTimeString('en-US', {
+                                      hour: 'numeric', minute: '2-digit',                                   })}
+                                  </p>
+                                </div>
+                              </td>
+                              <td className="px-6 py-4">
+                                <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${
+                                  submission.reviewed
+                                    ? 'bg-green-100 text-green-700'
+                                    : 'bg-amber-100 text-amber-700'
+                                }`}>
+                                  {submission.reviewed ? 'Reviewed' : 'Unreviewed'}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4">
+                                {gfrogDraft ? (
+                                  <span className="text-xs font-semibold text-blue-600">✓ Generated</span>
+                                ) : (
+                                  <span className="text-xs text-gray-400">—</span>
+                                )}
+                              </td>
+                              <td className="px-6 py-4">
+                                <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-all duration-150">
+                                  <button
+                                    onClick={() => setSelectedSubmission(submission)}
+                                    className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-gold/10 text-gold hover:bg-gold hover:text-white transition-all active:scale-[0.97]"
+                                  >
+                                    View →
+                                  </button>
+                                  {gfrogDraft && (
+                                    <button
+                                      onClick={() => setViewingGFROGDraft(gfrogDraft)}
+                                      className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white transition-all active:scale-[0.97]"
+                                    >
+                                      GFROG →
+                                    </button>
+                                  )}
+                                  <button
+                                    onClick={() => handleDeleteSubmission(submission.id)}
+                                    className="p-1.5 rounded-lg text-gray-300 hover:bg-red-50 hover:text-red-400 transition-all active:scale-[0.97]"
+                                    aria-label="Delete"
+                                  >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                    </svg>
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          )
+                        })}
                       </tbody>
                     </table>
                   </div>
@@ -1273,6 +1303,100 @@ export default function AdminPage() {
           JACKLAW Admin Panel · All client data is attorney-client privileged · Internal use only
         </p>
       </main>
+
+      {/* GFROG Draft Viewer Modal */}
+      {viewingGFROGDraft && (
+        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4 animate-fade-in" onClick={() => setViewingGFROGDraft(null)}>
+          <div className="bg-white rounded-2xl w-full max-w-3xl max-h-[90vh] overflow-auto shadow-2xl animate-modal-in" onClick={e => e.stopPropagation()}>
+            <div className="sticky top-0 bg-black px-6 py-4 flex items-center justify-between border-b border-white/10">
+              <div>
+                <h3 className="text-white font-bold">Generated GFROG Responses</h3>
+                <p className="text-white/50 text-xs mt-1">Auto-generated from client intake • Set {viewingGFROGDraft.setNumber}</p>
+              </div>
+              <button onClick={() => setViewingGFROGDraft(null)} className="text-white/50 hover:text-white transition-colors">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+                <p className="text-sm text-blue-900">
+                  <strong>Case:</strong> {viewingGFROGDraft.matterName}<br/>
+                  <strong>Responding Party:</strong> {viewingGFROGDraft.respondingParty}<br/>
+                  <strong>Generated:</strong> {new Date(viewingGFROGDraft.generatedAt).toLocaleString()}
+                </p>
+              </div>
+
+              {(() => {
+                try {
+                  const responseSet = JSON.parse(viewingGFROGDraft.responseJson)
+                  return (
+                    <div>
+                      <p className="font-semibold text-gray-900 mb-3">
+                        {responseSet.responses.length} Interrogatory Responses
+                      </p>
+                      <div className="space-y-3 max-h-[calc(90vh-300px)] overflow-y-auto">
+                        {responseSet.responses.map((resp: any, idx: number) => (
+                          <details key={idx} className="border border-gray-200 rounded-lg p-3 hover:bg-gray-50">
+                            <summary className="cursor-pointer font-semibold text-gray-900 text-sm">
+                              Interrogatory {resp.interrogatoryNumber}: {resp.interrogatoryLabel}
+                            </summary>
+                            <div className="mt-3 space-y-2 text-sm text-gray-600">
+                              {resp.intakeAnswers.length > 0 && (
+                                <div>
+                                  <p className="font-semibold text-gray-700 text-xs mb-1">Related Intake Answers:</p>
+                                  {resp.intakeAnswers.map((ans: any, i: number) => (
+                                    <p key={i} className="text-xs text-gray-600 ml-2">
+                                      <strong>{ans.question}:</strong> {ans.answer}
+                                    </p>
+                                  ))}
+                                </div>
+                              )}
+                              <div>
+                                <p className="font-semibold text-gray-700 text-xs mb-1">Draft Response:</p>
+                                <p className="text-xs font-mono whitespace-pre-wrap text-gray-700 ml-2">{resp.draftResponse}</p>
+                              </div>
+                            </div>
+                          </details>
+                        ))}
+                      </div>
+
+                      <div className="mt-6 p-4 bg-amber-50 border border-amber-200 rounded-xl">
+                        <p className="text-xs text-amber-900">
+                          <strong>⚠️ Attorney Review Required:</strong> These responses were auto-generated from client intake answers. An attorney must review, refine, and approve all responses before filing. Adjust language for formal discovery compliance as needed.
+                        </p>
+                      </div>
+
+                      <div className="flex gap-3 mt-4">
+                        <button
+                          onClick={() => {
+                            const text = JSON.stringify(JSON.parse(viewingGFROGDraft.responseJson), null, 2)
+                            navigator.clipboard.writeText(text)
+                            alert('Responses copied to clipboard!')
+                          }}
+                          className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg text-sm font-semibold transition-colors"
+                        >
+                          Copy to Clipboard
+                        </button>
+                        <button
+                          onClick={() => setViewingGFROGDraft(null)}
+                          className="flex-1 border-2 border-gray-200 text-gray-700 hover:bg-gray-50 py-2 rounded-lg text-sm font-semibold transition-colors"
+                        >
+                          Close
+                        </button>
+                      </div>
+                    </div>
+                  )
+                } catch (e) {
+                  return <p className="text-red-600 text-sm">Error loading responses</p>
+                }
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Add client modal */}
       {showAddClient && (
