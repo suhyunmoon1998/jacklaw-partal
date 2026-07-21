@@ -57,7 +57,11 @@ export const en = {
   q_required_error: 'Please answer the required questions before continuing.',
   q_yes: 'Yes',
   q_no: 'No',
+  q_not_sure: 'Not Sure',
   q_select: 'Select…',
+  q_unanswered_heading: 'Unanswered questions',
+  q_unanswered_sub: "These questions haven't been answered yet. You can submit without them, or tap one to go answer it.",
+  q_go: 'Go',
 
   // Submitted page
   submitted_heading: 'Thank You!',
@@ -168,7 +172,11 @@ export const es: typeof en = {
   q_required_error: 'Por favor responda las preguntas obligatorias antes de continuar.',
   q_yes: 'Sí',
   q_no: 'No',
+  q_not_sure: 'No Estoy Seguro',
   q_select: 'Seleccionar…',
+  q_unanswered_heading: 'Preguntas sin responder',
+  q_unanswered_sub: 'Estas preguntas aún no han sido respondidas. Puede enviar sin ellas, o toque una para responderla.',
+  q_go: 'Ir',
 
   // Submitted page
   submitted_heading: '¡Gracias!',

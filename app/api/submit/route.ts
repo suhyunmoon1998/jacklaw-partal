@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { Resend } from 'resend'
-import { generateIntakeEmailHtml } from '@/lib/emailTemplate'
+import { generateIntakeEmailHtml, generateClientThankYouEmailHtml } from '@/lib/emailTemplate'
 import { AnswerValue } from '@/types'
 
 export async function POST(req: NextRequest) {
@@ -46,6 +46,23 @@ export async function POST(req: NextRequest) {
     if (error) {
       console.error('Resend error:', error)
       return NextResponse.json({ error: 'Failed to send email.' }, { status: 500 })
+    }
+
+    // Send the client a thank-you email with a link to schedule a consultation.
+    // Non-fatal: the firm has already been notified, so a failure here shouldn't fail the request.
+    const clientEmail = typeof answers.email === 'string' ? answers.email.trim() : ''
+    const calendlyUrl = process.env.CALENDLY_URL
+    if (clientEmail && clientEmail.includes('@') && calendlyUrl) {
+      try {
+        await resend.emails.send({
+          from: `JACKLAW Portal <${fromEmail}>`,
+          to: [clientEmail],
+          subject: 'Thank You — Law Offices of Jack D. Josephson, APC',
+          html: generateClientThankYouEmailHtml(clientName, calendlyUrl),
+        })
+      } catch (err) {
+        console.error('Client thank-you email failed:', err)
+      }
     }
 
     return NextResponse.json({ success: true })

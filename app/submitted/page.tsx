@@ -3,7 +3,7 @@
 import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Header from '@/components/Header'
-import { getSession, getQuestionnaireState } from '@/lib/auth'
+import { getSession } from '@/lib/auth'
 import { useLanguage } from '@/lib/i18n'
 
 export default function SubmittedPage() {
@@ -14,10 +14,14 @@ export default function SubmittedPage() {
     const s = getSession()
     if (!s) { router.replace('/client'); return }
 
-    const qState = getQuestionnaireState(s.clientId)
-    if (!qState.submitted) {
-      router.replace('/questionnaire')
-    }
+    fetch(`/api/questionnaire?clientId=${s.clientId}`)
+      .then(r => r.json())
+      .then(({ state }) => {
+        if (!state?.submitted) router.replace('/questionnaire')
+      })
+      .catch(() => {
+        // Transient network issue right after submitting — don't bounce the client away.
+      })
   }, [router])
 
   return (

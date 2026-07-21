@@ -20,10 +20,12 @@ export type QuestionType =
   | 'phone'
   | 'date'
   | 'yes_no'
+  | 'yes_no_unsure'
   | 'select'
   | 'multiselect'
   | 'textarea'
   | 'number'
+  | 'currency'
 
 export interface ShowIfCondition {
   questionId: string
@@ -45,6 +47,7 @@ export interface QuestionnaireSection {
   id: string
   title: string
   questions: Question[]
+  showIf?: ShowIfCondition
 }
 
 export type AnswerValue = string | string[]

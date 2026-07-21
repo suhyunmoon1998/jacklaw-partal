@@ -6,12 +6,18 @@ import Header from '@/components/Header'
 import { getSession, addSubmissionNotification } from '@/lib/auth'
 import { QUESTIONNAIRE_SECTIONS } from '@/lib/questionnaireData'
 import { QUESTIONNAIRE_SECTIONS_ES } from '@/lib/questionnaireDataEs'
-import { AnswerValue, Question, QuestionnaireState, Session } from '@/types'
+import { AnswerValue, Question, QuestionnaireSection, QuestionnaireState, Session } from '@/types'
 import { useLanguage } from '@/lib/i18n'
 
-function isVisible(q: Question, answers: Record<string, AnswerValue>): boolean {
+function isVisible(q: Question | QuestionnaireSection, answers: Record<string, AnswerValue>): boolean {
   if (!q.showIf) return true
   return answers[q.showIf.questionId] === q.showIf.value
+}
+
+function hasAnswer(val: AnswerValue | undefined): boolean {
+  if (!val) return false
+  if (Array.isArray(val)) return val.length > 0
+  return String(val).trim().length > 0
 }
 
 function QuestionInput({
@@ -20,6 +26,7 @@ function QuestionInput({
   onChange,
   yesLabel,
   noLabel,
+  notSureLabel,
   selectPlaceholder,
 }: {
   question: Question
@@ -27,6 +34,7 @@ function QuestionInput({
   onChange: (id: string, val: AnswerValue) => void
   yesLabel: string
   noLabel: string
+  notSureLabel: string
   selectPlaceholder: string
 }) {
   const strVal = typeof value === 'string' ? value : ''
@@ -50,6 +58,41 @@ function QuestionInput({
               {opt === 'yes' ? yesLabel : noLabel}
             </button>
           ))}
+        </div>
+      )
+
+    case 'yes_no_unsure':
+      return (
+        <div className="flex gap-2">
+          {(['yes', 'no', 'not_sure'] as const).map(opt => (
+            <button
+              key={opt}
+              type="button"
+              onClick={() => onChange(question.id, opt)}
+              className={`flex-1 py-4 rounded-xl border-2 font-semibold text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gold ${
+                strVal === opt
+                  ? 'bg-gold text-white border-gold'
+                  : 'bg-white text-gray-600 border-gray-200 hover:border-gold/50'
+              }`}
+            >
+              {opt === 'yes' ? yesLabel : opt === 'no' ? noLabel : notSureLabel}
+            </button>
+          ))}
+        </div>
+      )
+
+    case 'currency':
+      return (
+        <div className="relative">
+          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-medium">$</span>
+          <input
+            type="text"
+            inputMode="decimal"
+            value={strVal}
+            onChange={e => onChange(question.id, e.target.value.replace(/[^0-9.]/g, ''))}
+            placeholder={question.placeholder ?? '0.00'}
+            className="input-field pl-8"
+          />
         </div>
       )
 
@@ -168,7 +211,8 @@ export default function QuestionnairePage() {
   const router = useRouter()
   const { lang, t } = useLanguage()
 
-  const SECTIONS = lang === 'es' ? QUESTIONNAIRE_SECTIONS_ES : QUESTIONNAIRE_SECTIONS
+  const ALL_SECTIONS = lang === 'es' ? QUESTIONNAIRE_SECTIONS_ES : QUESTIONNAIRE_SECTIONS
+  const SECTIONS = ALL_SECTIONS.filter(s => isVisible(s, qState.answers))
 
   useEffect(() => {
     const s = getSession()
@@ -180,11 +224,12 @@ export default function QuestionnairePage() {
         if (state) {
           setQState(state)
           if (state.completedSections.length > 0) {
-            setCurrentSection(Math.min(state.completedSections.length, QUESTIONNAIRE_SECTIONS.length - 1))
+            const visibleCount = ALL_SECTIONS.filter(sec => isVisible(sec, state.answers)).length
+            setCurrentSection(Math.min(state.completedSections.length, visibleCount - 1))
           }
         }
       })
-  }, [router])
+  }, [router]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const section = SECTIONS[currentSection]
   const totalSections = SECTIONS.length
@@ -312,6 +357,18 @@ export default function QuestionnairePage() {
   const progressPct = Math.round((currentSection / totalSections) * 100)
   const visibleQuestions = section.questions.filter(q => isVisible(q, qState.answers))
 
+  const unanswered = SECTIONS.flatMap((s, sIdx) =>
+    s.questions
+      .filter(q => isVisible(q, qState.answers) && !hasAnswer(qState.answers[q.id]))
+      .map(q => ({ sectionIndex: sIdx, sectionTitle: s.title, question: q }))
+  )
+
+  const goToUnanswered = (sectionIndex: number) => {
+    setValidationError('')
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+    setCurrentSection(sectionIndex)
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       <Header showBack backHref="/dashboard" showLogout subtitle="Questionnaire" />
@@ -383,6 +440,7 @@ export default function QuestionnairePage() {
                   onChange={handleAnswerChange}
                   yesLabel={t('q_yes')}
                   noLabel={t('q_no')}
+                  notSureLabel={t('q_not_sure')}
                   selectPlaceholder={t('q_select')}
                 />
               </div>
@@ -398,6 +456,31 @@ export default function QuestionnairePage() {
             </div>
           )}
         </div>
+
+        {isLastSection && unanswered.length > 0 && (
+          <div className="card mb-4">
+            <p className="text-sm font-semibold text-black mb-1">
+              {t('q_unanswered_heading')} ({unanswered.length})
+            </p>
+            <p className="text-xs text-gray-400 mb-3">{t('q_unanswered_sub')}</p>
+            <div className="space-y-1.5 max-h-64 overflow-y-auto">
+              {unanswered.map(({ sectionIndex, sectionTitle, question }) => (
+                <button
+                  key={question.id}
+                  type="button"
+                  onClick={() => goToUnanswered(sectionIndex)}
+                  className="w-full flex items-center justify-between gap-3 text-left px-3 py-2 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  <span className="min-w-0">
+                    <span className="block text-xs text-gray-400">{sectionTitle}</span>
+                    <span className="block text-sm text-gray-700 truncate">{question.label}</span>
+                  </span>
+                  <span className="text-gold text-xs font-semibold shrink-0">{t('q_go')} →</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         <p className="text-center text-xs text-gray-400 mt-4">
           Answers are saved automatically · Protected by attorney-client privilege
