@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
 
   const { data: clients, error } = await getSupabase()
     .from('clients')
-    .select('id, name, phone, case_type, onboarding_status, created_at')
+    .select('id, name, phone, case_type, case_name, onboarding_status, created_at')
     .order('created_at', { ascending: false })
 
   if (error) return NextResponse.json({ error: 'Fetch failed' }, { status: 500 })
@@ -33,6 +33,7 @@ export async function GET(req: NextRequest) {
     name: c.name,
     phone: c.phone,
     caseType: c.case_type,
+    caseName: c.case_name ?? '',
     onboardingStatus: c.onboarding_status,
     createdAt: c.created_at,
     questionnaire: qMap[c.id]
@@ -72,6 +73,23 @@ export async function POST(req: NextRequest) {
   }
 
   return NextResponse.json({ client: data })
+}
+
+// PATCH /api/admin/clients — update a client's case name
+export async function PATCH(req: NextRequest) {
+  if (!isAdmin(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const { id, caseName } = await req.json()
+  if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
+
+  const { error } = await getSupabase()
+    .from('clients')
+    .update({ case_name: (caseName ?? '').trim() || null })
+    .eq('id', id)
+
+  if (error) return NextResponse.json({ error: 'Update failed' }, { status: 500 })
+
+  return NextResponse.json({ success: true })
 }
 
 // DELETE /api/admin/clients?id=xxx

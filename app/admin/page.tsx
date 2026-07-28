@@ -27,6 +27,7 @@ interface AdminClient {
   name: string
   phone: string
   caseType: string
+  caseName: string
   onboardingStatus: string
   createdAt: string
   questionnaire: { completedSections: number[]; submitted: boolean; lastSaved: string }
@@ -606,6 +607,35 @@ function NotificationPanel({ onClose }: { onClose: () => void }) {
   )
 }
 
+// ─── Inline case-name editor ───────────────────────────────────────────────────
+function CaseNameField({
+  clientId,
+  caseName,
+  onSave,
+  className,
+}: {
+  clientId: string
+  caseName: string
+  onSave: (clientId: string, value: string) => void
+  className?: string
+}) {
+  const [value, setValue] = useState(caseName)
+
+  useEffect(() => { setValue(caseName) }, [caseName])
+
+  return (
+    <input
+      type="text"
+      value={value}
+      onChange={e => setValue(e.target.value)}
+      onBlur={() => { if (value !== caseName) onSave(clientId, value) }}
+      onClick={e => e.stopPropagation()}
+      placeholder="Add case name…"
+      className={className}
+    />
+  )
+}
+
 // ─── Main Admin Page ──────────────────────────────────────────────────────────
 export default function AdminPage() {
   const [authenticated, setAuthenticated] = useState(false)
@@ -728,6 +758,19 @@ export default function AdminPage() {
     a.download = `${client.name.replace(/[^a-z0-9]+/gi, '-')}-intake.pdf`
     a.click()
     URL.revokeObjectURL(url)
+  }
+
+  const handleUpdateCaseName = async (clientId: string, caseName: string) => {
+    setAllClients(prev => prev.map(c => (c.id === clientId ? { ...c, caseName } : c)))
+    const res = await fetch('/api/admin/clients', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'x-admin-key': MOCK_ADMIN_PASSWORD },
+      body: JSON.stringify({ id: clientId, caseName }),
+    })
+    if (!res.ok) {
+      alert('Failed to save case name. Please try again.')
+      fetchClients()
+    }
   }
 
   const handleAddClientFromIntake = (submission: IntakeSubmission) => {
@@ -1015,6 +1058,12 @@ export default function AdminPage() {
                   <div className="flex items-start justify-between mb-3">
                     <div>
                       <p className="font-semibold text-gray-900">{client.name}</p>
+                      <CaseNameField
+                        clientId={client.id}
+                        caseName={client.caseName}
+                        onSave={handleUpdateCaseName}
+                        className="block w-full text-xs text-gray-500 italic bg-transparent border-b border-transparent hover:border-gray-300 focus:border-gold focus:outline-none focus:not-italic py-0.5 transition-colors"
+                      />
                       <p className="text-xs text-gray-400">{client.caseType}</p>
                     </div>
                     <span className={`text-xs font-semibold px-2 py-1 rounded-full ${status.cls}`}>
@@ -1086,9 +1135,13 @@ export default function AdminPage() {
                   return (
                     <tr key={client.id} className="hover:bg-gray-50/50 transition-colors group">
                       <td className="px-6 py-4">
-                        <div className="flex items-center gap-2">
-                          <p className="font-semibold text-gray-900 text-sm">{client.name}</p>
-                        </div>
+                        <p className="font-semibold text-gray-900 text-sm">{client.name}</p>
+                        <CaseNameField
+                          clientId={client.id}
+                          caseName={client.caseName}
+                          onSave={handleUpdateCaseName}
+                          className="block max-w-[180px] text-xs text-gray-500 italic bg-transparent border-b border-transparent hover:border-gray-300 focus:border-gold focus:outline-none focus:not-italic py-0.5 transition-colors"
+                        />
                         <p className="text-xs text-gray-400 mt-0.5">
                           {formatPhone(client.phone)}
                         </p>
