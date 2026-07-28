@@ -713,6 +713,23 @@ export default function AdminPage() {
     })
   }
 
+  const handlePrintClient = async (client: AdminClient) => {
+    const res = await fetch(`/api/admin/questionnaire/pdf?clientId=${client.id}`, {
+      headers: { 'x-admin-key': MOCK_ADMIN_PASSWORD },
+    })
+    if (!res.ok) {
+      alert('Failed to generate PDF. Please try again.')
+      return
+    }
+    const blob = await res.blob()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${client.name.replace(/[^a-z0-9]+/gi, '-')}-intake.pdf`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   const handleAddClientFromIntake = (submission: IntakeSubmission) => {
     const answers = submission.answers
     const clientName = String(answers.legal_name || 'New Client')
@@ -1019,6 +1036,16 @@ export default function AdminPage() {
                       Share Link
                     </button>
                     <button
+                      onClick={() => handlePrintClient(client)}
+                      className="px-3 py-2 border border-gray-200 text-gray-500 rounded-xl transition-all duration-150 hover:bg-gray-700 hover:text-white hover:border-gray-700 active:scale-[0.97]"
+                      aria-label="Print PDF"
+                      title="Print questionnaire as PDF"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2m-8 4h8v-6H6v6z" />
+                      </svg>
+                    </button>
+                    <button
                       onClick={() => handleViewClient(client)}
                       className="flex-1 text-center text-sm font-medium text-gold py-2 border border-gold/30 rounded-xl transition-all duration-150 hover:bg-gold hover:text-white hover:border-gold active:scale-[0.97]"
                     >
@@ -1108,6 +1135,16 @@ export default function AdminPage() {
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C9.589 12.438 11.236 12 13 12s3.411.438 4.316 1.342m0 0h5.364a2 2 0 012 2v3.5a2 2 0 01-2 2H3.364a2 2 0 01-2-2v-3.5a2 2 0 012-2h5.364zm7.324-12H9.652a2 2 0 00-2 2v12a2 2 0 002 2h6.348a2 2 0 002-2V3a2 2 0 00-2-2z" />
                             </svg>
                             Share
+                          </button>
+                          <button
+                            onClick={() => handlePrintClient(client)}
+                            className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-700 hover:text-white transition-all duration-150 active:scale-[0.97] flex items-center gap-1"
+                            title="Print questionnaire as PDF"
+                          >
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2m-8 4h8v-6H6v6z" />
+                            </svg>
+                            Print
                           </button>
                           <button onClick={() => handleViewClient(client)} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-gold/10 text-gold hover:bg-gold hover:text-white transition-all duration-150 active:scale-[0.97]">
                             View →
