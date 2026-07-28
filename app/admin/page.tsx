@@ -302,15 +302,18 @@ function ClientDetailModal({
                     <button
                       onClick={handleTranslate}
                       disabled={translating}
-                      className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors ${
+                      className={`animate-glow flex items-center gap-2 text-sm font-bold px-6 py-3 rounded-xl border-2 transition-all duration-150 ease-out
+                        hover:-translate-y-0.5 active:scale-[0.97] active:translate-y-0
+                        disabled:opacity-60 disabled:cursor-not-allowed disabled:animate-none
+                        focus:outline-none focus:ring-2 focus:ring-gold focus:ring-offset-2 ${
                         translatedAnswers
-                          ? 'bg-gold text-white border-gold'
-                          : 'bg-white text-gray-600 border-gray-300 hover:border-gold hover:text-gold'
+                          ? 'bg-navy text-white border-navy hover:bg-navy-light'
+                          : 'bg-gold text-white border-gold hover:bg-gold-dark'
                       }`}
                     >
                       {translating ? (
                         <>
-                          <svg className="animate-spin h-3 w-3" fill="none" viewBox="0 0 24 24">
+                          <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
                             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                           </svg>

@@ -60,7 +60,7 @@ export default function LoginPage() {
           {/* Language toggle */}
           <button
             onClick={() => setLang(lang === 'en' ? 'es' : 'en')}
-            className="mt-1 text-white/40 hover:text-gold text-xs font-bold tracking-wider border border-white/20 hover:border-gold/40 px-3 py-1 rounded-full transition-colors"
+            className="animate-glow mt-2 bg-gold text-white text-sm font-bold tracking-wider border-2 border-gold hover:bg-gold-dark px-6 py-2.5 rounded-full transition-all duration-150 ease-out hover:-translate-y-0.5 active:scale-[0.97]"
           >
             {lang === 'en' ? 'Español' : 'English'}
           </button>
