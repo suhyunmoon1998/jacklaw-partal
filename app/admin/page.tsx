@@ -623,6 +623,8 @@ function CaseNameField({
 
   useEffect(() => { setValue(caseName) }, [caseName])
 
+  const isEmpty = value.trim().length === 0
+
   return (
     <input
       type="text"
@@ -630,8 +632,12 @@ function CaseNameField({
       onChange={e => setValue(e.target.value)}
       onBlur={() => { if (value !== caseName) onSave(clientId, value) }}
       onClick={e => e.stopPropagation()}
-      placeholder="Add case name…"
-      className={className}
+      placeholder="+ Add case name"
+      className={`${className} px-1.5 py-0.5 rounded-md border overflow-hidden text-ellipsis whitespace-nowrap transition-colors focus:outline-none focus:border-gold focus:ring-1 focus:ring-gold/30 ${
+        isEmpty
+          ? 'bg-gold/10 border-gold/20 text-gold text-xs font-semibold hover:bg-gold/20'
+          : 'bg-transparent border-transparent text-gray-700 text-xs italic hover:border-gray-300'
+      }`}
     />
   )
 }
@@ -1062,7 +1068,7 @@ export default function AdminPage() {
                         clientId={client.id}
                         caseName={client.caseName}
                         onSave={handleUpdateCaseName}
-                        className="block w-full text-xs text-gray-500 italic bg-transparent border-b border-transparent hover:border-gray-300 focus:border-gold focus:outline-none focus:not-italic py-0.5 transition-colors"
+                        className="block w-40 mt-1 mb-0.5"
                       />
                       <p className="text-xs text-gray-400">{client.caseType}</p>
                     </div>
@@ -1117,11 +1123,19 @@ export default function AdminPage() {
 
           {/* Desktop table */}
           <div className="hidden sm:block overflow-x-auto">
-            <table className="w-full">
+            <table className="w-full min-w-[900px] table-fixed">
               <thead>
                 <tr className="bg-gray-50/50 border-b border-gray-100">
-                  {['Client', 'Case Type', 'Status', 'Progress', 'Docs', 'Last Active', ''].map(h => (
-                    <th key={h} className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wider px-6 py-3">
+                  {[
+                    ['Client', 'w-[26%]'],
+                    ['Case Type', 'w-[13%]'],
+                    ['Status', 'w-[13%]'],
+                    ['Progress', 'w-[16%]'],
+                    ['Docs', 'w-[8%]'],
+                    ['Last Active', 'w-[10%]'],
+                    ['', 'w-[14%]'],
+                  ].map(([h, w]) => (
+                    <th key={h} className={`${w} text-left text-xs font-semibold text-gray-400 uppercase tracking-wider px-6 py-3`}>
                       {h}
                     </th>
                   ))}
@@ -1140,17 +1154,17 @@ export default function AdminPage() {
                           clientId={client.id}
                           caseName={client.caseName}
                           onSave={handleUpdateCaseName}
-                          className="block max-w-[180px] text-xs text-gray-500 italic bg-transparent border-b border-transparent hover:border-gray-300 focus:border-gold focus:outline-none focus:not-italic py-0.5 transition-colors"
+                          className="block w-40 mt-1 mb-0.5"
                         />
                         <p className="text-xs text-gray-400 mt-0.5">
                           {formatPhone(client.phone)}
                         </p>
                       </td>
                       <td className="px-6 py-4">
-                        <p className="text-sm text-gray-700">{client.caseType}</p>
+                        <p className="text-sm text-gray-700 truncate">{client.caseType}</p>
                       </td>
                       <td className="px-6 py-4">
-                        <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${status.cls}`}>
+                        <span className={`text-xs font-semibold px-2.5 py-1 rounded-full whitespace-nowrap ${status.cls}`}>
                           {status.label}
                         </span>
                       </td>
