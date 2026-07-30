@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
+import { sendIntakeNotificationEmails } from '@/lib/sendIntakeEmail'
 
 // GET /api/questionnaire?clientId=xxx
 export async function GET(req: NextRequest) {
@@ -33,7 +34,16 @@ export async function POST(req: NextRequest) {
   const { clientId, answers, completedSections, submitted } = await req.json()
   if (!clientId) return NextResponse.json({ error: 'Missing clientId' }, { status: 400 })
 
-  const { error } = await getSupabase()
+  const supabase = getSupabase()
+
+  const { data: existing } = await supabase
+    .from('questionnaire_states')
+    .select('submitted')
+    .eq('client_id', clientId)
+    .maybeSingle()
+  const wasSubmitted = existing?.submitted ?? false
+
+  const { error } = await supabase
     .from('questionnaire_states')
     .upsert({
       client_id: clientId,
@@ -50,7 +60,22 @@ export async function POST(req: NextRequest) {
 
   // Update client onboarding status
   const status = submitted ? 'completed' : completedSections.length > 0 ? 'in_progress' : 'not_started'
-  await getSupabase().from('clients').update({ onboarding_status: status }).eq('id', clientId)
+  await supabase.from('clients').update({ onboarding_status: status }).eq('id', clientId)
+
+  // Notify the firm the moment a client's intake first reaches 100% (submitted transitions false -> true).
+  // Keyed off the DB's prior state rather than the client's request, so it fires exactly once even if
+  // the client retries the save or the browser is closed right after submit.
+  if (submitted && !wasSubmitted) {
+    const { data: client } = await supabase
+      .from('clients')
+      .select('name, case_type')
+      .eq('id', clientId)
+      .maybeSingle()
+
+    if (client) {
+      await sendIntakeNotificationEmails(client.name, client.case_type, answers)
+    }
+  }
 
   return NextResponse.json({ success: true })
 }

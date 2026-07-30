@@ -336,19 +336,8 @@ export default function QuestionnairePage() {
       submittedAt: new Date().toISOString(),
     })
 
-    try {
-      await fetch('/api/submit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          clientName: session.name,
-          caseType: session.caseType,
-          answers: finalState.answers,
-        }),
-      })
-    } catch (err) {
-      console.error('Email send failed:', err)
-    }
+    // The firm's email notification fires server-side from persistState's save
+    // (see /api/questionnaire), keyed off the DB transition to submitted=true.
     router.push('/submitted')
   }
 
