@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import {
@@ -34,7 +34,19 @@ interface AdminClient {
   documentCount: number
 }
 import { QUESTIONNAIRE_SECTIONS } from '@/lib/questionnaireData'
-import { QuestionnaireState, UploadedDocument } from '@/types'
+import { AnswerValue, QuestionnaireState, UploadedDocument } from '@/types'
+
+// Spanish-specific characters that essentially never appear in English answers.
+const SPANISH_HINT = /[áéíóúñ¿¡]/i
+
+function looksSpanish(answers: Record<string, AnswerValue>): boolean {
+  const pref = String(answers.preferred_language ?? '').toLowerCase()
+  if (pref === 'español' || pref === 'spanish') return true
+  return Object.values(answers).some(v => {
+    const text = Array.isArray(v) ? v.join(' ') : String(v ?? '')
+    return SPANISH_HINT.test(text)
+  })
+}
 
 // ─── Admin Login ──────────────────────────────────────────────────────────────
 function AdminLogin({ onLogin }: { onLogin: () => void }) {
@@ -125,24 +137,34 @@ function ClientDetailModal({
   const [translating, setTranslating] = useState(false)
   const totalSections = QUESTIONNAIRE_SECTIONS.length
 
-  const handleTranslate = async () => {
-    if (translatedAnswers) { setTranslatedAnswers(null); return }
+  const handleTranslate = useCallback(async () => {
     setTranslating(true)
-    const result: Record<string, string> = {}
-    for (const [id, val] of Object.entries(qState.answers)) {
+    const entries = Object.entries(qState.answers)
+    const translated = await Promise.all(entries.map(async ([id, val]) => {
       const text = Array.isArray(val) ? val.join(', ') : String(val)
-      if (!text || text === 'yes' || text === 'no') { result[id] = text; continue }
+      if (!text || text === 'yes' || text === 'no' || !SPANISH_HINT.test(text)) return [id, text] as const
       try {
         const r = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=es|en`)
         const d = await r.json()
-        result[id] = d.responseData?.translatedText ?? text
+        return [id, d.responseData?.translatedText ?? text] as const
       } catch {
-        result[id] = text
+        return [id, text] as const
       }
-    }
-    setTranslatedAnswers(result)
+    }))
+    setTranslatedAnswers(Object.fromEntries(translated))
     setTranslating(false)
-  }
+  }, [qState.answers])
+
+  const clientIsSpanish = looksSpanish(qState.answers)
+
+  // Auto-translate as soon as we detect a Spanish-language submission, so staff
+  // see English by default instead of needing to remember to click Translate.
+  useEffect(() => {
+    if (clientIsSpanish && Object.keys(qState.answers).length > 0 && !translatedAnswers && !translating) {
+      handleTranslate()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [client.id, clientIsSpanish])
   const completedPct = qState.submitted
     ? 100
     : Math.round((qState.completedSections.length / totalSections) * 100)
@@ -299,9 +321,14 @@ function ClientDetailModal({
                 </div>
               ) : (
                 <>
-                  <div className="flex justify-end mb-3">
+                  <div className="flex items-center justify-end gap-2 mb-3">
+                    {clientIsSpanish && (
+                      <span className="text-xs text-gray-400">
+                        {translating ? 'Detected Spanish — translating…' : translatedAnswers ? 'Auto-translated from Spanish' : 'Spanish detected'}
+                      </span>
+                    )}
                     <button
-                      onClick={handleTranslate}
+                      onClick={() => translatedAnswers ? setTranslatedAnswers(null) : handleTranslate()}
                       disabled={translating}
                       className={`animate-glow flex items-center gap-2 text-sm font-bold px-6 py-3 rounded-xl border-2 transition-all duration-150 ease-out
                         hover:-translate-y-0.5 active:scale-[0.97] active:translate-y-0
