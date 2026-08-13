@@ -131,6 +131,49 @@
   .animate-glow {
     animation: glowPulse 2s ease-in-out infinite;
   }
+
+  /* Hide scrollbars on horizontal strips (progress rails, chip rows) */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Questions enter one after another — pair with an inline animation-delay */
+  .animate-question-in {
+    animation: questionIn 0.35s ease-out both;
+  }
+
+  /* Toast that rises above the bottom nav */
+  .animate-toast-in {
+    animation: toastIn 0.32s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  }
+
+  /* Springy scale, e.g. a checkmark landing */
+  .animate-pop {
+    animation: pop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  }
+
+  /* Confetti pieces for chapter milestones */
+  .animate-confetti {
+    animation: confettiFall 1.5s ease-in both;
+  }
+
+  /* Light sweeping across the progress bar so it reads as "live" */
+  .animate-sheen::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      100deg,
+      transparent 20%,
+      rgba(255, 255, 255, 0.55) 50%,
+      transparent 80%
+    );
+    animation: sheen 2.6s ease-in-out infinite;
+  }
 }
 
 /* ── Keyframes ─────────────────────────────────────── */
@@ -172,5 +215,52 @@
   50% {
     box-shadow: 0 0 22px 6px rgba(224, 120, 32, 0.9),
                 0 0 36px 12px rgba(224, 120, 32, 0.45);
+  }
+}
+
+@keyframes questionIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes toastIn {
+  from { opacity: 0; transform: translateY(16px) scale(0.94); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes pop {
+  0%   { transform: scale(0.4); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes confettiFall {
+  0%   { opacity: 1; transform: translateY(-10px) rotate(0deg); }
+  100% { opacity: 0; transform: translateY(150px) rotate(420deg); }
+}
+
+@keyframes sheen {
+  0%   { transform: translateX(-120%); }
+  60%  { transform: translateX(220%); }
+  100% { transform: translateX(220%); }
+}
+
+/* Respect the OS "reduce motion" setting — keep the UI, drop the movement */
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-in,
+  .animate-slide-up,
+  .animate-section-in,
+  .animate-modal-in,
+  .animate-question-in,
+  .animate-toast-in,
+  .animate-pop,
+  .animate-confetti,
+  .animate-glow,
+  .animate-shimmer {
+    animation: none !important;
+  }
+
+  .animate-sheen::after {
+    animation: none !important;
+    opacity: 0;
   }
 }
