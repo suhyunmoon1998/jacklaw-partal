@@ -2,15 +2,18 @@
 
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
+import MascotWatermark from '@/components/MascotWatermark'
 import { FIRM_PHONE_LABEL_HYPHENATED, FIRM_PHONE_TEL } from '@/lib/contact'
 
 export default function PortalHome() {
   const router = useRouter()
 
   return (
-    <div className="min-h-screen bg-black flex flex-col">
+    <div className="relative min-h-screen bg-black flex flex-col">
+      <MascotWatermark tone="dark" />
+
       {/* Header */}
-      <header className="pt-12 pb-8 px-4 text-center">
+      <header className="relative z-10 pt-12 pb-8 px-4 text-center">
         <div className="flex flex-col items-center gap-4">
           <Image
             src="/logo.png"
@@ -28,7 +31,7 @@ export default function PortalHome() {
       </header>
 
       {/* Portal selector */}
-      <main className="flex-1 flex flex-col items-center justify-start px-4 pt-4 pb-16">
+      <main className="relative z-10 flex-1 flex flex-col items-center justify-start px-4 pt-4 pb-16">
         <div className="w-full max-w-sm">
           <p className="text-white/40 text-xs uppercase tracking-widest text-center mb-6 font-semibold">
             Select Portal
@@ -47,7 +50,7 @@ export default function PortalHome() {
               </div>
               <div className="flex-1">
                 <p className="text-white font-bold text-base">Client Information Form</p>
-                <p className="text-white/40 text-sm mt-0.5">Start your intake questionnaire</p>
+                <p className="text-white/60 text-sm mt-0.5">Start your intake questionnaire</p>
               </div>
               <svg className="w-5 h-5 text-white/20 group-hover:text-gold transition-colors shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -68,7 +71,7 @@ export default function PortalHome() {
               </div>
               <div className="flex-1">
                 <p className="text-white font-bold text-base">Client Portal</p>
-                <p className="text-white/40 text-sm mt-0.5">Access your case, questionnaire &amp; documents</p>
+                <p className="text-white/60 text-sm mt-0.5">Access your case, questionnaire &amp; documents</p>
               </div>
               <svg className="w-5 h-5 text-white/20 group-hover:text-gold transition-colors shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -89,7 +92,7 @@ export default function PortalHome() {
               </div>
               <div className="flex-1">
                 <p className="text-white font-bold text-base">Admin Portal</p>
-                <p className="text-white/40 text-sm mt-0.5">Internal management · Staff only</p>
+                <p className="text-white/60 text-sm mt-0.5">Internal management · Staff only</p>
               </div>
               <svg className="w-5 h-5 text-white/20 group-hover:text-gold transition-colors shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -111,8 +114,8 @@ export default function PortalHome() {
         </div>
       </main>
 
-      <footer className="pb-8 text-center">
-        <p className="text-white/20 text-xs">
+      <footer className="relative z-10 pb-8 text-center">
+        <p className="text-white/45 text-xs">
           Law Offices of Jack D. Josephson, APC · California Employment Law
         </p>
       </footer>

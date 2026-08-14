@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Header from '@/components/Header'
+import MascotWatermark from '@/components/MascotWatermark'
 import { getSession } from '@/lib/auth'
 import { Session } from '@/types'
 import { QUESTIONNAIRE_SECTIONS } from '@/lib/questionnaireData'
@@ -54,10 +55,14 @@ export default function DashboardPage() {
   const onboardingDone = questionnaireProgress === 100
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col animate-fade-in">
-      <Header showLogout />
+    <div className="relative min-h-screen bg-gray-50 flex flex-col animate-fade-in">
+      <MascotWatermark />
 
-      <main className="flex-1 px-4 pt-5 pb-8 pb-safe max-w-2xl mx-auto w-full">
+      <div className="relative z-10">
+        <Header showLogout />
+      </div>
+
+      <main className="relative z-10 flex-1 px-4 pt-5 pb-8 pb-safe max-w-2xl mx-auto w-full">
         {/* Welcome */}
         <div className="mb-5 animate-slide-up">
           <h2 className="text-2xl font-bold text-black">{t('hello')} {session.name} 👋</h2>
@@ -197,7 +202,8 @@ export default function DashboardPage() {
           </a>
         </div>
 
-        <p className="text-center text-xs text-gray-400 pb-2">
+        {/* White halo keeps this legible where it overlaps the watermark */}
+        <p className="text-center text-xs text-gray-500 pb-2 [text-shadow:0_1px_8px_#fff,0_0_3px_#fff]">
           Law Offices of Jack D. Josephson, APC<br />
           California Employment Law · Attorney-Client Confidential
         </p>

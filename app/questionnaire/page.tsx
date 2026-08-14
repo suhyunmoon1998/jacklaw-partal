@@ -1,9 +1,9 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import Header from '@/components/Header'
+import MascotWatermark from '@/components/MascotWatermark'
 import SectionIcon from '@/components/SectionIcon'
 import { getSession, addSubmissionNotification } from '@/lib/auth'
 import { QUESTIONNAIRE_SECTIONS } from '@/lib/questionnaireData'
@@ -515,18 +515,7 @@ export default function QuestionnairePage() {
 
   return (
     <div className="relative min-h-screen bg-gray-50 flex flex-col">
-      {/* Brand watermark — decorative, kept faint so form text stays readable */}
-      <div className="fixed inset-0 z-0 overflow-hidden pointer-events-none select-none" aria-hidden="true">
-        <div className="absolute -top-24 left-1/2 -translate-x-1/2 w-[720px] h-[420px] rounded-full bg-gold/10 blur-3xl" />
-        <Image
-          src="/mascot.png"
-          alt=""
-          width={900}
-          height={900}
-          priority={false}
-          className="absolute -right-20 bottom-0 w-[min(105vw,640px)] h-auto opacity-[0.16]"
-        />
-      </div>
+      <MascotWatermark />
 
       <div className="relative z-10">
         <Header showBack backHref="/dashboard" showLogout subtitle="Questionnaire" />
