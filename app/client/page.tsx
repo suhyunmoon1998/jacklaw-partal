@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { normalizePhone, setSession, getSession, formatPhone } from '@/lib/auth'
+import { FIRM_PHONE_LABEL, FIRM_PHONE_TEL } from '@/lib/contact'
 import { useLanguage } from '@/lib/i18n'
 
 export default function LoginPage() {
@@ -120,9 +121,17 @@ export default function LoginPage() {
             </form>
           </div>
 
-          <div className="mt-6 bg-red-50 border border-red-200 rounded-xl p-4">
-            <p className="text-red-700 text-xs font-semibold text-center">{t('emergency')}</p>
-            <p className="text-red-600 text-xs text-center mt-1">{t('emergency_sub')}</p>
+          <div className="mt-6 bg-gold/5 border border-gold/30 rounded-xl p-4">
+            <p className="text-black text-xs font-semibold text-center">{t('emergency')}</p>
+            <p className="text-gray-500 text-xs text-center mt-1">
+              {t('emergency_sub')}{' '}
+              <a
+                href={FIRM_PHONE_TEL}
+                className="text-gold font-bold underline underline-offset-2 whitespace-nowrap py-3.5 hover:text-gold-dark active:text-gold-dark"
+              >
+                {FIRM_PHONE_LABEL}
+              </a>.
+            </p>
           </div>
 
           <p className="text-center text-xs text-gray-400 mt-6">

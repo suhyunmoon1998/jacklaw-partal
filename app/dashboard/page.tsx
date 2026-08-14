@@ -6,6 +6,7 @@ import Header from '@/components/Header'
 import { getSession } from '@/lib/auth'
 import { Session } from '@/types'
 import { QUESTIONNAIRE_SECTIONS } from '@/lib/questionnaireData'
+import { FIRM_PHONE_LABEL, FIRM_PHONE_LABEL_HYPHENATED, FIRM_PHONE_TEL } from '@/lib/contact'
 import { useLanguage } from '@/lib/i18n'
 
 export default function DashboardPage() {
@@ -63,13 +64,19 @@ export default function DashboardPage() {
           <p className="text-gray-500 text-sm mt-0.5">{t('welcome_portal')}</p>
         </div>
 
-        {/* Emergency warning */}
-        <div className="mb-5 bg-red-50 border border-red-200 rounded-2xl p-4 flex gap-3 animate-slide-up stagger-1">
-          <svg className="w-5 h-5 text-red-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M12 3a9 9 0 100 18A9 9 0 0012 3z" />
+        {/* What this portal is for, and how to actually reach the office */}
+        <div className="mb-5 bg-gold/5 border border-gold/30 rounded-2xl p-4 flex gap-3 animate-slide-up stagger-1">
+          <svg className="w-5 h-5 text-gold shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
-          <p className="text-red-700 text-sm leading-relaxed">
-            <strong>{t('emergency')}</strong> {t('emergency_sub')}
+          <p className="text-gray-600 text-sm leading-relaxed">
+            <strong className="text-black font-semibold">{t('emergency')}</strong> {t('emergency_sub')}{' '}
+            <a
+              href={FIRM_PHONE_TEL}
+              className="text-gold font-bold underline underline-offset-2 whitespace-nowrap py-3.5 hover:text-gold-dark active:text-gold-dark"
+            >
+              {FIRM_PHONE_LABEL}
+            </a>.
           </p>
         </div>
 
@@ -180,13 +187,13 @@ export default function DashboardPage() {
           </div>
           <p className="text-white/60 text-sm mb-4 leading-relaxed">{t('contact_msg')}</p>
           <a
-            href="tel:+18668225529"
+            href={FIRM_PHONE_TEL}
             className="flex items-center justify-center gap-2 w-full bg-gold text-white font-bold py-4 rounded-xl hover:bg-gold-dark active:bg-gold-dark transition-colors text-base"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
             </svg>
-            866-JACK-LAW
+            {FIRM_PHONE_LABEL_HYPHENATED}
           </a>
         </div>
 

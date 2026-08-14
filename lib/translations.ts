@@ -11,8 +11,8 @@ export const en = {
   continue_btn: 'Continue',
   checking: 'Checking...',
   not_found: 'We could not find your file. Please contact the office.',
-  emergency: 'Do not use this portal for emergencies.',
-  emergency_sub: 'For urgent matters, call our office directly.',
+  emergency: 'This portal system is for case information and evidence intake only.',
+  emergency_sub: 'To communicate with our office, please call',
 
   // Dashboard
   hello: 'Hello,',
@@ -148,8 +148,8 @@ export const es: typeof en = {
   continue_btn: 'Continuar',
   checking: 'Verificando...',
   not_found: 'No encontramos su expediente. Por favor comuníquese con la oficina.',
-  emergency: 'No use este portal para emergencias.',
-  emergency_sub: 'Para asuntos urgentes, llame directamente a nuestra oficina.',
+  emergency: 'Este portal es únicamente para información del caso y entrega de evidencia.',
+  emergency_sub: 'Para comunicarse con nuestra oficina, por favor llame al',
 
   // Dashboard
   hello: 'Hola,',
