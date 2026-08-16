@@ -133,6 +133,33 @@ export const en = {
   intake_thanks: 'Thank You!',
   intake_success: 'Your intake form has been submitted successfully. We will review your information and contact you shortly.',
   intake_redirecting: 'Redirecting you home…',
+
+  // Install as app
+  install_title: 'Install the portal app',
+  install_body: 'Add 866 JACK LAW to your home screen for one-tap access to your case.',
+  install_cta: 'Install',
+  install_dismiss: 'Not now',
+  install_ios_title: 'Add to Home Screen',
+  install_ios_body: 'Install the portal on your phone so it opens like an app.',
+  install_ios_step: 'Tap Share, then "Add to Home Screen".',
+  install_menu_step: 'Open your browser menu, then "Install app".',
+  install_link: 'Get the app',
+
+  // Install page
+  install_page_title: 'Put the portal on your phone',
+  install_page_sub: 'Add 866 JACK LAW to your home screen. No app store, nothing to download.',
+  install_steps_heading: 'Three steps',
+  install_ios_1: 'Tap the Share button — the square with an arrow, at the bottom of Safari.',
+  install_ios_2: 'Scroll down the list and tap "Add to Home Screen".',
+  install_ios_3: 'Tap "Add". The icon is now on your home screen.',
+  install_android_1: 'Tap Install below, or open the browser menu (⋮).',
+  install_android_2: 'Choose "Install app" or "Add to Home screen".',
+  install_android_3: 'Confirm. The icon is now on your home screen.',
+  install_safari_warning: 'To install on iPhone, this page has to be open in Safari. Tap the menu and choose "Open in Safari".',
+  install_qr_title: 'Scan with your phone',
+  install_qr_sub: 'Point your phone camera at this code, then follow the steps on your phone.',
+  install_already: 'The app is installed. You are using it right now.',
+  install_help: 'Need help? Call us.',
 }
 
 export const es: typeof en = {
@@ -270,4 +297,31 @@ export const es: typeof en = {
   intake_thanks: '¡Gracias!',
   intake_success: 'Su formulario de información ha sido enviado exitosamente. Revisaremos su información y nos comunicaremos con usted en breve.',
   intake_redirecting: 'Redirigiendo a inicio…',
+
+  // Install as app
+  install_title: 'Instala la aplicación del portal',
+  install_body: 'Añade 866 JACK LAW a tu pantalla de inicio y accede a tu caso con un toque.',
+  install_cta: 'Instalar',
+  install_dismiss: 'Ahora no',
+  install_ios_title: 'Añadir a pantalla de inicio',
+  install_ios_body: 'Instala el portal en tu teléfono para que se abra como una aplicación.',
+  install_ios_step: 'Toca Compartir y luego "Añadir a pantalla de inicio".',
+  install_menu_step: 'Abre el menú del navegador y elige "Instalar aplicación".',
+  install_link: 'Obtener la app',
+
+  // Install page
+  install_page_title: 'Instala el portal en tu teléfono',
+  install_page_sub: 'Añade 866 JACK LAW a tu pantalla de inicio. Sin tienda de aplicaciones, sin descargas.',
+  install_steps_heading: 'Tres pasos',
+  install_ios_1: 'Toca el botón Compartir — el cuadrado con una flecha, abajo en Safari.',
+  install_ios_2: 'Baja en la lista y toca "Añadir a pantalla de inicio".',
+  install_ios_3: 'Toca "Añadir". El ícono ya está en tu pantalla de inicio.',
+  install_android_1: 'Toca Instalar aquí abajo, o abre el menú del navegador (⋮).',
+  install_android_2: 'Elige "Instalar aplicación" o "Añadir a pantalla de inicio".',
+  install_android_3: 'Confirma. El ícono ya está en tu pantalla de inicio.',
+  install_safari_warning: 'Para instalar en iPhone, esta página debe abrirse en Safari. Toca el menú y elige "Abrir en Safari".',
+  install_qr_title: 'Escanea con tu teléfono',
+  install_qr_sub: 'Apunta la cámara de tu teléfono a este código y sigue los pasos en el teléfono.',
+  install_already: 'La aplicación ya está instalada. La estás usando ahora mismo.',
+  install_help: '¿Necesitas ayuda? Llámanos.',
 }

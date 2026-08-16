@@ -4,9 +4,11 @@ import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import MascotWatermark from '@/components/MascotWatermark'
 import { FIRM_PHONE_LABEL_HYPHENATED, FIRM_PHONE_TEL } from '@/lib/contact'
+import { useLanguage } from '@/lib/i18n'
 
 export default function PortalHome() {
   const router = useRouter()
+  const { t } = useLanguage()
 
   return (
     <div className="relative min-h-screen bg-black flex flex-col">
@@ -110,6 +112,18 @@ export default function PortalHome() {
               </svg>
               {FIRM_PHONE_LABEL_HYPHENATED}
             </a>
+          </div>
+
+          <div className="mt-4 text-center">
+            <button
+              onClick={() => router.push('/install')}
+              className="inline-flex items-center gap-1.5 text-white/40 hover:text-white/70 text-xs font-medium transition-colors"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v11m0 0l-3.5-3.5M12 15l3.5-3.5M5 15v3a2 2 0 002 2h10a2 2 0 002-2v-3" />
+              </svg>
+              {t('install_link')}
+            </button>
           </div>
         </div>
       </main>
