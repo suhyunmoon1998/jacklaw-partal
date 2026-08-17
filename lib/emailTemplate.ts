@@ -176,7 +176,6 @@ export function generateClientThankYouEmailHtml(clientName: string, calendlyUrl:
 export function generateAssignmentEmailHtml(
   clientName: string,
   setName: string,
-  description: string,
   questionCount: number,
   link: string
 ): string {
@@ -206,7 +205,6 @@ export function generateAssignmentEmailHtml(
     <div style="background:#ffffff;border:1px solid #e5e7eb;border-radius:12px;padding:20px 24px;margin-bottom:24px;">
       <p style="margin:0 0 4px 0;color:#111827;font-size:17px;font-weight:800;">${setName}</p>
       <p style="margin:0;color:#6b7280;font-size:13px;">${questionCount} question${questionCount === 1 ? '' : 's'}</p>
-      ${description ? `<p style="margin:12px 0 0 0;color:#374151;font-size:13px;line-height:1.6;">${description}</p>` : ''}
     </div>
 
     <p style="margin:0 0 24px 0;color:#374151;font-size:14px;line-height:1.7;">

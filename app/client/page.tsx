@@ -13,13 +13,19 @@ import { useLanguage } from '@/lib/i18n'
  * were asked about instead of the dashboard.
  *
  * Read off window.location rather than useSearchParams so this page keeps
- * prerendering without a Suspense boundary. Only same-site paths are honoured —
- * "//evil.com" is a protocol-relative URL, not a path.
+ * prerendering without a Suspense boundary.
+ *
+ * Only a same-site path is honoured. Checking for a leading "/" is not enough:
+ * "//evil.com" is a protocol-relative URL, and browsers treat the backslash in
+ * "/\evil.com" as a slash too, so both would leave the site. The allowlist is
+ * therefore positive — the two destinations a link is ever sent to.
  */
+const SAFE_NEXT = /^\/(dashboard|documents|questionnaire(\/[A-Za-z0-9-]+)?)$/
+
 function nextPath(): string {
   if (typeof window === 'undefined') return '/dashboard'
   const raw = new URLSearchParams(window.location.search).get('next') ?? ''
-  return raw.startsWith('/') && !raw.startsWith('//') ? raw : '/dashboard'
+  return SAFE_NEXT.test(raw) ? raw : '/dashboard'
 }
 
 export default function LoginPage() {

@@ -41,7 +41,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       to,
       clientName: assignment.clientName || 'there',
       setName: assignment.questionSetName,
-      description: assignment.questionSetDescription,
+      // The set description is a staff-only note, so it stays out of the client's email.
       questionCount: assignment.questionCount,
       link,
     })
@@ -54,13 +54,12 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   }
 
   // Recorded only after the email actually went out, so "Sent" on the admin
-  // screen always means a message left the building.
-  const patch: Record<string, unknown> = { status: 'sent', updated_at: new Date().toISOString() }
-  if (advancesTo(assignment.status as AssignmentStatus, 'sent')) patch.sent_at = new Date().toISOString()
-  if (assignment.status === 'in_progress' || assignment.status === 'completed') {
-    // Re-sending a reminder must not drag a client's progress backwards.
-    delete patch.status
-  }
+  // screen always means a message left the building. sent_at is stamped on every
+  // send — including reminders to a client already working — while the status
+  // only moves forward, so a reminder cannot drag their progress backwards.
+  const now = new Date().toISOString()
+  const patch: Record<string, unknown> = { updated_at: now, sent_at: now }
+  if (advancesTo(assignment.status as AssignmentStatus, 'sent')) patch.status = 'sent'
 
   await getSupabase().from('client_question_set_assignments').update(patch).eq('id', params.id)
 

@@ -33,6 +33,9 @@ export default function AssignmentQuestionnairePage({
   const [autoSaved, setAutoSaved] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [justSubmitted, setJustSubmitted] = useState(false)
+  const [saveFailed, setSaveFailed] = useState(false)
+  const [leaving, setLeaving] = useState(false)
+  const [retry, setRetry] = useState(0)
 
   // Only questions edited since the last save go up, so a 48-question set does
   // not rewrite every row on every keystroke.
@@ -72,41 +75,67 @@ export default function AssignmentQuestionnairePage({
   const readOnly = assignment?.status === 'completed'
 
   const save = useCallback(
-    async (submitted: boolean) => {
-      if (!session) return
-      const changed = Object.fromEntries(
-        Array.from(dirty.current).map(id => [id, answers[id] ?? ''])
-      )
-      dirty.current.clear()
+    async (submitted: boolean): Promise<boolean> => {
+      if (!session) return false
+      const sending = Array.from(dirty.current)
+      const changed = Object.fromEntries(sending.map(id => [id, answers[id] ?? '']))
 
-      const res = await fetch(`/api/assignments/${params.assignmentId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clientId: session.clientId, answers: changed, submitted }),
-      })
-      return res.ok
+      try {
+        const res = await fetch(`/api/assignments/${params.assignmentId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ clientId: session.clientId, answers: changed, submitted }),
+        })
+        if (!res.ok) return false
+        // Clear only what actually reached the server, and only after it did.
+        // Anything typed while the request was in flight stays queued, and a
+        // failed save leaves its answers marked so the retry resends them.
+        sending.forEach(id => dirty.current.delete(id))
+        setSaveFailed(false)
+        return true
+      } catch {
+        return false
+      }
     },
     [session, answers, params.assignmentId]
   )
 
   // Autosave a second after typing stops, matching the default questionnaire.
+  // `retry` re-arms this effect after a failure, since a failed save changes no
+  // other state and would otherwise never be attempted again.
   useEffect(() => {
-    if (!session || !assignment || readOnly || dirty.current.size === 0) return
+    if (!session || !assignment || readOnly || justSubmitted || dirty.current.size === 0) return
     const timer = setTimeout(() => {
       save(false).then(ok => {
-        if (!ok) return
+        if (!ok) {
+          setSaveFailed(true)
+          setTimeout(() => setRetry(n => n + 1), 4000)
+          return
+        }
         setAutoSaved(true)
         setTimeout(() => setAutoSaved(false), 2000)
       })
     }, 1000)
     return () => clearTimeout(timer)
-  }, [answers, session, assignment, readOnly, save])
+  }, [answers, session, assignment, readOnly, justSubmitted, retry, save])
 
   const handleChange = (id: string, val: AnswerValue) => {
     dirty.current.add(id)
     setAnswers(prev => ({ ...prev, [id]: val }))
     setValidationError('')
   }
+
+  // Last line of defence for a closed tab or a followed link: the browser's own
+  // "leave site?" prompt while answers are still unsaved.
+  useEffect(() => {
+    const warn = (e: BeforeUnloadEvent) => {
+      if (dirty.current.size === 0 || justSubmitted) return
+      e.preventDefault()
+      e.returnValue = ''
+    }
+    window.addEventListener('beforeunload', warn)
+    return () => window.removeEventListener('beforeunload', warn)
+  }, [justSubmitted])
 
   const visibleQuestions = (assignment?.questions ?? []).filter(q => isVisible(q, answers))
   const answeredCount = visibleQuestions.filter(q => hasAnswer(answers[q.id])).length
@@ -121,13 +150,35 @@ export default function AssignmentQuestionnairePage({
     }
 
     setSubmitting(true)
-    // Everything answered goes up on submit, not just the dirty keys, so a
-    // dropped autosave can never leave a gap in a completed set.
-    visibleQuestions.forEach(q => { if (hasAnswer(answers[q.id])) dirty.current.add(q.id) })
-    const ok = await save(true)
-    setSubmitting(false)
+    setValidationError('')
+    // Every visible question goes up on submit, not just the dirty keys, so a
+    // dropped autosave can never leave a gap in a completed set. Cleared answers
+    // are included too, so blanking a field is recorded rather than left behind.
+    visibleQuestions.forEach(q => dirty.current.add(q.id))
+
+    let ok = false
+    try {
+      ok = await save(true)
+    } finally {
+      // Runs even if the request blew up, so the button can never stay stuck on
+      // "Submitting…" with no way forward.
+      setSubmitting(false)
+    }
+
     if (ok) setJustSubmitted(true)
-    else setValidationError(t('qs_unavailable'))
+    else setSaveFailed(true)
+  }
+
+  /** "Save & Exit" has to actually save — leaving cancels the pending autosave. */
+  const handleSaveExit = async () => {
+    if (dirty.current.size === 0) { router.push('/dashboard'); return }
+    setLeaving(true)
+    const ok = await save(false)
+    setLeaving(false)
+    // Staying put on failure is the point: navigating away would discard the
+    // answers with nothing left holding them.
+    if (ok) router.push('/dashboard')
+    else setSaveFailed(true)
   }
 
   if (loadError) {
@@ -235,12 +286,6 @@ export default function AssignmentQuestionnairePage({
         )}
 
         <div className="card p-5 sm:p-6 mb-4">
-          {assignment.questionSetDescription && !readOnly && (
-            <p className="text-sm text-gray-500 leading-relaxed mb-5 pb-4 border-b border-gray-100">
-              {assignment.questionSetDescription}
-            </p>
-          )}
-
           <div className="space-y-5">
             {visibleQuestions.map((q, i) => {
               const answered = hasAnswer(answers[q.id])
@@ -307,6 +352,24 @@ export default function AssignmentQuestionnairePage({
               <p className="text-red-700 text-sm">{validationError}</p>
             </div>
           )}
+
+          {saveFailed && (
+            <div className="mt-5 bg-amber-50 border border-amber-200 rounded-xl p-4 flex gap-3 animate-pop">
+              <svg className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+              </svg>
+              <div className="min-w-0">
+                <p className="text-amber-800 text-sm font-semibold">{t('qs_save_failed')}</p>
+                <p className="text-amber-700 text-xs mt-0.5">{t('qs_save_failed_sub')}</p>
+              </div>
+              <button
+                onClick={() => { setSaveFailed(false); setRetry(n => n + 1) }}
+                className="ml-auto shrink-0 self-center text-xs font-bold text-amber-900 underline underline-offset-2"
+              >
+                {t('qs_retry')}
+              </button>
+            </div>
+          )}
         </div>
 
         <p className="text-center text-xs text-gray-500 mt-4 [text-shadow:0_1px_8px_#fff,0_0_3px_#fff]">
@@ -329,10 +392,11 @@ export default function AssignmentQuestionnairePage({
               ) : t('qs_submit')}
             </button>
             <button
-              onClick={() => router.push('/dashboard')}
-              className="w-full text-gray-400 text-sm py-1.5 transition-colors hover:text-gray-600"
+              onClick={handleSaveExit}
+              disabled={leaving || submitting}
+              className="w-full text-gray-400 text-sm py-1.5 transition-colors hover:text-gray-600 disabled:opacity-50"
             >
-              {t('q_save_exit')}
+              {leaving ? t('q_saving') : t('q_save_exit')}
             </button>
           </div>
         </div>

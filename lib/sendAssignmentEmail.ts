@@ -26,7 +26,6 @@ export async function sendAssignmentEmail(opts: {
   to: string
   clientName: string
   setName: string
-  description: string
   questionCount: number
   link: string
 }): Promise<void> {
@@ -44,7 +43,6 @@ export async function sendAssignmentEmail(opts: {
     html: generateAssignmentEmailHtml(
       opts.clientName,
       opts.setName,
-      opts.description,
       opts.questionCount,
       opts.link
     ),

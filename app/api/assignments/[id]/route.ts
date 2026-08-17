@@ -17,7 +17,7 @@ function authorize(assignmentClientId: string, requestClientId: string | null): 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   const clientId = req.nextUrl.searchParams.get('clientId')
 
-  const assignment = await getAssignmentDetail(params.id)
+  const assignment = await getAssignmentDetail(params.id, { forClient: true })
   if (!assignment) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   if (!authorize(assignment.clientId, clientId)) {
@@ -48,6 +48,14 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   }
   if (row.status === 'draft') {
     return NextResponse.json({ error: 'This questionnaire is not available yet.' }, { status: 404 })
+  }
+  // The page turns read-only after submission; the server has to enforce that
+  // too, or a stale tab or a hand-made request could rewrite a finished answer.
+  if (row.status === 'completed') {
+    return NextResponse.json(
+      { error: 'This questionnaire has already been submitted. Call the office to change an answer.' },
+      { status: 409 }
+    )
   }
 
   const entries = Object.entries((answers ?? {}) as Record<string, AnswerValue>)

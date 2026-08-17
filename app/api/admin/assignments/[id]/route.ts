@@ -42,8 +42,9 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     if (stamp) patch[stamp] = now
   } else if (next === 'sent') {
     // "Mark sent" on a client who has already started: record that the link went
-    // out, but never drag their progress back to Sent.
-    patch.sent_at = row.sent_at ?? now
+    // out — every time, so the date reflects the most recent send — but never
+    // drag their progress back to Sent.
+    patch.sent_at = now
   } else if (next === 'draft') {
     // The one deliberate step backwards — an admin parking an assignment so the
     // client stops seeing it.

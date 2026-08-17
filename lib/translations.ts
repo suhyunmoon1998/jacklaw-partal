@@ -181,6 +181,9 @@ export const en = {
   qs_unavailable: 'This questionnaire is not available.',
   qs_wrong_client: 'This link belongs to a different client. Please sign in with your own phone number.',
   qs_loading: 'Loading…',
+  qs_save_failed: 'Your last answers have not been saved.',
+  qs_save_failed_sub: 'Check your connection — we will keep trying. Do not close this page yet.',
+  qs_retry: 'Try now',
 }
 
 export const es: typeof en = {
@@ -366,4 +369,7 @@ export const es: typeof en = {
   qs_unavailable: 'Este cuestionario no está disponible.',
   qs_wrong_client: 'Este enlace pertenece a otro cliente. Por favor inicie sesión con su propio número de teléfono.',
   qs_loading: 'Cargando…',
+  qs_save_failed: 'Sus últimas respuestas no se han guardado.',
+  qs_save_failed_sub: 'Revise su conexión — seguiremos intentando. No cierre esta página todavía.',
+  qs_retry: 'Intentar ahora',
 }

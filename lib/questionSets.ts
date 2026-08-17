@@ -195,14 +195,16 @@ function toAssignment(
   row: AssignmentRow,
   set: { name: string; description: string },
   questionCount: number,
-  answeredCount: number
+  answeredCount: number,
+  /** The description is the admin's internal note — never send it to a client. */
+  includeDescription = true
 ): Assignment {
   return {
     id: row.id,
     clientId: row.client_id,
     questionSetId: row.question_set_id,
     questionSetName: set.name,
-    questionSetDescription: set.description ?? '',
+    questionSetDescription: includeDescription ? (set.description ?? '') : '',
     questionCount,
     status: row.status as AssignmentStatus,
     assignedAt: row.assigned_at,
@@ -240,16 +242,24 @@ export async function listAssignments(
 
   const [{ data: sets }, { data: questions }, { data: responses }] = await Promise.all([
     supabase.from('question_sets').select('id, name, description').in('id', setIds),
-    supabase.from('question_set_questions').select('question_set_id').in('question_set_id', setIds),
-    supabase.from('question_set_responses').select('assignment_id, answer').in('assignment_id', assignmentIds),
+    supabase.from('question_set_questions').select('question_set_id, question').in('question_set_id', setIds),
+    supabase.from('question_set_responses').select('assignment_id, question_key, answer').in('assignment_id', assignmentIds),
   ])
 
   const setMap = Object.fromEntries((sets ?? []).map(s => [s.id, s]))
-  const counts = (questions ?? []).reduce<Record<string, number>>((acc, q) => {
-    acc[q.question_set_id] = (acc[q.question_set_id] ?? 0) + 1
+
+  // Question ids per set, so an answer left behind by an edited set does not
+  // inflate the progress shown against the set's current questions.
+  const idsBySet = (questions ?? []).reduce<Record<string, Set<string>>>((acc, row) => {
+    const q = row.question as Question
+    ;(acc[row.question_set_id] ??= new Set()).add(q.id)
     return acc
   }, {})
+
+  const setIdOf = Object.fromEntries(rows.map(r => [r.id, r.question_set_id]))
   const answered = (responses ?? []).reduce<Record<string, number>>((acc, r) => {
+    const current = idsBySet[setIdOf[r.assignment_id]]
+    if (!current?.has(r.question_key)) return acc
     if (isAnswered(r.answer as AnswerValue)) acc[r.assignment_id] = (acc[r.assignment_id] ?? 0) + 1
     return acc
   }, {})
@@ -258,8 +268,9 @@ export async function listAssignments(
     toAssignment(
       row as AssignmentRow,
       setMap[row.question_set_id] ?? { name: 'Removed question set', description: '' },
-      counts[row.question_set_id] ?? 0,
-      answered[row.id] ?? 0
+      idsBySet[row.question_set_id]?.size ?? 0,
+      answered[row.id] ?? 0,
+      !visibleToClient
     )
   )
 }
@@ -270,7 +281,19 @@ function isAnswered(val: AnswerValue | null | undefined): boolean {
   return String(val).trim().length > 0
 }
 
-export async function getAssignmentDetail(id: string): Promise<AssignmentDetail | null> {
+/**
+ * One assignment with the questions to render and the answers recorded so far.
+ *
+ * `forClient` does two things: it withholds the set's internal description, and
+ * it renders only the set's current questions. For admins the opposite is
+ * wanted — if a question was edited out of the template after this client
+ * answered it, that answer is still evidence, so it is surfaced rather than
+ * silently orphaned.
+ */
+export async function getAssignmentDetail(
+  id: string,
+  { forClient = false }: { forClient?: boolean } = {}
+): Promise<AssignmentDetail | null> {
   const supabase = getSupabase()
 
   const { data: row } = await supabase
@@ -291,16 +314,28 @@ export async function getAssignmentDetail(id: string): Promise<AssignmentDetail 
     supabase.from('clients').select('name').eq('id', row.client_id).maybeSingle(),
   ])
 
-  const questions = (questionRows ?? []).map(r => r.question as Question)
+  const current = (questionRows ?? []).map(r => r.question as Question)
   const answers: Record<string, AnswerValue> = Object.fromEntries(
     (responses ?? []).map(r => [r.question_key, r.answer as AnswerValue])
   )
+
+  // Answers whose question the template no longer contains. Showing them to the
+  // firm keeps an edit to a template from hiding what a client actually said.
+  const known = new Set(current.map(q => q.id))
+  const removed: Question[] = forClient
+    ? []
+    : Object.keys(answers)
+        .filter(key => !known.has(key) && isAnswered(answers[key]))
+        .map(key => ({ id: key, label: `${key} (question since removed from this set)`, type: 'textarea' as const }))
+
+  const questions = [...current, ...removed]
 
   const base = toAssignment(
     row as AssignmentRow,
     set ?? { name: 'Removed question set', description: '' },
     questions.length,
-    Object.values(answers).filter(isAnswered).length
+    questions.filter(q => isAnswered(answers[q.id])).length,
+    !forClient
   )
 
   return { ...base, clientName: client?.name ?? '', questions, answers }
