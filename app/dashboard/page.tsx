@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import Header from '@/components/Header'
 import MascotWatermark from '@/components/MascotWatermark'
 import { getSession } from '@/lib/auth'
-import { Session } from '@/types'
+import { Assignment, Session } from '@/types'
 import { QUESTIONNAIRE_SECTIONS } from '@/lib/questionnaireData'
 import { FIRM_PHONE_LABEL, FIRM_PHONE_LABEL_HYPHENATED, FIRM_PHONE_TEL } from '@/lib/contact'
 import { useLanguage } from '@/lib/i18n'
@@ -14,6 +14,7 @@ export default function DashboardPage() {
   const [session, setSession] = useState<Session | null>(null)
   const [questionnaireProgress, setQuestionnaireProgress] = useState(0)
   const [documentCount, setDocumentCount] = useState(0)
+  const [assignments, setAssignments] = useState<Assignment[]>([])
   const router = useRouter()
   const { t } = useLanguage()
 
@@ -31,6 +32,13 @@ export default function DashboardPage() {
       setQuestionnaireProgress(Math.round((completed / total) * 100))
       setDocumentCount(documents?.length ?? 0)
     })
+
+    // Question sets the office assigned to this client specifically. Kept apart
+    // from the onboarding progress above — each has its own status.
+    fetch(`/api/assignments?clientId=${encodeURIComponent(s.clientId)}`)
+      .then(r => r.json())
+      .then(({ assignments }) => setAssignments(assignments ?? []))
+      .catch(() => setAssignments([]))
   }, [router])
 
   if (!session) return (
@@ -181,6 +189,66 @@ export default function DashboardPage() {
             </svg>
           </button>
         </div>
+
+
+        {/* Question sets assigned to this client */}
+        {assignments.length > 0 && (
+          <div className="mb-5 animate-slide-up stagger-4">
+            <div className="flex items-baseline justify-between gap-3 mb-2 px-1">
+              <h3 className="font-bold text-black">{t('qs_your_questionnaires')}</h3>
+              <span className="text-xs text-gray-400">{assignments.length}</span>
+            </div>
+            <p className="text-xs text-gray-500 mb-3 px-1">{t('qs_your_questionnaires_sub')}</p>
+
+            <div className="space-y-3">
+              {assignments.map(a => {
+                const done = a.status === 'completed'
+                const started = a.status === 'in_progress' || a.answeredCount > 0
+                const label = done ? t('qs_completed') : started ? t('qs_in_progress') : t('qs_not_started')
+                const action = done ? t('qs_view') : started ? t('qs_continue') : t('qs_start')
+                const pct = a.questionCount > 0 ? Math.round((a.answeredCount / a.questionCount) * 100) : 0
+
+                return (
+                  <button
+                    key={a.id}
+                    onClick={() => router.push(`/questionnaire/${a.id}`)}
+                    className="w-full bg-white border-2 border-transparent hover:border-gold rounded-2xl p-5 text-left transition-all duration-200 shadow-sm hover:shadow-md active:scale-[0.98] group"
+                  >
+                    <div className="flex items-start justify-between gap-3 mb-2">
+                      <div className="min-w-0">
+                        <p className="font-semibold text-black truncate">{a.questionSetName}</p>
+                        <p className="text-sm text-gray-500 mt-0.5">
+                          {a.questionCount} {a.questionCount === 1 ? t('qs_question') : t('qs_questions')}
+                        </p>
+                      </div>
+                      <span className={`text-xs font-semibold px-2.5 py-1 rounded-full shrink-0 ${
+                        done ? 'bg-green-100 text-green-700' : started ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-500'
+                      }`}>
+                        {label}
+                      </span>
+                    </div>
+
+                    {!done && a.questionCount > 0 && (
+                      <div className="flex items-center gap-2 mb-3">
+                        <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                          <div className="h-full rounded-full bg-gold transition-all duration-500" style={{ width: `${pct}%` }} />
+                        </div>
+                        <span className="text-xs text-gray-400 tabular-nums">{pct}%</span>
+                      </div>
+                    )}
+
+                    <span className="inline-flex items-center gap-1 text-sm font-semibold text-gold">
+                      {action}
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Contact Office */}
         <div className="bg-black rounded-2xl p-5 mb-6 animate-slide-up stagger-5">

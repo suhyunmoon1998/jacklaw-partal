@@ -35,6 +35,10 @@ interface AdminClient {
 }
 import { QUESTIONNAIRE_SECTIONS } from '@/lib/questionnaireData'
 import { AnswerValue, QuestionnaireState, UploadedDocument } from '@/types'
+import QuestionSetsPanel from '@/components/admin/QuestionSetsPanel'
+import ClientAssignments from '@/components/admin/ClientAssignments'
+
+const DEFAULT_QUESTION_COUNT = QUESTIONNAIRE_SECTIONS.reduce((n, s) => n + s.questions.length, 0)
 
 // Spanish-specific characters that essentially never appear in English answers.
 const SPANISH_HINT = /[áéíóúñ¿¡]/i
@@ -131,7 +135,7 @@ function ClientDetailModal({
   documents: UploadedDocument[]
   onClose: () => void
 }) {
-  const [tab, setTab] = useState<'progress' | 'answers' | 'documents'>('progress')
+  const [tab, setTab] = useState<'progress' | 'answers' | 'documents' | 'questionnaires'>('progress')
   const [expandedSection, setExpandedSection] = useState<number | null>(null)
   const [translatedAnswers, setTranslatedAnswers] = useState<Record<string, string> | null>(null)
   const [translating, setTranslating] = useState(false)
@@ -222,6 +226,7 @@ function ClientDetailModal({
             { key: 'progress', label: 'Progress' },
             { key: 'answers', label: 'Answers' },
             { key: 'documents', label: `Documents (${documents.length})` },
+            { key: 'questionnaires', label: 'Question Sets' },
           ] as const).map(t => (
             <button
               key={t.key}
@@ -401,6 +406,16 @@ function ClientDetailModal({
                 </>
               )}
             </div>
+          )}
+
+          {/* ── Question Sets tab ── */}
+          {tab === 'questionnaires' && (
+            <ClientAssignments
+              clientId={client.id}
+              clientName={client.name}
+              defaultState={qState}
+              defaultQuestionCount={DEFAULT_QUESTION_COUNT}
+            />
           )}
 
           {/* ── Documents tab ── */}
@@ -690,7 +705,7 @@ export default function AdminPage() {
   const [showNotifications, setShowNotifications] = useState(false)
   const [showAddClient, setShowAddClient] = useState(false)
   const [allClients, setAllClients] = useState<AdminClient[]>([])
-  const [activeTab, setActiveTab] = useState<'clients' | 'intake'>('clients')
+  const [activeTab, setActiveTab] = useState<'clients' | 'intake' | 'question-sets'>('clients')
   const [intakeSubmissions, setIntakeSubmissions] = useState<IntakeSubmission[]>([])
   const [viewingGFROGDraft, setViewingGFROGDraft] = useState<GeneratedGFROGDraft | null>(null)
   const [selectedSubmission, setSelectedSubmission] = useState<IntakeSubmission | null>(null)
@@ -1031,18 +1046,30 @@ export default function AdminPage() {
             >
               Intake Submissions ({intakeSubmissions.length})
             </button>
+            <button
+              onClick={() => setActiveTab('question-sets')}
+              className={`pb-3 font-semibold transition-colors ${
+                activeTab === 'question-sets'
+                  ? 'border-b-2 border-gold text-black'
+                  : 'text-gray-500 hover:text-black'
+              }`}
+            >
+              Question Sets
+            </button>
           </div>
         </div>
 
         {/* Page title */}
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-black">
-            {activeTab === 'clients' ? 'Client Overview' : 'Intake Submissions'}
+            {activeTab === 'clients' ? 'Client Overview' : activeTab === 'intake' ? 'Intake Submissions' : 'Question Sets'}
           </h1>
           <p className="text-gray-500 text-sm mt-1">
             {activeTab === 'clients'
               ? `${allClients.length} registered clients`
-              : `${intakeSubmissions.length} total submissions · ${intakeSubmissions.filter(s => !s.reviewed).length} unreviewed`}
+              : activeTab === 'intake'
+              ? `${intakeSubmissions.length} total submissions · ${intakeSubmissions.filter(s => !s.reviewed).length} unreviewed`
+              : 'Reusable questionnaires you can send to individual clients'}
           </p>
         </div>
 
@@ -1270,6 +1297,9 @@ export default function AdminPage() {
         </div>
           </>
         )}
+
+        {/* Question Sets View */}
+        {activeTab === 'question-sets' && <QuestionSetsPanel />}
 
         {/* Intake Submissions View */}
         {activeTab === 'intake' && (

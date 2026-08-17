@@ -7,6 +7,21 @@ import { normalizePhone, setSession, getSession, formatPhone } from '@/lib/auth'
 import { FIRM_PHONE_LABEL, FIRM_PHONE_TEL } from '@/lib/contact'
 import { useLanguage } from '@/lib/i18n'
 
+/**
+ * Where to land after signing in. An emailed question-set link sends the client
+ * here with ?next=/questionnaire/<assignmentId> so they end up on the set they
+ * were asked about instead of the dashboard.
+ *
+ * Read off window.location rather than useSearchParams so this page keeps
+ * prerendering without a Suspense boundary. Only same-site paths are honoured —
+ * "//evil.com" is a protocol-relative URL, not a path.
+ */
+function nextPath(): string {
+  if (typeof window === 'undefined') return '/dashboard'
+  const raw = new URLSearchParams(window.location.search).get('next') ?? ''
+  return raw.startsWith('/') && !raw.startsWith('//') ? raw : '/dashboard'
+}
+
 export default function LoginPage() {
   const [phone, setPhone] = useState('')
   const [error, setError] = useState('')
@@ -16,7 +31,7 @@ export default function LoginPage() {
 
   useEffect(() => {
     const session = getSession()
-    if (session) router.replace('/dashboard')
+    if (session) router.replace(nextPath())
   }, [router])
 
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -41,7 +56,7 @@ export default function LoginPage() {
 
     if (client) {
       setSession({ clientId: client.id, phone: normalized, name: client.name, caseType: client.case_type ?? '' })
-      router.replace('/dashboard')
+      router.replace(nextPath())
     } else {
       setError(t('not_found'))
     }

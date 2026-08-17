@@ -89,3 +89,49 @@ export interface CardProgress {
   status: 'new' | 'learning' | 'known'
   lastReviewedAt?: string
 }
+
+// ─── Question Sets ────────────────────────────────────────────────────────────
+// Reusable questionnaire templates an admin can build and assign to individual
+// clients, independently of the default onboarding questionnaire.
+
+export type QuestionSetStatus = 'active' | 'archived'
+
+export interface QuestionSet {
+  id: string
+  name: string
+  description: string
+  status: QuestionSetStatus
+  isDefault: boolean
+  questionCount: number
+  createdAt: string
+  updatedAt: string
+}
+
+/** A set plus its ordered questions — the shape the renderer needs. */
+export interface QuestionSetDetail extends QuestionSet {
+  questions: Question[]
+}
+
+export type AssignmentStatus = 'draft' | 'assigned' | 'sent' | 'in_progress' | 'completed'
+
+export interface Assignment {
+  id: string
+  clientId: string
+  questionSetId: string
+  questionSetName: string
+  questionSetDescription: string
+  questionCount: number
+  status: AssignmentStatus
+  assignedAt: string
+  sentAt: string | null
+  startedAt: string | null
+  completedAt: string | null
+  answeredCount: number
+}
+
+/** An assignment with the questions to render and the answers so far. */
+export interface AssignmentDetail extends Assignment {
+  clientName: string
+  questions: Question[]
+  answers: Record<string, AnswerValue>
+}

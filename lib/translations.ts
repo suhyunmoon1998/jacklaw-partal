@@ -160,6 +160,27 @@ export const en = {
   install_qr_sub: 'Point your phone camera at this code, then follow the steps on your phone.',
   install_already: 'The app is installed. You are using it right now.',
   install_help: 'Need help? Call us.',
+
+  // Assigned question sets
+  qs_your_questionnaires: 'Your Questionnaires',
+  qs_your_questionnaires_sub: 'Question sets our office has sent you.',
+  qs_questions: 'questions',
+  qs_question: 'question',
+  qs_start: 'Start',
+  qs_continue: 'Continue',
+  qs_view: 'View',
+  qs_not_started: 'Not Started',
+  qs_in_progress: 'In Progress',
+  qs_completed: 'Completed',
+  qs_submit: 'Submit Answers',
+  qs_submitted_on: 'Submitted',
+  qs_readonly_note: 'You have already submitted this questionnaire. Please call our office if an answer needs to change.',
+  qs_thanks_title: 'Thank you!',
+  qs_thanks_sub: 'Your answers are with our office.',
+  qs_back_portal: 'Back to my portal',
+  qs_unavailable: 'This questionnaire is not available.',
+  qs_wrong_client: 'This link belongs to a different client. Please sign in with your own phone number.',
+  qs_loading: 'Loading…',
 }
 
 export const es: typeof en = {
@@ -324,4 +345,25 @@ export const es: typeof en = {
   install_qr_sub: 'Apunta la cámara de tu teléfono a este código y sigue los pasos en el teléfono.',
   install_already: 'La aplicación ya está instalada. La estás usando ahora mismo.',
   install_help: '¿Necesitas ayuda? Llámanos.',
+
+  // Assigned question sets
+  qs_your_questionnaires: 'Sus Cuestionarios',
+  qs_your_questionnaires_sub: 'Grupos de preguntas que nuestra oficina le ha enviado.',
+  qs_questions: 'preguntas',
+  qs_question: 'pregunta',
+  qs_start: 'Comenzar',
+  qs_continue: 'Continuar',
+  qs_view: 'Ver',
+  qs_not_started: 'Sin Comenzar',
+  qs_in_progress: 'En Progreso',
+  qs_completed: 'Completado',
+  qs_submit: 'Enviar Respuestas',
+  qs_submitted_on: 'Enviado',
+  qs_readonly_note: 'Ya envió este cuestionario. Por favor llame a nuestra oficina si necesita cambiar una respuesta.',
+  qs_thanks_title: '¡Gracias!',
+  qs_thanks_sub: 'Sus respuestas están con nuestra oficina.',
+  qs_back_portal: 'Volver a mi portal',
+  qs_unavailable: 'Este cuestionario no está disponible.',
+  qs_wrong_client: 'Este enlace pertenece a otro cliente. Por favor inicie sesión con su propio número de teléfono.',
+  qs_loading: 'Cargando…',
 }

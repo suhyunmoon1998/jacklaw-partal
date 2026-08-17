@@ -168,3 +168,128 @@ export function generateClientThankYouEmailHtml(clientName: string, calendlyUrl:
 </body>
 </html>`.trim()
 }
+
+/**
+ * Sent when an admin releases one specific question set to a client. The link
+ * points at that client's own assignment, never at the shared template.
+ */
+export function generateAssignmentEmailHtml(
+  clientName: string,
+  setName: string,
+  description: string,
+  questionCount: number,
+  link: string
+): string {
+  return `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>${setName} — Law Offices of Jack D. Josephson, APC</title>
+</head>
+<body style="margin:0;padding:0;background:#f3f4f6;font-family:'Helvetica Neue',Arial,sans-serif;">
+
+  <!-- Header -->
+  <div style="background:#000000;padding:36px 24px;text-align:center;">
+    <p style="margin:0 0 6px 0;color:#E07820;font-size:11px;font-weight:700;letter-spacing:0.2em;text-transform:uppercase;">Law Offices of Jack D. Josephson, APC</p>
+    <h1 style="margin:0;color:#ffffff;font-size:32px;font-weight:900;letter-spacing:0.04em;">866 JACKLAW</h1>
+  </div>
+
+  <!-- Body -->
+  <div style="max-width:560px;margin:0 auto;padding:36px 24px;">
+    <h2 style="margin:0 0 12px 0;color:#111827;font-size:22px;font-weight:800;">Hello ${clientName},</h2>
+    <p style="margin:0 0 16px 0;color:#374151;font-size:14px;line-height:1.7;">
+      Our office has a short set of questions for you about your case.
+    </p>
+
+    <div style="background:#ffffff;border:1px solid #e5e7eb;border-radius:12px;padding:20px 24px;margin-bottom:24px;">
+      <p style="margin:0 0 4px 0;color:#111827;font-size:17px;font-weight:800;">${setName}</p>
+      <p style="margin:0;color:#6b7280;font-size:13px;">${questionCount} question${questionCount === 1 ? '' : 's'}</p>
+      ${description ? `<p style="margin:12px 0 0 0;color:#374151;font-size:13px;line-height:1.6;">${description}</p>` : ''}
+    </div>
+
+    <p style="margin:0 0 24px 0;color:#374151;font-size:14px;line-height:1.7;">
+      Your answers save automatically, so you can stop partway and pick up where you left off.
+    </p>
+
+    <div style="text-align:center;margin-bottom:28px;">
+      <a href="${link}" style="display:inline-block;background:#E07820;color:#ffffff;font-size:15px;font-weight:700;text-decoration:none;padding:14px 32px;border-radius:99px;">
+        Answer the Questions
+      </a>
+    </div>
+
+    <p style="margin:0 0 24px 0;color:#9ca3af;font-size:12px;line-height:1.6;word-break:break-all;text-align:center;">
+      If the button does not work, paste this into your browser:<br/>${link}
+    </p>
+
+    <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:12px 16px;margin-bottom:8px;">
+      <p style="margin:0;color:#b91c1c;font-size:12px;font-weight:700;">Do not use this portal or email for emergencies.</p>
+      <p style="margin:4px 0 0 0;color:#991b1b;font-size:12px;">For urgent matters, please call our office directly.</p>
+    </div>
+
+    <!-- Footer -->
+    <div style="border-top:2px solid #e5e7eb;padding-top:20px;margin-top:24px;text-align:center;">
+      <p style="margin:0;color:#111111;font-weight:800;font-size:14px;">Law Offices of Jack D. Josephson, APC</p>
+      <p style="margin:4px 0 0 0;color:#9ca3af;font-size:11px;">California Employment Law · Attorney-Client Confidential</p>
+    </div>
+  </div>
+
+</body>
+</html>`.trim()
+}
+
+/** Tells the firm a client finished one assigned question set. */
+export function generateAssignmentCompletedEmailHtml(
+  clientName: string,
+  setName: string,
+  completedAt: string,
+  questions: Question[],
+  answers: Record<string, AnswerValue>
+): string {
+  const rows = questions
+    .filter(q => hasAnswer(answers[q.id]))
+    .map(q => `
+      <tr>
+        <td style="padding:10px 16px;border-bottom:1px solid #f3f4f6;vertical-align:top;width:38%;color:#6b7280;font-size:13px;line-height:1.6;">
+          ${q.label}
+        </td>
+        <td style="padding:10px 16px;border-bottom:1px solid #f3f4f6;vertical-align:top;color:#111827;font-size:13px;line-height:1.6;font-weight:500;">
+          ${formatAnswer(answers[q.id], q)}
+        </td>
+      </tr>`).join('')
+
+  return `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>${setName} completed — ${clientName}</title>
+</head>
+<body style="margin:0;padding:0;background:#f3f4f6;font-family:'Helvetica Neue',Arial,sans-serif;">
+
+  <div style="background:#000000;padding:28px 24px;text-align:center;">
+    <p style="margin:0 0 6px 0;color:#E07820;font-size:11px;font-weight:700;letter-spacing:0.2em;text-transform:uppercase;">Question Set Completed</p>
+    <h1 style="margin:0;color:#ffffff;font-size:26px;font-weight:900;">${clientName}</h1>
+  </div>
+
+  <div style="max-width:680px;margin:0 auto;padding:28px 20px;">
+    <div style="background:#ffffff;border:1px solid #e5e7eb;border-radius:12px;padding:18px 22px;margin-bottom:20px;">
+      <p style="margin:0 0 4px 0;color:#111827;font-size:17px;font-weight:800;">${setName}</p>
+      <p style="margin:0;color:#6b7280;font-size:13px;">Completed ${completedAt}</p>
+    </div>
+
+    <table style="width:100%;border-collapse:collapse;background:#ffffff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;">
+      ${rows || '<tr><td style="padding:16px;color:#9ca3af;font-size:13px;">No answers recorded.</td></tr>'}
+    </table>
+
+    <div style="border-top:2px solid #e5e7eb;padding-top:20px;margin-top:24px;text-align:center;">
+      <p style="margin:0;color:#111111;font-weight:800;font-size:14px;">Law Offices of Jack D. Josephson, APC</p>
+      <p style="margin:4px 0 0 0;color:#9ca3af;font-size:11px;">California Employment Law · Attorney-Client Confidential</p>
+    </div>
+  </div>
+
+</body>
+</html>`.trim()
+}

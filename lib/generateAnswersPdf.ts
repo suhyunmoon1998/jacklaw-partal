@@ -1,6 +1,6 @@
 import PDFDocument from 'pdfkit'
 import { QUESTIONNAIRE_SECTIONS } from '@/lib/questionnaireData'
-import { AnswerValue, Question } from '@/types'
+import { AnswerValue, Question, QuestionnaireSection } from '@/types'
 
 const GOLD = '#E07820'
 const NAVY = '#111111'
@@ -24,12 +24,22 @@ function formatAnswer(val: AnswerValue | undefined, question: Question): string 
   return s
 }
 
+/**
+ * Renders a client's answers as a PDF.
+ *
+ * `options` lets an assigned question set reuse this exact layout by passing its
+ * own questions and heading; omitting it keeps the original behaviour — the
+ * default onboarding questionnaire, section by section.
+ */
 export function generateAnswersPdf(
   clientName: string,
   caseType: string,
   phone: string,
-  answers: Record<string, AnswerValue>
+  answers: Record<string, AnswerValue>,
+  options: { sections?: QuestionnaireSection[]; title?: string } = {}
 ): Promise<Buffer> {
+  const sections = options.sections ?? QUESTIONNAIRE_SECTIONS
+  const title = options.title ?? 'CLIENT INTAKE QUESTIONNAIRE'
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ margin: 50, size: 'LETTER', bufferPages: true })
     const chunks: Buffer[] = []
@@ -45,7 +55,7 @@ export function generateAnswersPdf(
     doc.fillColor(NAVY).font('Helvetica-Bold').fontSize(16)
       .text('Law Offices of Jack D. Josephson, APC', { align: 'center' })
     doc.fillColor(GOLD).font('Helvetica-Bold').fontSize(9)
-      .text('CLIENT INTAKE QUESTIONNAIRE', { align: 'center', characterSpacing: 1 })
+      .text(title.toUpperCase(), { align: 'center', characterSpacing: 1 })
     doc.moveDown(1.2)
 
     doc.fillColor('#000000').font('Helvetica-Bold').fontSize(13).text(clientName)
@@ -63,7 +73,7 @@ export function generateAnswersPdf(
 
     let anySections = false
 
-    for (const section of QUESTIONNAIRE_SECTIONS) {
+    for (const section of sections) {
       const answered = section.questions.filter(q => hasAnswer(answers[q.id]))
       if (answered.length === 0) continue
       anySections = true
