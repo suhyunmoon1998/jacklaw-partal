@@ -25,7 +25,15 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     return NextResponse.json({ error: 'Could not duplicate.' }, { status: 500 })
   }
 
-  await replaceQuestions(set.id, source.questions)
+  try {
+    await replaceQuestions(set.id, source.questions)
+  } catch (err) {
+    await getSupabase().from('question_sets').delete().eq('id', set.id)
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : 'Could not copy the questions.' },
+      { status: 500 }
+    )
+  }
 
   return NextResponse.json({ id: set.id })
 }

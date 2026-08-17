@@ -20,6 +20,7 @@ export function QuestionInput({
   notSureLabel,
   selectPlaceholder,
   optionLabels,
+  maxDate,
 }: {
   question: Question
   inputId: string
@@ -35,6 +36,13 @@ export function QuestionInput({
    * an untranslated one.
    */
   optionLabels?: string[]
+  /**
+   * Upper bound for date questions. The default onboarding questionnaire asks
+   * only about things that already happened and passes today; an admin-built
+   * set may legitimately ask for a future date (a hearing, a return-to-work
+   * date) and passes nothing.
+   */
+  maxDate?: string
 }) {
   const strVal = typeof value === 'string' ? value : ''
   const arrVal = Array.isArray(value) ? value : []
@@ -199,7 +207,7 @@ export function QuestionInput({
           value={strVal}
           onChange={e => onChange(question.id, e.target.value)}
           className="input-field"
-          max={new Date().toISOString().split('T')[0]}
+          max={maxDate}
         />
       )
 

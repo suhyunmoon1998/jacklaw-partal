@@ -429,6 +429,7 @@ export default function QuestionnairePage() {
                       noLabel={t('q_no')}
                       notSureLabel={t('q_not_sure')}
                       selectPlaceholder={t('q_select')}
+                      maxDate={new Date().toISOString().split('T')[0]}
                     />
                   </div>
                 </div>

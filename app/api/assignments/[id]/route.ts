@@ -58,7 +58,19 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     )
   }
 
+  // Only keys that are questions in this set may be written. Without this the
+  // response table takes whatever the browser sends, and those keys are shown
+  // to staff as "question since removed" rows — letting anything typed into a
+  // request body appear inside the office's copy of a client's answers.
+  const { data: questionRows } = await supabase
+    .from('question_set_questions')
+    .select('question')
+    .eq('question_set_id', row.question_set_id)
+  const known = new Set((questionRows ?? []).map(r => (r.question as { id: string }).id))
+
   const entries = Object.entries((answers ?? {}) as Record<string, AnswerValue>)
+    .filter(([key]) => known.has(key))
+
   if (entries.length > 0) {
     const { error } = await supabase
       .from('question_set_responses')

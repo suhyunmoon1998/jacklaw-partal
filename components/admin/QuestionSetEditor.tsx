@@ -103,6 +103,7 @@ export default function QuestionSetEditor({
   const [loading, setLoading] = useState(!!setId)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [loadError, setLoadError] = useState('')
   const [pasteOpen, setPasteOpen] = useState(false)
   const [pasted, setPasted] = useState('')
   const [suggestOpen, setSuggestOpen] = useState(false)
@@ -115,14 +116,19 @@ export default function QuestionSetEditor({
   useEffect(() => {
     if (!setId) return
     fetch(`/api/admin/question-sets/${setId}`, { headers: { 'x-admin-key': MOCK_ADMIN_PASSWORD } })
-      .then(r => r.json())
-      .then(({ set }: { set: QuestionSetDetail }) => {
-        if (!set) return
+      .then(async r => {
+        const body = await r.json().catch(() => ({}))
+        if (!r.ok || !body?.set) throw new Error(body?.error ?? 'Could not load this question set.')
+        const set = body.set as QuestionSetDetail
         setName(set.name)
         setNameEs(set.nameEs ?? '')
         setDescription(set.description)
         setQuestions(set.questions.map(toDraft))
       })
+      // Opening blank on a failed load is how an existing set gets wiped: the
+      // editor saves the whole list, so an empty form would replace real
+      // questions with nothing. Saving stays blocked until it loads.
+      .catch(err => setLoadError(err instanceof Error ? err.message : 'Could not load this question set.'))
       .finally(() => setLoading(false))
   }, [setId])
 
@@ -222,6 +228,7 @@ export default function QuestionSetEditor({
     })
 
   const handleSave = async () => {
+    if (loadError) return
     if (!name.trim()) { setError('Give the question set a name.'); return }
     const cleaned = questions.filter(q => q.label.trim())
     if (cleaned.length === 0) { setError('Add at least one question.'); return }
@@ -255,9 +262,14 @@ export default function QuestionSetEditor({
     onSaved()
   }
 
-  /** Questions above this one — the only valid targets for skip logic. */
+  /**
+   * Questions above this one that can actually gate another.
+   *
+   * Visibility is an equality test, so a multiselect — whose answer is a list —
+   * can never match and would hide the dependent question from every client.
+   */
   const priorQuestions = (index: number) =>
-    questions.slice(0, index).filter(q => q.label.trim())
+    questions.slice(0, index).filter(q => q.label.trim() && q.type !== 'multiselect')
 
   return (
     <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-2 sm:p-4 animate-fade-in" onClick={onClose}>
@@ -283,6 +295,14 @@ export default function QuestionSetEditor({
           <div className="p-6 space-y-3">
             <div className="animate-shimmer h-10 rounded-xl" />
             <div className="animate-shimmer h-24 rounded-xl" />
+          </div>
+        ) : loadError ? (
+          <div className="p-8 text-center">
+            <p className="text-4xl mb-3">⚠️</p>
+            <p className="text-sm text-gray-700">{loadError}</p>
+            <p className="text-xs text-gray-400 mt-2">
+              Nothing has been changed. Close this and try again.
+            </p>
           </div>
         ) : (
           <div className="flex-1 overflow-y-auto p-5 space-y-5">
@@ -661,7 +681,7 @@ export default function QuestionSetEditor({
             </button>
             <button
               onClick={handleSave}
-              disabled={saving}
+              disabled={saving || !!loadError}
               className="bg-gold text-white px-5 py-2.5 rounded-xl text-sm font-semibold hover:bg-gold-dark transition-colors disabled:opacity-50"
             >
               {saving ? 'Saving…' : setId ? 'Save Changes' : 'Create Question Set'}

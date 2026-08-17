@@ -15,7 +15,7 @@ import { useRouter } from 'next/navigation'
 import Header from '@/components/Header'
 import MascotWatermark from '@/components/MascotWatermark'
 import { QuestionInput } from '@/components/QuestionField'
-import { hasAnswer, isFieldControl, isVisible, localize } from '@/lib/questionLogic'
+import { hasAnswer, isAnsweredFor, isFieldControl, isVisible, localize } from '@/lib/questionLogic'
 import { getSession } from '@/lib/auth'
 import { useLanguage } from '@/lib/i18n'
 import { AnswerValue, AssignmentDetail, Session } from '@/types'
@@ -174,11 +174,11 @@ export default function AssignmentQuestionnairePage({
   }, [justSubmitted, saveBlocked])
 
   const visibleQuestions = (assignment?.questions ?? []).filter(q => isVisible(q, answers))
-  const answeredCount = visibleQuestions.filter(q => hasAnswer(answers[q.id])).length
+  const answeredCount = visibleQuestions.filter(q => isAnsweredFor(q, answers)).length
   const pct = visibleQuestions.length > 0 ? Math.round((answeredCount / visibleQuestions.length) * 100) : 0
 
   const handleSubmit = async () => {
-    const missing = visibleQuestions.find(q => q.required && !hasAnswer(answers[q.id]))
+    const missing = visibleQuestions.find(q => q.required && !isAnsweredFor(q, answers))
     if (missing) {
       setValidationError(t('q_required_error') + ` "${localize(missing, lang).label}"`)
       document.getElementById(`q-${missing.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
@@ -371,7 +371,7 @@ export default function AssignmentQuestionnairePage({
             {visibleQuestions.map((raw, i) => {
               // Skip logic runs on the English question; only what is shown is translated.
               const q = localize(raw, lang)
-              const answered = hasAnswer(answers[q.id])
+              const answered = isAnsweredFor(raw, answers)
               const inputId = `q-${q.id}`
               return (
                 <div
@@ -407,7 +407,9 @@ export default function AssignmentQuestionnairePage({
                   <div className="pl-0 sm:pl-[28px]">
                     {readOnly ? (
                       <p className="text-sm text-gray-800 font-medium whitespace-pre-line bg-gray-50 rounded-xl px-4 py-3">
-                        {formatReadOnly(answers[q.id], raw.options, q.optionLabels)}
+                        {formatReadOnly(answers[q.id], raw.options, q.optionLabels, {
+                          yes: t('q_yes'), no: t('q_no'), notSure: t('q_not_sure'),
+                        })}
                       </p>
                     ) : (
                       <QuestionInput
@@ -504,7 +506,8 @@ export default function AssignmentQuestionnairePage({
 function formatReadOnly(
   val: AnswerValue | undefined,
   options?: string[],
-  optionLabels?: string[]
+  optionLabels?: string[],
+  words: { yes: string; no: string; notSure: string } = { yes: 'Yes', no: 'No', notSure: 'Not Sure' }
 ): string {
   // Answers are stored as the English option; show the client their own wording.
   const shown = (v: string) => {
@@ -514,8 +517,8 @@ function formatReadOnly(
   if (!hasAnswer(val)) return '—'
   if (Array.isArray(val)) return val.map(v => `• ${shown(v)}`).join('\n')
   const s = shown(String(val))
-  if (s === 'yes') return '✓ Yes'
-  if (s === 'no') return '✗ No'
-  if (s === 'not_sure') return '? Not Sure'
+  if (s === 'yes') return `✓ ${words.yes}`
+  if (s === 'no') return `✗ ${words.no}`
+  if (s === 'not_sure') return `? ${words.notSure}`
   return s
 }

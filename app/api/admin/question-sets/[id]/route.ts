@@ -45,7 +45,25 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   // Questions are replaced wholesale: the editor holds the whole list, and this
   // is what makes reordering and removal a single save.
   if (body.questions !== undefined) {
-    await replaceQuestions(params.id, normalizeQuestions(body.questions))
+    const questions = normalizeQuestions(body.questions)
+    // A questionnaire with nothing in it cannot be answered, and arriving here
+    // with an empty list usually means the caller sent junk — or a half-loaded
+    // editor sent its blank state. Either way, leave the existing questions
+    // alone rather than emptying a set the firm may already have sent out.
+    if (questions.length === 0) {
+      return NextResponse.json(
+        { error: 'A question set needs at least one usable question, so nothing was changed.' },
+        { status: 400 }
+      )
+    }
+    try {
+      await replaceQuestions(params.id, questions)
+    } catch (err) {
+      return NextResponse.json(
+        { error: err instanceof Error ? err.message : 'Could not save the questions.' },
+        { status: 500 }
+      )
+    }
   }
 
   return NextResponse.json({ success: true })

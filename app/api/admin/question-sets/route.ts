@@ -23,6 +23,9 @@ export async function POST(req: NextRequest) {
   if (!name) return NextResponse.json({ error: 'Name is required.' }, { status: 400 })
 
   const questions = normalizeQuestions(body.questions)
+  if (questions.length === 0) {
+    return NextResponse.json({ error: 'Add at least one usable question.' }, { status: 400 })
+  }
 
   const { data: set, error } = await getSupabase()
     .from('question_sets')
@@ -39,7 +42,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Could not create question set.' }, { status: 500 })
   }
 
-  await replaceQuestions(set.id, questions)
+  try {
+    await replaceQuestions(set.id, questions)
+  } catch (err) {
+    // The set row exists but has no questions — remove it rather than leaving
+    // an empty set in the picker.
+    await getSupabase().from('question_sets').delete().eq('id', set.id)
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : 'Could not save the questions.' },
+      { status: 500 }
+    )
+  }
 
   return NextResponse.json({ id: set.id })
 }

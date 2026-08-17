@@ -24,7 +24,8 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   if (!isAdmin(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const assignment = await getAssignmentDetail(params.id)
+  // forClient: the count in the email has to match the questionnaire they open.
+  const assignment = await getAssignmentDetail(params.id, { forClient: true })
   if (!assignment) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   const body = await req.json().catch(() => ({}))

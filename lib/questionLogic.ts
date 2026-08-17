@@ -23,6 +23,26 @@ export function hasAnswer(val: AnswerValue | undefined): boolean {
   return String(val).trim().length > 0
 }
 
+/**
+ * Whether a stored answer still fits the question it belongs to.
+ *
+ * An admin can change a question's type after clients have answered it. The
+ * control then renders empty — a multiselect cannot show a string, a text box
+ * cannot show an array — while the old value is still on file, so counting it
+ * as answered would show a client 12/12 with a blank box in front of them, and
+ * would let a required question pass validation with nothing visible in it.
+ */
+export function answerFitsType(val: AnswerValue | undefined, type: Question['type']): boolean {
+  if (!hasAnswer(val)) return false
+  const wantsArray = type === 'multiselect'
+  return wantsArray === Array.isArray(val)
+}
+
+/** hasAnswer, but only counting answers the client can actually see and edit. */
+export function isAnsweredFor(q: Question, answers: Record<string, AnswerValue>): boolean {
+  return answerFitsType(answers[q.id], q.type)
+}
+
 /** Button groups have no single control to point a <label for> at. */
 export function isFieldControl(type: Question['type']): boolean {
   return type !== 'yes_no' && type !== 'yes_no_unsure' && type !== 'multiselect'

@@ -107,6 +107,44 @@ create table if not exists question_set_responses (
 create index if not exists responses_assignment_idx
   on question_set_responses (assignment_id);
 
+-- Replacing a set's questions must be all-or-nothing. Done as a DELETE then an
+-- INSERT from the API, a failure between the two left the set with no questions
+-- at all — silently emptying a questionnaire already sent to clients. A function
+-- body is one transaction, so the delete only stands if the insert does too.
+create or replace function replace_question_set_questions(
+  p_set_id uuid,
+  p_questions jsonb
+)
+returns integer
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  inserted integer;
+begin
+  if not exists (select 1 from question_sets where id = p_set_id) then
+    raise exception 'question set % does not exist', p_set_id;
+  end if;
+
+  if jsonb_typeof(p_questions) <> 'array' then
+    raise exception 'questions must be a JSON array, got %', jsonb_typeof(p_questions);
+  end if;
+
+  delete from question_set_questions where question_set_id = p_set_id;
+
+  insert into question_set_questions (question_set_id, question, sort_order)
+  select p_set_id, value, (ordinality - 1)::integer
+  from jsonb_array_elements(p_questions) with ordinality;
+
+  get diagnostics inserted = row_count;
+  return inserted;
+end;
+$$;
+
+revoke all on function replace_question_set_questions(uuid, jsonb) from public;
+grant execute on function replace_question_set_questions(uuid, jsonb) to service_role;
+
 -- Row Level Security (all access via service role key through API routes)
 alter table clients              enable row level security;
 alter table questionnaire_states enable row level security;

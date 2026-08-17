@@ -15,6 +15,7 @@
 
 import { getSupabase } from '@/lib/supabase'
 import { QUESTIONNAIRE_SECTIONS } from '@/lib/questionnaireData'
+import { answerFitsType, isVisible } from '@/lib/questionLogic'
 import {
   AnswerValue,
   Assignment,
@@ -105,7 +106,22 @@ export function normalizeQuestions(raw: unknown): Question[] {
     seen.add(q.id)
     out.push(q)
   })
-  return out
+
+  // Skip logic that points at a question which is no longer in the set — the
+  // gate was deleted or reordered below its dependant — can never be true, so
+  // the condition is dropped rather than hiding the question from every client
+  // forever. A multiselect gate is dropped for the same reason: visibility is
+  // an equality test and its answer is an array, which can never match.
+  const byId = new Map(out.map(q => [q.id, q]))
+  return out.map((q, index) => {
+    if (!q.showIf) return q
+    const gate = byId.get(q.showIf.questionId)
+    const gateIndex = gate ? out.findIndex(x => x.id === gate.id) : -1
+    if (!gate || gateIndex >= index || gate.type === 'multiselect') {
+      return { ...q, showIf: undefined }
+    }
+    return q
+  })
 }
 
 interface SetRow {
@@ -156,7 +172,9 @@ export async function listQuestionSets(includeArchived = true): Promise<Question
 
   const [{ data: sets }, { data: questions }] = await Promise.all([
     query,
-    supabase.from('question_set_questions').select('question_set_id'),
+    // Ranged explicitly: PostgREST caps an unbounded select at 1000 rows, which
+    // would silently under-report counts once the firm's library grows.
+    supabase.from('question_set_questions').select('question_set_id').range(0, 99_999),
   ])
 
   const counts = (questions ?? []).reduce<Record<string, number>>((acc, q) => {
@@ -171,7 +189,13 @@ export async function getQuestionSetDetail(id: string): Promise<QuestionSetDetai
   if (id === DEFAULT_SET_ID) {
     return {
       ...defaultQuestionSet(),
-      questions: QUESTIONNAIRE_SECTIONS.flatMap(s => s.questions),
+      // Sections carry their own showIf in the built-in questionnaire. Flattening
+      // without pushing it onto the questions would hand a duplicate every gated
+      // question unconditionally — e.g. the termination questions asked of
+      // someone still employed.
+      questions: QUESTIONNAIRE_SECTIONS.flatMap(section =>
+        section.questions.map(q => (section.showIf && !q.showIf ? { ...q, showIf: section.showIf } : q))
+      ),
     }
   }
 
@@ -189,14 +213,22 @@ export async function getQuestionSetDetail(id: string): Promise<QuestionSetDetai
   return { ...toQuestionSet(set as SetRow, questions.length), questions }
 }
 
-/** Replaces a set's questions wholesale — the editor always sends the full list. */
+/**
+ * Replaces a set's questions wholesale — the editor always sends the full list.
+ *
+ * Goes through a database function so the delete and the insert share one
+ * transaction: a failure part way through leaves the old questions in place
+ * rather than emptying a set the firm may already have sent out.
+ */
 export async function replaceQuestions(setId: string, questions: Question[]): Promise<void> {
-  const supabase = getSupabase()
-  await supabase.from('question_set_questions').delete().eq('question_set_id', setId)
-  if (questions.length === 0) return
-  await supabase.from('question_set_questions').insert(
-    questions.map((question, i) => ({ question_set_id: setId, question, sort_order: i }))
-  )
+  const { error } = await getSupabase().rpc('replace_question_set_questions', {
+    p_set_id: setId,
+    p_questions: questions,
+  })
+  if (error) {
+    console.error('replaceQuestions failed:', error)
+    throw new Error(error.message || 'Could not save the questions.')
+  }
 }
 
 interface AssignmentRow {
@@ -262,7 +294,11 @@ export async function listAssignments(
 
   const [{ data: sets }, { data: questions }, { data: responses }] = await Promise.all([
     supabase.from('question_sets').select('id, name, name_es, description').in('id', setIds),
-    supabase.from('question_set_questions').select('question_set_id, question').in('question_set_id', setIds),
+    supabase
+      .from('question_set_questions')
+      .select('question_set_id, question')
+      .in('question_set_id', setIds)
+      .range(0, 99_999),
     supabase.from('question_set_responses').select('assignment_id, question_key, answer').in('assignment_id', assignmentIds),
   ])
 
@@ -270,35 +306,60 @@ export async function listAssignments(
 
   // Question ids per set, so an answer left behind by an edited set does not
   // inflate the progress shown against the set's current questions.
-  const idsBySet = (questions ?? []).reduce<Record<string, Set<string>>>((acc, row) => {
-    const q = row.question as Question
-    ;(acc[row.question_set_id] ??= new Set()).add(q.id)
+  const questionsBySet = (questions ?? []).reduce<Record<string, Question[]>>((acc, row) => {
+    ;(acc[row.question_set_id] ??= []).push(row.question as Question)
     return acc
   }, {})
 
-  const setIdOf = Object.fromEntries(rows.map(r => [r.id, r.question_set_id]))
-  const answered = (responses ?? []).reduce<Record<string, number>>((acc, r) => {
-    const current = idsBySet[setIdOf[r.assignment_id]]
-    if (!current?.has(r.question_key)) return acc
-    if (isAnswered(r.answer as AnswerValue)) acc[r.assignment_id] = (acc[r.assignment_id] ?? 0) + 1
+  const answersByAssignment = (responses ?? []).reduce<Record<string, Record<string, AnswerValue>>>((acc, r) => {
+    ;(acc[r.assignment_id] ??= {})[r.question_key] = r.answer as AnswerValue
     return acc
   }, {})
 
-  return rows.map(row =>
-    toAssignment(
+  return rows.map(row => {
+    const progress = progressOf(
+      questionsBySet[row.question_set_id] ?? [],
+      answersByAssignment[row.id] ?? {},
+      visibleToClient
+    )
+    return toAssignment(
       row as AssignmentRow,
       setMap[row.question_set_id] ?? { name: 'Removed question set', description: '' },
-      idsBySet[row.question_set_id]?.size ?? 0,
-      answered[row.id] ?? 0,
+      progress.total,
+      progress.answered,
       !visibleToClient
     )
-  )
+  })
 }
 
 function isAnswered(val: AnswerValue | null | undefined): boolean {
   if (val === null || val === undefined) return false
   if (Array.isArray(val)) return val.length > 0
   return String(val).trim().length > 0
+}
+
+/**
+ * How far along an assignment is.
+ *
+ * The two audiences want different denominators. A client's progress has to be
+ * able to reach 100%, so theirs counts only the questions their own answers
+ * actually reveal — a set where answering "no" hides six follow-ups is finished
+ * at 1/1, not stuck at 1/7. Staff think of a set by its real size, so the
+ * office sees every question in it.
+ *
+ * Both count the same answers: filled in, and still fitting the control they
+ * belong to.
+ */
+function progressOf(
+  questions: Question[],
+  answers: Record<string, AnswerValue>,
+  forClient: boolean
+): { total: number; answered: number } {
+  const counted = forClient ? questions.filter(q => isVisible(q, answers)) : questions
+  return {
+    total: counted.length,
+    answered: counted.filter(q => answerFitsType(answers[q.id], q.type)).length,
+  }
 }
 
 /**
@@ -350,11 +411,14 @@ export async function getAssignmentDetail(
 
   const questions = [...current, ...removed]
 
+  // `questions` already carries the since-removed ones for staff, so their
+  // answers are counted here without any extra bookkeeping.
+  const progress = progressOf(questions, answers, forClient)
   const base = toAssignment(
     row as AssignmentRow,
     set ?? { name: 'Removed question set', description: '' },
-    questions.length,
-    questions.filter(q => isAnswered(answers[q.id])).length,
+    progress.total,
+    progress.answered,
     !forClient
   )
 
