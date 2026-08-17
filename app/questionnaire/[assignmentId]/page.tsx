@@ -34,12 +34,20 @@ export default function AssignmentQuestionnairePage({
   const [submitting, setSubmitting] = useState(false)
   const [justSubmitted, setJustSubmitted] = useState(false)
   const [saveFailed, setSaveFailed] = useState(false)
+  const [saveBlocked, setSaveBlocked] = useState(false)
   const [leaving, setLeaving] = useState(false)
   const [retry, setRetry] = useState(0)
 
-  // Only questions edited since the last save go up, so a 48-question set does
-  // not rewrite every row on every keystroke.
-  const dirty = useRef<Set<string>>(new Set())
+  // Answers edited since the last save, so a 48-question set does not rewrite
+  // every row on every keystroke.
+  //
+  // It holds the VALUE, not just the id. Clearing by id alone loses an answer
+  // the client re-typed while its own save was in flight: the id is already in
+  // the set, re-adding it is a no-op, and the response then clears it — leaving
+  // the newer text queued nowhere.
+  const dirty = useRef<Map<string, AnswerValue>>(new Map())
+  /** One writer at a time, so an older save cannot land on top of a newer one. */
+  const inFlight = useRef(false)
   const router = useRouter()
   const { t } = useLanguage()
 
@@ -63,10 +71,7 @@ export default function AssignmentQuestionnairePage({
         // those keystrokes, so anything already edited wins over the server copy.
         setAnswers(prev => {
           const fromServer: Record<string, AnswerValue> = body.assignment.answers ?? {}
-          const edited = Object.fromEntries(
-            Array.from(dirty.current).map(id => [id, prev[id]])
-          )
-          return { ...fromServer, ...edited }
+          return { ...fromServer, ...Object.fromEntries(dirty.current) }
         })
       })
       .catch(() => setLoadError(t('qs_unavailable')))
@@ -74,53 +79,81 @@ export default function AssignmentQuestionnairePage({
 
   const readOnly = assignment?.status === 'completed'
 
-  const save = useCallback(
-    async (submitted: boolean): Promise<boolean> => {
-      if (!session) return false
-      const sending = Array.from(dirty.current)
-      const changed = Object.fromEntries(sending.map(id => [id, answers[id] ?? '']))
+  /**
+   * 'ok'        — everything queued reached the server
+   * 'busy'      — another save is running; the caller should try again shortly
+   * 'failed'    — worth retrying (offline, server error)
+   * 'permanent' — retrying can never help (already submitted, wrong client, gone)
+   */
+  type SaveResult = 'ok' | 'busy' | 'failed' | 'permanent'
 
+  const save = useCallback(
+    async (submitted: boolean): Promise<SaveResult> => {
+      if (!session) return 'failed'
+      if (inFlight.current) return 'busy'
+
+      const sending = new Map(dirty.current)
+      if (sending.size === 0 && !submitted) return 'ok'
+
+      inFlight.current = true
       try {
         const res = await fetch(`/api/assignments/${params.assignmentId}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ clientId: session.clientId, answers: changed, submitted }),
+          body: JSON.stringify({
+            clientId: session.clientId,
+            answers: Object.fromEntries(sending),
+            submitted,
+          }),
         })
-        if (!res.ok) return false
-        // Clear only what actually reached the server, and only after it did.
-        // Anything typed while the request was in flight stays queued, and a
-        // failed save leaves its answers marked so the retry resends them.
-        sending.forEach(id => dirty.current.delete(id))
+
+        // 409 already submitted, 403 wrong client, 404 removed — the answers are
+        // not going to be accepted however many times we ask.
+        if (res.status === 409 || res.status === 403 || res.status === 404) return 'permanent'
+        if (!res.ok) return 'failed'
+
+        // Clear only the entries whose value is still the one we sent. A key the
+        // client re-edited mid-flight holds a different value and stays queued.
+        sending.forEach((value, id) => {
+          if (dirty.current.get(id) === value) dirty.current.delete(id)
+        })
         setSaveFailed(false)
-        return true
+        return 'ok'
       } catch {
-        return false
+        return 'failed'
+      } finally {
+        inFlight.current = false
       }
     },
-    [session, answers, params.assignmentId]
+    [session, params.assignmentId]
   )
 
   // Autosave a second after typing stops, matching the default questionnaire.
-  // `retry` re-arms this effect after a failure, since a failed save changes no
-  // other state and would otherwise never be attempted again.
+  // `retry` re-arms this effect after a failure or a collision, since neither
+  // changes any other state the effect depends on.
   useEffect(() => {
     if (!session || !assignment || readOnly || justSubmitted || dirty.current.size === 0) return
     const timer = setTimeout(() => {
-      save(false).then(ok => {
-        if (!ok) {
-          setSaveFailed(true)
-          setTimeout(() => setRetry(n => n + 1), 4000)
+      // Re-checked here, not just at effect setup: an in-flight save may have
+      // drained the queue since this timer was armed.
+      if (dirty.current.size === 0) return
+      save(false).then(result => {
+        if (result === 'ok') {
+          setAutoSaved(true)
+          setTimeout(() => setAutoSaved(false), 2000)
           return
         }
-        setAutoSaved(true)
-        setTimeout(() => setAutoSaved(false), 2000)
+        if (result === 'permanent') { setSaveBlocked(true); return }
+        // 'busy' comes back in a moment; 'failed' needs the client to know.
+        if (result === 'failed') setSaveFailed(true)
+        setTimeout(() => setRetry(n => n + 1), result === 'busy' ? 400 : 4000)
       })
     }, 1000)
     return () => clearTimeout(timer)
   }, [answers, session, assignment, readOnly, justSubmitted, retry, save])
 
   const handleChange = (id: string, val: AnswerValue) => {
-    dirty.current.add(id)
+    dirty.current.set(id, val)
     setAnswers(prev => ({ ...prev, [id]: val }))
     setValidationError('')
   }
@@ -129,13 +162,13 @@ export default function AssignmentQuestionnairePage({
   // "leave site?" prompt while answers are still unsaved.
   useEffect(() => {
     const warn = (e: BeforeUnloadEvent) => {
-      if (dirty.current.size === 0 || justSubmitted) return
+      if (dirty.current.size === 0 || justSubmitted || saveBlocked) return
       e.preventDefault()
       e.returnValue = ''
     }
     window.addEventListener('beforeunload', warn)
     return () => window.removeEventListener('beforeunload', warn)
-  }, [justSubmitted])
+  }, [justSubmitted, saveBlocked])
 
   const visibleQuestions = (assignment?.questions ?? []).filter(q => isVisible(q, answers))
   const answeredCount = visibleQuestions.filter(q => hasAnswer(answers[q.id])).length
@@ -151,35 +184,74 @@ export default function AssignmentQuestionnairePage({
 
     setSubmitting(true)
     setValidationError('')
-    // Every visible question goes up on submit, not just the dirty keys, so a
+    // Every visible question goes up on submit, not just the queued ones, so a
     // dropped autosave can never leave a gap in a completed set. Cleared answers
     // are included too, so blanking a field is recorded rather than left behind.
-    visibleQuestions.forEach(q => dirty.current.add(q.id))
+    visibleQuestions.forEach(q => dirty.current.set(q.id, answers[q.id] ?? ''))
 
-    let ok = false
+    let result: SaveResult = 'failed'
     try {
-      ok = await save(true)
+      result = await save(true)
+      // A collision with an autosave is not a failure — wait it out once.
+      if (result === 'busy') {
+        await new Promise(r => setTimeout(r, 600))
+        result = await save(true)
+      }
     } finally {
       // Runs even if the request blew up, so the button can never stay stuck on
       // "Submitting…" with no way forward.
       setSubmitting(false)
     }
 
-    if (ok) setJustSubmitted(true)
-    else setSaveFailed(true)
+    if (result === 'ok') { setJustSubmitted(true); return }
+    if (result === 'permanent') { setSaveBlocked(true); return }
+    // Leave the queue armed so the autosave keeps trying behind the warning.
+    setSaveFailed(true)
+    setRetry(n => n + 1)
   }
 
   /** "Save & Exit" has to actually save — leaving cancels the pending autosave. */
-  const handleSaveExit = async () => {
-    if (dirty.current.size === 0) { router.push('/dashboard'); return }
+  const flushAndLeave = useCallback(async (to: string): Promise<boolean> => {
+    if (dirty.current.size === 0) { router.push(to); return true }
     setLeaving(true)
-    const ok = await save(false)
+    let result = await save(false)
+    if (result === 'busy') {
+      await new Promise(r => setTimeout(r, 600))
+      result = await save(false)
+    }
     setLeaving(false)
+
     // Staying put on failure is the point: navigating away would discard the
     // answers with nothing left holding them.
-    if (ok) router.push('/dashboard')
-    else setSaveFailed(true)
-  }
+    if (result === 'ok') { router.push(to); return true }
+    if (result === 'permanent') { setSaveBlocked(true); return false }
+    setSaveFailed(true)
+    setRetry(n => n + 1)
+    return false
+  }, [router, save])
+
+  const handleSaveExit = () => flushAndLeave('/dashboard')
+
+  /**
+   * The header's own Back and Log out buttons leave the page too, and they were
+   * discarding whatever the autosave had not yet picked up. They now flush
+   * first and stay put if that fails.
+   */
+  const guardedLeave = useCallback(async (): Promise<boolean> => {
+    if (dirty.current.size === 0 || readOnly || justSubmitted) return true
+    setLeaving(true)
+    let result = await save(false)
+    if (result === 'busy') {
+      await new Promise(r => setTimeout(r, 600))
+      result = await save(false)
+    }
+    setLeaving(false)
+    if (result === 'ok') return true
+    if (result === 'permanent') { setSaveBlocked(true); return true }
+    setSaveFailed(true)
+    setRetry(n => n + 1)
+    return false
+  }, [readOnly, justSubmitted, save])
 
   if (loadError) {
     return (
@@ -241,7 +313,13 @@ export default function AssignmentQuestionnairePage({
       <MascotWatermark />
 
       <div className="relative z-10">
-        <Header showBack backHref="/dashboard" showLogout subtitle={assignment.questionSetName} />
+        <Header
+          showBack
+          backHref="/dashboard"
+          showLogout
+          subtitle={assignment.questionSetName}
+          beforeLeave={guardedLeave}
+        />
       </div>
 
       {/* Sticky progress */}
@@ -353,7 +431,19 @@ export default function AssignmentQuestionnairePage({
             </div>
           )}
 
-          {saveFailed && (
+          {saveBlocked && (
+            <div className="mt-5 bg-gray-50 border border-gray-300 rounded-xl p-4 flex gap-3">
+              <svg className="w-5 h-5 text-gray-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+              </svg>
+              <div className="min-w-0">
+                <p className="text-gray-800 text-sm font-semibold">{t('qs_save_blocked')}</p>
+                <p className="text-gray-600 text-xs mt-0.5">{t('qs_save_blocked_sub')}</p>
+              </div>
+            </div>
+          )}
+
+          {saveFailed && !saveBlocked && (
             <div className="mt-5 bg-amber-50 border border-amber-200 rounded-xl p-4 flex gap-3 animate-pop">
               <svg className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />

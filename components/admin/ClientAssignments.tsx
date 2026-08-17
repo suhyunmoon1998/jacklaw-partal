@@ -11,6 +11,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { MOCK_ADMIN_PASSWORD } from '@/lib/mockData'
 import { AnswerValue, Assignment, AssignmentDetail, QuestionSet, QuestionnaireState } from '@/types'
+import type { RecommendedBank } from '@/lib/recommendedQuestions'
 
 const STATUS_BADGE: Record<Assignment['status'], { label: string; cls: string }> = {
   draft: { label: 'Draft', cls: 'bg-gray-100 text-gray-500' },
@@ -30,11 +31,13 @@ function shortDate(iso: string | null): string {
 export default function ClientAssignments({
   clientId,
   clientName,
+  caseType,
   defaultState,
   defaultQuestionCount,
 }: {
   clientId: string
   clientName: string
+  caseType: string
   defaultState: QuestionnaireState
   defaultQuestionCount: number
 }) {
@@ -47,6 +50,7 @@ export default function ClientAssignments({
   const [viewing, setViewing] = useState<AssignmentDetail | null>(null)
   const [sending, setSending] = useState<{ assignment: Assignment; email: string; link: string } | null>(null)
   const [notice, setNotice] = useState('')
+  const [banks, setBanks] = useState<RecommendedBank[]>([])
 
   const load = useCallback(async () => {
     const [aRes, sRes] = await Promise.all([
@@ -57,6 +61,15 @@ export default function ClientAssignments({
     if (sRes.ok) setSets((await sRes.json()).sets ?? [])
     setLoading(false)
   }, [clientId])
+
+  // Suggestions keyed off this client's own case type, so the shortcut below is
+  // already the right one for them.
+  useEffect(() => {
+    fetch(`/api/admin/recommended-questions?caseType=${encodeURIComponent(caseType)}`, { headers: adminHeaders })
+      .then(r => r.json())
+      .then(({ banks }) => setBanks(banks ?? []))
+      .catch(() => setBanks([]))
+  }, [caseType])
 
   useEffect(() => { load() }, [load])
 
@@ -76,6 +89,29 @@ export default function ClientAssignments({
       setNotice(body.error ?? 'Could not assign.')
       return
     }
+    load()
+  }
+
+  /** Creates the suggested set and hands it to this client in one step. */
+  const assignRecommended = async (bank: RecommendedBank) => {
+    setBusy(bank.key)
+    const created = await fetch('/api/admin/question-sets', {
+      method: 'POST',
+      headers: adminHeaders,
+      body: JSON.stringify({ name: bank.setName, description: bank.description, questions: bank.questions }),
+    })
+    if (!created.ok) { setBusy(null); setNotice('Could not build that question set.'); return }
+    const { id } = await created.json()
+
+    const assigned = await fetch('/api/admin/assignments', {
+      method: 'POST',
+      headers: adminHeaders,
+      body: JSON.stringify({ clientId, questionSetId: id, asDraft }),
+    })
+    setBusy(null)
+    setPicking(false)
+    if (!assigned.ok) { setNotice('The set was created but could not be assigned.'); return }
+    setNotice(`"${bank.setName}" created and assigned. Edit it under Question Sets if you want to adjust the questions.`)
     load()
   }
 
@@ -247,7 +283,7 @@ export default function ClientAssignments({
                 >
                   Copy Link
                 </button>
-                {a.answeredCount > 0 && (
+                {(a.answeredCount > 0 || a.status === 'in_progress' || a.status === 'completed') && (
                   <>
                     <button
                       onClick={() => view(a)}
@@ -310,6 +346,34 @@ export default function ClientAssignments({
               ))}
             </div>
           )}
+          {banks.length > 0 && (
+            <div className="mt-4 pt-3 border-t border-gold/20">
+              <p className="text-xs font-semibold text-gray-600 mb-2">
+                Suggested for {caseType}
+              </p>
+              <div className="space-y-1.5">
+                {banks.map(bank => (
+                  <button
+                    key={bank.key}
+                    onClick={() => assignRecommended(bank)}
+                    disabled={busy === bank.key}
+                    className="w-full flex items-center justify-between gap-3 text-left px-3 py-2.5 rounded-lg bg-white border border-dashed border-gold/50 hover:border-gold transition-colors disabled:opacity-50"
+                  >
+                    <span className="min-w-0">
+                      <span className="block text-sm font-medium text-gray-800 truncate">{bank.setName}</span>
+                      <span className="block text-xs text-gray-400">
+                        {bank.questions.length} suggested questions · creates a new set
+                      </span>
+                    </span>
+                    <span className="text-gold text-xs font-semibold shrink-0">
+                      {busy === bank.key ? 'Working…' : 'Build & assign →'}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           <label className="flex items-center gap-2 mt-3 text-xs text-gray-600 cursor-pointer select-none">
             <input type="checkbox" checked={asDraft} onChange={e => setAsDraft(e.target.checked)} className="w-4 h-4 accent-gold" />
             Save as draft — do not show it to the client yet

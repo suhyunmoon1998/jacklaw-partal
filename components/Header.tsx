@@ -10,18 +10,27 @@ interface HeaderProps {
   showBack?: boolean
   backHref?: string
   subtitle?: string
+  /**
+   * Run before this header navigates anywhere. Return false to stay put —
+   * a page with unsaved work uses it to flush first, or to keep the client
+   * on the page when the flush fails. Absent means navigate immediately,
+   * which is how every other page behaves.
+   */
+  beforeLeave?: () => Promise<boolean>
 }
 
-export default function Header({ showLogout, showBack, backHref, subtitle }: HeaderProps) {
+export default function Header({ showLogout, showBack, backHref, subtitle, beforeLeave }: HeaderProps) {
   const router = useRouter()
   const { lang, setLang, t } = useLanguage()
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    if (beforeLeave && !(await beforeLeave())) return
     clearSession()
     router.push('/client')
   }
 
-  const handleBack = () => {
+  const handleBack = async () => {
+    if (beforeLeave && !(await beforeLeave())) return
     if (backHref) {
       router.push(backHref)
     } else {

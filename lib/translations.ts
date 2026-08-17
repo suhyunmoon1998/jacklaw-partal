@@ -184,6 +184,8 @@ export const en = {
   qs_save_failed: 'Your last answers have not been saved.',
   qs_save_failed_sub: 'Check your connection — we will keep trying. Do not close this page yet.',
   qs_retry: 'Try now',
+  qs_save_blocked: 'This questionnaire can no longer be changed.',
+  qs_save_blocked_sub: 'It has already been submitted, or the office has withdrawn it. Please call us if something needs to change.',
 }
 
 export const es: typeof en = {
@@ -372,4 +374,6 @@ export const es: typeof en = {
   qs_save_failed: 'Sus últimas respuestas no se han guardado.',
   qs_save_failed_sub: 'Revise su conexión — seguiremos intentando. No cierre esta página todavía.',
   qs_retry: 'Intentar ahora',
+  qs_save_blocked: 'Este cuestionario ya no se puede cambiar.',
+  qs_save_blocked_sub: 'Ya fue enviado, o la oficina lo retiró. Por favor llámenos si necesita cambiar algo.',
 }

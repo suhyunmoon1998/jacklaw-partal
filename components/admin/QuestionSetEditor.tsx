@@ -11,6 +11,7 @@
 import { useEffect, useState } from 'react'
 import { MOCK_ADMIN_PASSWORD } from '@/lib/mockData'
 import { Question, QuestionSetDetail, QuestionType } from '@/types'
+import type { RecommendedBank } from '@/lib/recommendedQuestions'
 
 const TYPE_LABELS: { value: QuestionType; label: string }[] = [
   { value: 'text', label: 'Short text' },
@@ -103,6 +104,10 @@ export default function QuestionSetEditor({
   const [error, setError] = useState('')
   const [pasteOpen, setPasteOpen] = useState(false)
   const [pasted, setPasted] = useState('')
+  const [suggestOpen, setSuggestOpen] = useState(false)
+  const [banks, setBanks] = useState<RecommendedBank[] | null>(null)
+  const [bankCaseType, setBankCaseType] = useState('')
+  const [picked, setPicked] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     if (!setId) return
@@ -116,6 +121,45 @@ export default function QuestionSetEditor({
       })
       .finally(() => setLoading(false))
   }, [setId])
+
+  useEffect(() => {
+    if (!suggestOpen || banks) return
+    fetch('/api/admin/recommended-questions', { headers: { 'x-admin-key': MOCK_ADMIN_PASSWORD } })
+      .then(r => r.json())
+      .then(({ banks }: { banks: RecommendedBank[] }) => {
+        setBanks(banks ?? [])
+        setBankCaseType(prev => prev || banks?.[0]?.caseType || '')
+      })
+      .catch(() => setBanks([]))
+  }, [suggestOpen, banks])
+
+  const shownBanks = (banks ?? []).filter(b => b.caseType === bankCaseType)
+  const caseTypes = Array.from(new Set((banks ?? []).map(b => b.caseType)))
+
+  /** Adds the ticked questions, skipping any whose id is already in the set. */
+  const addPicked = () => {
+    const existing = new Set(questions.map(q => q.id))
+    const chosen = shownBanks.flatMap(b => b.questions).filter(q => picked.has(q.id) && !existing.has(q.id))
+    if (chosen.length === 0) return
+
+    // A showIf pointing at a question the admin did not tick would never show,
+    // so the condition is dropped rather than leaving a permanently hidden question.
+    const added = new Set(chosen.map(q => q.id))
+    const cleaned = chosen.map(q =>
+      q.showIf && !added.has(q.showIf.questionId) && !existing.has(q.showIf.questionId)
+        ? { ...q, showIf: undefined }
+        : q
+    )
+
+    setQuestions(prev => [...prev, ...cleaned.map(toDraft)])
+    setPicked(new Set())
+    setSuggestOpen(false)
+
+    // Naming the set is the next thing the admin would do anyway.
+    const bank = shownBanks[0]
+    if (bank && !name.trim()) setName(bank.setName)
+    if (bank && !description.trim()) setDescription(bank.description)
+  }
 
   const update = (key: string, patch: Partial<Draft>) =>
     setQuestions(prev => prev.map(q => (q.key === key ? { ...q, ...patch } : q)))
@@ -219,13 +263,110 @@ export default function QuestionSetEditor({
             <div>
               <div className="flex items-center justify-between mb-2">
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Questions</p>
-                <button
-                  onClick={() => setPasteOpen(v => !v)}
-                  className="text-xs font-semibold text-gold hover:underline"
-                >
-                  {pasteOpen ? 'Hide bulk paste' : 'Paste a list'}
-                </button>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => { setSuggestOpen(v => !v); setPasteOpen(false) }}
+                    className="text-xs font-semibold text-gold hover:underline"
+                  >
+                    {suggestOpen ? 'Hide suggestions' : 'Suggested questions'}
+                  </button>
+                  <button
+                    onClick={() => { setPasteOpen(v => !v); setSuggestOpen(false) }}
+                    className="text-xs font-semibold text-gold hover:underline"
+                  >
+                    {pasteOpen ? 'Hide bulk paste' : 'Paste a list'}
+                  </button>
+                </div>
               </div>
+
+              {suggestOpen && (
+                <div className="mb-3 bg-gold/5 border border-gold/30 rounded-xl p-3">
+                  {banks === null ? (
+                    <div className="animate-shimmer h-20 rounded-lg" />
+                  ) : banks.length === 0 ? (
+                    <p className="text-xs text-gray-500">No suggestions available.</p>
+                  ) : (
+                    <>
+                      <div className="flex items-center gap-2 mb-2.5">
+                        <label className="text-xs font-semibold text-gray-600 shrink-0">Case type</label>
+                        <select
+                          value={bankCaseType}
+                          onChange={e => { setBankCaseType(e.target.value); setPicked(new Set()) }}
+                          className="input-field text-sm py-2 flex-1"
+                        >
+                          {caseTypes.map(ct => (
+                            <option key={ct} value={ct}>{ct === 'Any' ? 'Any case type' : ct}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {shownBanks.map(bank => {
+                        const ids = bank.questions.map(q => q.id)
+                        const allPicked = ids.every(id => picked.has(id))
+                        return (
+                          <div key={bank.key} className="mb-3 last:mb-0">
+                            <div className="flex items-start justify-between gap-3 mb-1.5">
+                              <div className="min-w-0">
+                                <p className="text-sm font-semibold text-black">{bank.setName}</p>
+                                <p className="text-xs text-gray-500">{bank.description}</p>
+                              </div>
+                              <button
+                                onClick={() =>
+                                  setPicked(prev => {
+                                    const next = new Set(prev)
+                                    ids.forEach(id => (allPicked ? next.delete(id) : next.add(id)))
+                                    return next
+                                  })
+                                }
+                                className="text-xs font-semibold text-gold hover:underline shrink-0"
+                              >
+                                {allPicked ? 'Clear' : `Select all ${ids.length}`}
+                              </button>
+                            </div>
+
+                            <div className="max-h-56 overflow-y-auto space-y-1 bg-white border border-gray-200 rounded-lg p-2">
+                              {bank.questions.map(q => (
+                                <label
+                                  key={q.id}
+                                  className="flex items-start gap-2 px-1.5 py-1 rounded hover:bg-gray-50 cursor-pointer"
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={picked.has(q.id)}
+                                    onChange={e =>
+                                      setPicked(prev => {
+                                        const next = new Set(prev)
+                                        if (e.target.checked) next.add(q.id)
+                                        else next.delete(q.id)
+                                        return next
+                                      })
+                                    }
+                                    className="mt-0.5 w-4 h-4 accent-gold shrink-0"
+                                  />
+                                  <span className="min-w-0">
+                                    <span className="block text-xs text-gray-800 leading-snug">{q.label}</span>
+                                    {q.showIf && (
+                                      <span className="block text-[10px] text-gray-400">follow-up question</span>
+                                    )}
+                                  </span>
+                                </label>
+                              ))}
+                            </div>
+                          </div>
+                        )
+                      })}
+
+                      <button
+                        onClick={addPicked}
+                        disabled={picked.size === 0}
+                        className="mt-1 bg-black text-white text-xs font-semibold px-4 py-2 rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-40"
+                      >
+                        Add {picked.size} question{picked.size === 1 ? '' : 's'}
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
 
               {pasteOpen && (
                 <div className="mb-3 bg-gray-50 border border-gray-200 rounded-xl p-3">

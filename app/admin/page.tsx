@@ -413,6 +413,7 @@ function ClientDetailModal({
             <ClientAssignments
               clientId={client.id}
               clientName={client.name}
+              caseType={client.caseType}
               defaultState={qState}
               defaultQuestionCount={DEFAULT_QUESTION_COUNT}
             />
