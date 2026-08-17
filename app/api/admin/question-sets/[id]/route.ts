@@ -32,6 +32,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     if (!name) return NextResponse.json({ error: 'Name is required.' }, { status: 400 })
     patch.name = name
   }
+  if (typeof body.nameEs === 'string') patch.name_es = body.nameEs.trim() || null
   if (typeof body.description === 'string') patch.description = body.description.trim()
   if (body.status === 'active' || body.status === 'archived') patch.status = body.status
 

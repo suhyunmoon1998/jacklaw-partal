@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
 import { isAdmin } from '@/lib/adminAuth'
 import { advancesTo, assignmentLink, getAssignmentDetail } from '@/lib/questionSets'
-import { lookupClientEmail, sendAssignmentEmail } from '@/lib/sendAssignmentEmail'
+import { lookupClientEmail, lookupClientLanguage, sendAssignmentEmail } from '@/lib/sendAssignmentEmail'
 import { AssignmentStatus } from '@/types'
 
 // GET /api/admin/assignments/[id]/send — the link plus the email we would use
@@ -12,10 +12,12 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   const assignment = await getAssignmentDetail(params.id)
   if (!assignment) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  return NextResponse.json({
-    link: assignmentLink(req.nextUrl.origin, params.id),
-    email: await lookupClientEmail(assignment.clientId),
-  })
+  const [email, lang] = await Promise.all([
+    lookupClientEmail(assignment.clientId),
+    lookupClientLanguage(assignment.clientId),
+  ])
+
+  return NextResponse.json({ link: assignmentLink(req.nextUrl.origin, params.id), email, lang })
 }
 
 // POST /api/admin/assignments/[id]/send  { email? }
@@ -27,6 +29,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   const body = await req.json().catch(() => ({}))
   const to = String(body?.email ?? '').trim() || (await lookupClientEmail(assignment.clientId))
+  const lang: 'en' | 'es' =
+    body?.lang === 'es' || body?.lang === 'en' ? body.lang : await lookupClientLanguage(assignment.clientId)
   const link = assignmentLink(req.nextUrl.origin, params.id)
 
   if (!to.includes('@')) {
@@ -40,10 +44,11 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     await sendAssignmentEmail({
       to,
       clientName: assignment.clientName || 'there',
-      setName: assignment.questionSetName,
+      setName: (lang === 'es' && assignment.questionSetNameEs) || assignment.questionSetName,
       // The set description is a staff-only note, so it stays out of the client's email.
       questionCount: assignment.questionCount,
       link,
+      lang,
     })
   } catch (err) {
     console.error('assignment send failed:', err)
@@ -63,5 +68,5 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   await getSupabase().from('client_question_set_assignments').update(patch).eq('id', params.id)
 
-  return NextResponse.json({ sent: true, email: to, link })
+  return NextResponse.json({ sent: true, email: to, link, lang })
 }

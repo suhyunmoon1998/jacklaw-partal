@@ -16,7 +16,7 @@ export default function DashboardPage() {
   const [documentCount, setDocumentCount] = useState(0)
   const [assignments, setAssignments] = useState<Assignment[]>([])
   const router = useRouter()
-  const { t } = useLanguage()
+  const { t, lang } = useLanguage()
 
   useEffect(() => {
     const s = getSession()
@@ -216,7 +216,9 @@ export default function DashboardPage() {
                   >
                     <div className="flex items-start justify-between gap-3 mb-2">
                       <div className="min-w-0">
-                        <p className="font-semibold text-black truncate">{a.questionSetName}</p>
+                        <p className="font-semibold text-black truncate">
+                          {(lang === 'es' && a.questionSetNameEs) || a.questionSetName}
+                        </p>
                         <p className="text-sm text-gray-500 mt-0.5">
                           {a.questionCount} {a.questionCount === 1 ? t('qs_question') : t('qs_questions')}
                         </p>

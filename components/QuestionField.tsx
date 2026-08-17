@@ -19,6 +19,7 @@ export function QuestionInput({
   noLabel,
   notSureLabel,
   selectPlaceholder,
+  optionLabels,
 }: {
   question: Question
   inputId: string
@@ -28,9 +29,16 @@ export function QuestionInput({
   noLabel: string
   notSureLabel: string
   selectPlaceholder: string
+  /**
+   * Display text for `question.options`, matched by position. The option itself
+   * is still what gets stored, so a translated form records the same answer as
+   * an untranslated one.
+   */
+  optionLabels?: string[]
 }) {
   const strVal = typeof value === 'string' ? value : ''
   const arrVal = Array.isArray(value) ? value : []
+  const labelFor = (opt: string, i: number) => optionLabels?.[i] ?? opt
 
   const choiceClass = (selected: boolean) =>
     `flex-1 flex items-center justify-center gap-1.5 py-3.5 rounded-xl border-2 font-semibold transition-all duration-150 active:scale-[0.96] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gold ${
@@ -115,8 +123,8 @@ export function QuestionInput({
             className="input-field appearance-none bg-white pr-10"
           >
             <option value="">{selectPlaceholder}</option>
-            {question.options?.map(opt => (
-              <option key={opt} value={opt}>{opt}</option>
+            {question.options?.map((opt, i) => (
+              <option key={opt} value={opt}>{labelFor(opt, i)}</option>
             ))}
           </select>
           <svg
@@ -133,7 +141,7 @@ export function QuestionInput({
     case 'multiselect':
       return (
         <div className="space-y-2">
-          {question.options?.map(opt => {
+          {question.options?.map((opt, i) => {
             const checked = arrVal.includes(opt)
             return (
               <label
@@ -153,7 +161,7 @@ export function QuestionInput({
                     </svg>
                   )}
                 </div>
-                <span className={`text-sm ${checked ? 'text-gold font-semibold' : 'text-gray-700'}`}>{opt}</span>
+                <span className={`text-sm ${checked ? 'text-gold font-semibold' : 'text-gray-700'}`}>{labelFor(opt, i)}</span>
                 <input
                   type="checkbox"
                   className="sr-only"

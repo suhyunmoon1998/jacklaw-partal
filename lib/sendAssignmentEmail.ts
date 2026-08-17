@@ -21,6 +21,25 @@ export async function lookupClientEmail(clientId: string): Promise<string> {
   return value.includes('@') ? value : ''
 }
 
+/**
+ * Which language to write to this client in.
+ *
+ * The clients table has no language column, so this reads the answer they gave
+ * on the default intake — the same place their email address comes from.
+ * Defaults to English when there is nothing to go on.
+ */
+export async function lookupClientLanguage(clientId: string): Promise<'en' | 'es'> {
+  const { data } = await getSupabase()
+    .from('questionnaire_states')
+    .select('answers')
+    .eq('client_id', clientId)
+    .maybeSingle()
+
+  const answers = data?.answers as Record<string, AnswerValue> | undefined
+  const pref = String(answers?.preferred_language ?? '').toLowerCase()
+  return pref === 'spanish' || pref === 'español' || pref === 'espanol' ? 'es' : 'en'
+}
+
 /** Emails one client the link to their own assignment. Throws on failure so the route can report it. */
 export async function sendAssignmentEmail(opts: {
   to: string
@@ -28,6 +47,7 @@ export async function sendAssignmentEmail(opts: {
   setName: string
   questionCount: number
   link: string
+  lang?: 'en' | 'es'
 }): Promise<void> {
   const apiKey = process.env.RESEND_API_KEY
   const fromEmail = process.env.FIRM_FROM_EMAIL ?? 'onboarding@resend.dev'
@@ -39,12 +59,16 @@ export async function sendAssignmentEmail(opts: {
   const { error } = await resend.emails.send({
     from: `JACKLAW Portal <${fromEmail}>`,
     to: [opts.to],
-    subject: `${opts.setName} — Law Offices of Jack D. Josephson, APC`,
+    subject:
+      opts.lang === 'es'
+        ? `${opts.setName} — Oficinas Legales de Jack D. Josephson, APC`
+        : `${opts.setName} — Law Offices of Jack D. Josephson, APC`,
     html: generateAssignmentEmailHtml(
       opts.clientName,
       opts.setName,
       opts.questionCount,
-      opts.link
+      opts.link,
+      opts.lang ?? 'en'
     ),
   })
 

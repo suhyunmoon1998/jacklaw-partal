@@ -173,19 +173,48 @@ export function generateClientThankYouEmailHtml(clientName: string, calendlyUrl:
  * Sent when an admin releases one specific question set to a client. The link
  * points at that client's own assignment, never at the shared template.
  */
+const ASSIGNMENT_EMAIL_COPY = {
+  en: {
+    title: (s: string) => `${s} — Law Offices of Jack D. Josephson, APC`,
+    greeting: (n: string) => `Hello ${n},`,
+    intro: 'Our office has a short set of questions for you about your case.',
+    questions: (n: number) => `${n} question${n === 1 ? '' : 's'}`,
+    autosave: 'Your answers save automatically, so you can stop partway and pick up where you left off.',
+    cta: 'Answer the Questions',
+    fallback: 'If the button does not work, paste this into your browser:',
+    emergencyTitle: 'Do not use this portal or email for emergencies.',
+    emergencyBody: 'For urgent matters, please call our office directly.',
+    footer: 'California Employment Law · Attorney-Client Confidential',
+  },
+  es: {
+    title: (s: string) => `${s} — Oficinas Legales de Jack D. Josephson, APC`,
+    greeting: (n: string) => `Hola ${n}:`,
+    intro: 'Nuestra oficina tiene unas preguntas cortas para usted sobre su caso.',
+    questions: (n: number) => `${n} pregunta${n === 1 ? '' : 's'}`,
+    autosave: 'Sus respuestas se guardan solas, así que puede parar y seguir después donde se quedó.',
+    cta: 'Responder las Preguntas',
+    fallback: 'Si el botón no funciona, copie esta dirección en su navegador:',
+    emergencyTitle: 'No use este portal ni el correo para emergencias.',
+    emergencyBody: 'Para asuntos urgentes, por favor llame directamente a nuestra oficina.',
+    footer: 'Derecho Laboral de California · Confidencial Abogado-Cliente',
+  },
+} as const
+
 export function generateAssignmentEmailHtml(
   clientName: string,
   setName: string,
   questionCount: number,
-  link: string
+  link: string,
+  lang: 'en' | 'es' = 'en'
 ): string {
+  const c = ASSIGNMENT_EMAIL_COPY[lang]
   return `
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-  <title>${setName} — Law Offices of Jack D. Josephson, APC</title>
+  <title>${c.title(setName)}</title>
 </head>
 <body style="margin:0;padding:0;background:#f3f4f6;font-family:'Helvetica Neue',Arial,sans-serif;">
 
@@ -197,39 +226,35 @@ export function generateAssignmentEmailHtml(
 
   <!-- Body -->
   <div style="max-width:560px;margin:0 auto;padding:36px 24px;">
-    <h2 style="margin:0 0 12px 0;color:#111827;font-size:22px;font-weight:800;">Hello ${clientName},</h2>
-    <p style="margin:0 0 16px 0;color:#374151;font-size:14px;line-height:1.7;">
-      Our office has a short set of questions for you about your case.
-    </p>
+    <h2 style="margin:0 0 12px 0;color:#111827;font-size:22px;font-weight:800;">${c.greeting(clientName)}</h2>
+    <p style="margin:0 0 16px 0;color:#374151;font-size:14px;line-height:1.7;">${c.intro}</p>
 
     <div style="background:#ffffff;border:1px solid #e5e7eb;border-radius:12px;padding:20px 24px;margin-bottom:24px;">
       <p style="margin:0 0 4px 0;color:#111827;font-size:17px;font-weight:800;">${setName}</p>
-      <p style="margin:0;color:#6b7280;font-size:13px;">${questionCount} question${questionCount === 1 ? '' : 's'}</p>
+      <p style="margin:0;color:#6b7280;font-size:13px;">${c.questions(questionCount)}</p>
     </div>
 
-    <p style="margin:0 0 24px 0;color:#374151;font-size:14px;line-height:1.7;">
-      Your answers save automatically, so you can stop partway and pick up where you left off.
-    </p>
+    <p style="margin:0 0 24px 0;color:#374151;font-size:14px;line-height:1.7;">${c.autosave}</p>
 
     <div style="text-align:center;margin-bottom:28px;">
       <a href="${link}" style="display:inline-block;background:#E07820;color:#ffffff;font-size:15px;font-weight:700;text-decoration:none;padding:14px 32px;border-radius:99px;">
-        Answer the Questions
+        ${c.cta}
       </a>
     </div>
 
     <p style="margin:0 0 24px 0;color:#9ca3af;font-size:12px;line-height:1.6;word-break:break-all;text-align:center;">
-      If the button does not work, paste this into your browser:<br/>${link}
+      ${c.fallback}<br/>${link}
     </p>
 
     <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:12px 16px;margin-bottom:8px;">
-      <p style="margin:0;color:#b91c1c;font-size:12px;font-weight:700;">Do not use this portal or email for emergencies.</p>
-      <p style="margin:4px 0 0 0;color:#991b1b;font-size:12px;">For urgent matters, please call our office directly.</p>
+      <p style="margin:0;color:#b91c1c;font-size:12px;font-weight:700;">${c.emergencyTitle}</p>
+      <p style="margin:4px 0 0 0;color:#991b1b;font-size:12px;">${c.emergencyBody}</p>
     </div>
 
     <!-- Footer -->
     <div style="border-top:2px solid #e5e7eb;padding-top:20px;margin-top:24px;text-align:center;">
       <p style="margin:0;color:#111111;font-weight:800;font-size:14px;">Law Offices of Jack D. Josephson, APC</p>
-      <p style="margin:4px 0 0 0;color:#9ca3af;font-size:11px;">California Employment Law · Attorney-Client Confidential</p>
+      <p style="margin:4px 0 0 0;color:#9ca3af;font-size:11px;">${c.footer}</p>
     </div>
   </div>
 

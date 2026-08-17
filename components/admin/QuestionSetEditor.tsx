@@ -97,6 +97,7 @@ export default function QuestionSetEditor({
   onSaved: () => void
 }) {
   const [name, setName] = useState('')
+  const [nameEs, setNameEs] = useState('')
   const [description, setDescription] = useState('')
   const [questions, setQuestions] = useState<Draft[]>([])
   const [loading, setLoading] = useState(!!setId)
@@ -108,6 +109,8 @@ export default function QuestionSetEditor({
   const [banks, setBanks] = useState<RecommendedBank[] | null>(null)
   const [bankCaseType, setBankCaseType] = useState('')
   const [picked, setPicked] = useState<Set<string>>(new Set())
+  const [esOpen, setEsOpen] = useState<Set<string>>(new Set())
+  const [translating, setTranslating] = useState(false)
 
   useEffect(() => {
     if (!setId) return
@@ -116,6 +119,7 @@ export default function QuestionSetEditor({
       .then(({ set }: { set: QuestionSetDetail }) => {
         if (!set) return
         setName(set.name)
+        setNameEs(set.nameEs ?? '')
         setDescription(set.description)
         setQuestions(set.questions.map(toDraft))
       })
@@ -158,11 +162,55 @@ export default function QuestionSetEditor({
     // Naming the set is the next thing the admin would do anyway.
     const bank = shownBanks[0]
     if (bank && !name.trim()) setName(bank.setName)
+    if (bank && !nameEs.trim() && bank.setNameEs) setNameEs(bank.setNameEs)
     if (bank && !description.trim()) setDescription(bank.description)
   }
 
   const update = (key: string, patch: Partial<Draft>) =>
     setQuestions(prev => prev.map(q => (q.key === key ? { ...q, ...patch } : q)))
+
+  const updateEs = (key: string, patch: Partial<NonNullable<Draft['es']>>) =>
+    setQuestions(prev =>
+      prev.map(q => (q.key === key ? { ...q, es: { ...(q.es ?? {}), ...patch } } : q))
+    )
+
+  /**
+   * Machine translation as a STARTING POINT only — the same free endpoint the
+   * admin panel already uses to read Spanish intake answers. Staff review and
+   * correct it before the set goes out; nothing here is sent to a client
+   * unreviewed, because saving is still a deliberate click.
+   */
+  const autoTranslate = async () => {
+    setTranslating(true)
+    const es = async (text: string) => {
+      if (!text.trim()) return ''
+      try {
+        const r = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=en|es`)
+        const d = await r.json()
+        return String(d.responseData?.translatedText ?? '')
+      } catch {
+        return ''
+      }
+    }
+
+    const filled = await Promise.all(
+      questions.map(async q => {
+        if (!q.label.trim()) return q
+        const next = { ...(q.es ?? {}) }
+        if (!next.label) next.label = (await es(q.label)) || undefined
+        if (q.helpText && !next.helpText) next.helpText = (await es(q.helpText)) || undefined
+        if (q.options?.length && !next.options?.length) {
+          const opts = await Promise.all(q.options.map(o => es(o)))
+          if (opts.every(Boolean)) next.options = opts
+        }
+        return { ...q, es: next }
+      })
+    )
+
+    setQuestions(filled)
+    setTranslating(false)
+    setEsOpen(new Set(filled.map(q => q.key)))
+  }
 
   const move = (index: number, delta: number) =>
     setQuestions(prev => {
@@ -183,6 +231,7 @@ export default function QuestionSetEditor({
 
     const payload = {
       name: name.trim(),
+      nameEs: nameEs.trim(),
       description: description.trim(),
       // Strip the editor-only React key before it reaches the API.
       questions: cleaned.map(q => ({ ...q, key: undefined })),
@@ -237,7 +286,7 @@ export default function QuestionSetEditor({
           </div>
         ) : (
           <div className="flex-1 overflow-y-auto p-5 space-y-5">
-            <div className="grid sm:grid-cols-2 gap-4">
+            <div className="grid sm:grid-cols-3 gap-4">
               <div>
                 <label className="block text-xs font-semibold text-gray-500 mb-1.5">Question Set Name</label>
                 <input
@@ -246,6 +295,17 @@ export default function QuestionSetEditor({
                   placeholder="e.g. Who's Who"
                   className="input-field"
                   autoFocus
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 mb-1.5">
+                  Name in Spanish <span className="font-normal text-gray-400">· optional</span>
+                </label>
+                <input
+                  value={nameEs}
+                  onChange={e => setNameEs(e.target.value)}
+                  placeholder="p. ej. Quién es Quién"
+                  className="input-field"
                 />
               </div>
               <div>
@@ -275,6 +335,14 @@ export default function QuestionSetEditor({
                     className="text-xs font-semibold text-gold hover:underline"
                   >
                     {pasteOpen ? 'Hide bulk paste' : 'Paste a list'}
+                  </button>
+                  <button
+                    onClick={autoTranslate}
+                    disabled={translating || questions.length === 0}
+                    className="text-xs font-semibold text-gold hover:underline disabled:opacity-40"
+                    title="Fills the empty Spanish fields with a machine translation for staff to correct"
+                  >
+                    {translating ? 'Translating…' : 'Draft Spanish'}
                   </button>
                 </div>
               </div>
@@ -473,6 +541,62 @@ export default function QuestionSetEditor({
                             placeholder="Choices, separated by commas"
                             className="input-field text-sm"
                           />
+                        )}
+
+                        {/* Spanish shown to clients who switch the portal to Español */}
+                        {esOpen.has(q.key) ? (
+                          <div className="space-y-2 bg-blue-50/60 border border-blue-200 rounded-lg p-2.5">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[11px] font-bold tracking-wider uppercase text-blue-700">Español</span>
+                              <button
+                                onClick={() => setEsOpen(prev => { const n = new Set(prev); n.delete(q.key); return n })}
+                                className="text-[11px] text-blue-600 hover:underline"
+                              >
+                                Hide
+                              </button>
+                            </div>
+                            <input
+                              value={q.es?.label ?? ''}
+                              onChange={e => updateEs(q.key, { label: e.target.value || undefined })}
+                              placeholder="Pregunta en español"
+                              className="input-field text-sm"
+                            />
+                            {q.helpText && (
+                              <input
+                                value={q.es?.helpText ?? ''}
+                                onChange={e => updateEs(q.key, { helpText: e.target.value || undefined })}
+                                placeholder="Texto de ayuda en español"
+                                className="input-field text-xs"
+                              />
+                            )}
+                            {NEEDS_OPTIONS.includes(q.type) && (
+                              <>
+                                <input
+                                  value={(q.es?.options ?? []).join(', ')}
+                                  onChange={e => {
+                                    const parts = e.target.value.split(',').map(o => o.trim()).filter(Boolean)
+                                    updateEs(q.key, { options: parts.length ? parts : undefined })
+                                  }}
+                                  placeholder="Opciones en español, separadas por comas"
+                                  className="input-field text-xs"
+                                />
+                                {(q.es?.options?.length ?? 0) > 0 &&
+                                  q.es!.options!.length !== (q.options?.length ?? 0) && (
+                                    <p className="text-[11px] text-red-600">
+                                      {q.es!.options!.length} Spanish choices vs {q.options?.length ?? 0} English —
+                                      they are matched in order, so the counts must agree or the Spanish is ignored.
+                                    </p>
+                                  )}
+                              </>
+                            )}
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => setEsOpen(prev => new Set(prev).add(q.key))}
+                            className={`text-xs hover:text-gold ${q.es?.label ? 'text-blue-600 font-semibold' : 'text-gray-400'}`}
+                          >
+                            {q.es?.label ? '✓ Español' : '+ Add Spanish'}
+                          </button>
                         )}
 
                         {/* Skip logic — same showIf the default questionnaire uses */}

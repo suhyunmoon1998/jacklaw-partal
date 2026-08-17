@@ -48,7 +48,7 @@ export default function ClientAssignments({
   const [asDraft, setAsDraft] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
   const [viewing, setViewing] = useState<AssignmentDetail | null>(null)
-  const [sending, setSending] = useState<{ assignment: Assignment; email: string; link: string } | null>(null)
+  const [sending, setSending] = useState<{ assignment: Assignment; email: string; link: string; lang: 'en' | 'es' } | null>(null)
   const [notice, setNotice] = useState('')
   const [banks, setBanks] = useState<RecommendedBank[]>([])
 
@@ -98,7 +98,12 @@ export default function ClientAssignments({
     const created = await fetch('/api/admin/question-sets', {
       method: 'POST',
       headers: adminHeaders,
-      body: JSON.stringify({ name: bank.setName, description: bank.description, questions: bank.questions }),
+      body: JSON.stringify({
+        name: bank.setName,
+        nameEs: bank.setNameEs,
+        description: bank.description,
+        questions: bank.questions,
+      }),
     })
     if (!created.ok) { setBusy(null); setNotice('Could not build that question set.'); return }
     const { id } = await created.json()
@@ -120,7 +125,7 @@ export default function ClientAssignments({
     const res = await fetch(`/api/admin/assignments/${assignment.id}/send`, { headers: adminHeaders })
     const body = await res.json().catch(() => ({}))
     setBusy(null)
-    setSending({ assignment, email: body.email ?? '', link: body.link ?? '' })
+    setSending({ assignment, email: body.email ?? '', link: body.link ?? '', lang: body.lang === 'es' ? 'es' : 'en' })
   }
 
   const handleSend = async () => {
@@ -129,7 +134,7 @@ export default function ClientAssignments({
     const res = await fetch(`/api/admin/assignments/${sending.assignment.id}/send`, {
       method: 'POST',
       headers: adminHeaders,
-      body: JSON.stringify({ email: sending.email }),
+      body: JSON.stringify({ email: sending.email, lang: sending.lang }),
     })
     const body = await res.json().catch(() => ({}))
     setBusy(null)
@@ -138,7 +143,7 @@ export default function ClientAssignments({
       return
     }
     setSending(null)
-    setNotice(`Sent to ${body.email}.`)
+    setNotice(`Sent to ${body.email} in ${body.lang === 'es' ? 'Spanish' : 'English'}.`)
     load()
   }
 
@@ -410,6 +415,20 @@ export default function ClientAssignments({
                 No email on file — type one, or use Copy Link and send it yourself.
               </p>
             )}
+
+            <label className="block text-xs font-semibold text-gray-500 mt-3 mb-1.5">Language</label>
+            <select
+              value={sending.lang}
+              onChange={e => setSending({ ...sending, lang: e.target.value as 'en' | 'es' })}
+              className="input-field text-sm"
+            >
+              <option value="en">English</option>
+              <option value="es">Español</option>
+            </select>
+            <p className="text-[11px] text-gray-400 mt-1">
+              Taken from the language on their intake. The questions themselves appear in whichever
+              language the client picks in the portal.
+            </p>
 
             <p className="mt-3 text-[11px] text-gray-400 break-all bg-gray-50 rounded-lg p-2">{sending.link}</p>
 

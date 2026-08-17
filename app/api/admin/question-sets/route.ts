@@ -26,7 +26,11 @@ export async function POST(req: NextRequest) {
 
   const { data: set, error } = await getSupabase()
     .from('question_sets')
-    .insert({ name, description: String(body.description ?? '').trim() })
+    .insert({
+      name,
+      name_es: String(body.nameEs ?? '').trim() || null,
+      description: String(body.description ?? '').trim(),
+    })
     .select()
     .single()
 

@@ -32,6 +32,20 @@ export interface ShowIfCondition {
   value: string
 }
 
+/**
+ * Spanish text for one question.
+ *
+ * Only what a client reads is translated. `options` is display text matched to
+ * the English options BY POSITION — the English string stays the stored answer,
+ * so a Spanish-speaking client's choices arrive in the office in English.
+ */
+export interface QuestionTranslation {
+  label?: string
+  helpText?: string
+  placeholder?: string
+  options?: string[]
+}
+
 export interface Question {
   id: string
   label: string
@@ -41,6 +55,8 @@ export interface Question {
   placeholder?: string
   helpText?: string
   showIf?: ShowIfCondition
+  /** Optional Spanish for question sets. The default questionnaire uses a separate file. */
+  es?: QuestionTranslation
 }
 
 export interface QuestionnaireSection {
@@ -99,6 +115,8 @@ export type QuestionSetStatus = 'active' | 'archived'
 export interface QuestionSet {
   id: string
   name: string
+  /** Spanish name shown to clients who read the portal in Spanish. */
+  nameEs: string
   description: string
   status: QuestionSetStatus
   isDefault: boolean
@@ -119,6 +137,7 @@ export interface Assignment {
   clientId: string
   questionSetId: string
   questionSetName: string
+  questionSetNameEs: string
   questionSetDescription: string
   questionCount: number
   status: AssignmentStatus

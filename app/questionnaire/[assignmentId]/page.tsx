@@ -15,7 +15,7 @@ import { useRouter } from 'next/navigation'
 import Header from '@/components/Header'
 import MascotWatermark from '@/components/MascotWatermark'
 import { QuestionInput } from '@/components/QuestionField'
-import { hasAnswer, isFieldControl, isVisible } from '@/lib/questionLogic'
+import { hasAnswer, isFieldControl, isVisible, localize } from '@/lib/questionLogic'
 import { getSession } from '@/lib/auth'
 import { useLanguage } from '@/lib/i18n'
 import { AnswerValue, AssignmentDetail, Session } from '@/types'
@@ -49,7 +49,7 @@ export default function AssignmentQuestionnairePage({
   /** One writer at a time, so an older save cannot land on top of a newer one. */
   const inFlight = useRef(false)
   const router = useRouter()
-  const { t } = useLanguage()
+  const { t, lang } = useLanguage()
 
   useEffect(() => {
     const s = getSession()
@@ -78,6 +78,9 @@ export default function AssignmentQuestionnairePage({
   }, [params.assignmentId, router]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const readOnly = assignment?.status === 'completed'
+  const setTitle = assignment
+    ? (lang === 'es' && assignment.questionSetNameEs) || assignment.questionSetName
+    : ''
 
   /**
    * 'ok'        — everything queued reached the server
@@ -177,7 +180,7 @@ export default function AssignmentQuestionnairePage({
   const handleSubmit = async () => {
     const missing = visibleQuestions.find(q => q.required && !hasAnswer(answers[q.id]))
     if (missing) {
-      setValidationError(t('q_required_error') + ` "${missing.label}"`)
+      setValidationError(t('q_required_error') + ` "${localize(missing, lang).label}"`)
       document.getElementById(`q-${missing.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
       return
     }
@@ -298,7 +301,7 @@ export default function AssignmentQuestionnairePage({
             </span>
             <h2 className="text-xl font-bold text-black">{t('qs_thanks_title')}</h2>
             <p className="text-gray-500 text-sm mt-1">{t('qs_thanks_sub')}</p>
-            <p className="text-black font-semibold text-sm mt-4">{assignment.questionSetName}</p>
+            <p className="text-black font-semibold text-sm mt-4">{setTitle}</p>
             <button onClick={() => router.push('/dashboard')} className="btn-primary mt-6">
               {t('qs_back_portal')}
             </button>
@@ -317,7 +320,7 @@ export default function AssignmentQuestionnairePage({
           showBack
           backHref="/dashboard"
           showLogout
-          subtitle={assignment.questionSetName}
+          subtitle={setTitle}
           beforeLeave={guardedLeave}
         />
       </div>
@@ -327,7 +330,7 @@ export default function AssignmentQuestionnairePage({
         <div className="max-w-2xl mx-auto">
           <div className="flex justify-between items-center gap-3 mb-2">
             <span className="min-w-0 text-[10px] font-bold tracking-[0.14em] uppercase text-gold truncate">
-              {assignment.questionSetName}
+              {setTitle}
             </span>
             <div className="flex items-center gap-2 shrink-0">
               {autoSaved && (
@@ -365,7 +368,9 @@ export default function AssignmentQuestionnairePage({
 
         <div className="card p-5 sm:p-6 mb-4">
           <div className="space-y-5">
-            {visibleQuestions.map((q, i) => {
+            {visibleQuestions.map((raw, i) => {
+              // Skip logic runs on the English question; only what is shown is translated.
+              const q = localize(raw, lang)
               const answered = hasAnswer(answers[q.id])
               const inputId = `q-${q.id}`
               return (
@@ -402,7 +407,7 @@ export default function AssignmentQuestionnairePage({
                   <div className="pl-0 sm:pl-[28px]">
                     {readOnly ? (
                       <p className="text-sm text-gray-800 font-medium whitespace-pre-line bg-gray-50 rounded-xl px-4 py-3">
-                        {formatReadOnly(answers[q.id])}
+                        {formatReadOnly(answers[q.id], raw.options, q.optionLabels)}
                       </p>
                     ) : (
                       <QuestionInput
@@ -414,6 +419,7 @@ export default function AssignmentQuestionnairePage({
                         noLabel={t('q_no')}
                         notSureLabel={t('q_not_sure')}
                         selectPlaceholder={t('q_select')}
+                        optionLabels={q.optionLabels}
                       />
                     )}
                   </div>
@@ -495,10 +501,19 @@ export default function AssignmentQuestionnairePage({
   )
 }
 
-function formatReadOnly(val: AnswerValue | undefined): string {
+function formatReadOnly(
+  val: AnswerValue | undefined,
+  options?: string[],
+  optionLabels?: string[]
+): string {
+  // Answers are stored as the English option; show the client their own wording.
+  const shown = (v: string) => {
+    const i = options?.indexOf(v) ?? -1
+    return i >= 0 ? optionLabels?.[i] ?? v : v
+  }
   if (!hasAnswer(val)) return '—'
-  if (Array.isArray(val)) return val.map(v => `• ${v}`).join('\n')
-  const s = String(val)
+  if (Array.isArray(val)) return val.map(v => `• ${shown(v)}`).join('\n')
+  const s = shown(String(val))
   if (s === 'yes') return '✓ Yes'
   if (s === 'no') return '✗ No'
   if (s === 'not_sure') return '? Not Sure'

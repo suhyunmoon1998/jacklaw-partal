@@ -16,7 +16,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   const { data: set, error } = await getSupabase()
     .from('question_sets')
-    .insert({ name, description: source.description })
+    .insert({ name, name_es: source.nameEs || null, description: source.description })
     .select()
     .single()
 
