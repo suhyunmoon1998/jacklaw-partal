@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import MascotWatermark from '@/components/MascotWatermark'
 import { FIRM_PHONE_LABEL_HYPHENATED, FIRM_PHONE_TEL } from '@/lib/contact'
 import { useLanguage } from '@/lib/i18n'
+import LanguagePicker from '@/components/LanguagePicker'
 
 export default function PortalHome() {
   const router = useRouter()
@@ -35,6 +36,12 @@ export default function PortalHome() {
       {/* Portal selector */}
       <main className="relative z-10 flex-1 flex flex-col items-center justify-start px-4 pt-4 pb-16">
         <div className="w-full max-w-sm">
+          {/* Before anything has to be read. This is the portal's front door, so
+              someone who reads none of the text below still has a way in. */}
+          <div className="mb-6">
+            <LanguagePicker variant="row" />
+          </div>
+
           <p className="text-white/40 text-xs uppercase tracking-widest text-center mb-6 font-semibold">
             {t('home_select_portal')}
           </p>
