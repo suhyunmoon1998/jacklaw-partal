@@ -14,6 +14,7 @@ import { AnswerValue, Assignment, AssignmentDetail, QuestionSet, QuestionnaireSt
 import { LANGUAGES, LANG_ENGLISH_NAME, Lang, toLang } from '@/lib/langs'
 import { submissionLanguage, translateAnswersToEnglish } from '@/lib/machineTranslate'
 import PasteQuestionsDialog from '@/components/admin/PasteQuestionsDialog'
+import ModalPortal from '@/components/ModalPortal'
 import type { RecommendedBank } from '@/lib/recommendedQuestions'
 
 const STATUS_BADGE: Record<Assignment['status'], { label: string; cls: string }> = {
@@ -465,6 +466,7 @@ export default function ClientAssignments({
 
       {/* Send dialog */}
       {sending && (
+        <ModalPortal>
         <div className="fixed inset-0 bg-black/70 z-[60] flex items-center justify-center p-4" onClick={() => setSending(null)}>
           <div className="bg-white rounded-2xl w-full max-w-md p-5 shadow-2xl animate-modal-in" onClick={e => e.stopPropagation()}>
             <h3 className="font-bold text-black">Send “{sending.assignment.questionSetName}”</h3>
@@ -516,10 +518,12 @@ export default function ClientAssignments({
             </div>
           </div>
         </div>
+        </ModalPortal>
       )}
 
       {/* Answers */}
       {viewing && (
+        <ModalPortal>
         <div className="fixed inset-0 bg-black/70 z-[60] flex items-center justify-center p-4" onClick={() => { setViewing(null); setViewTranslated(null) }}>
           <div
             className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl animate-modal-in overflow-hidden"
@@ -575,6 +579,7 @@ export default function ClientAssignments({
             </div>
           </div>
         </div>
+        </ModalPortal>
       )}
     </div>
   )

@@ -17,6 +17,7 @@ import { useEffect, useRef, useState } from 'react'
 import { MOCK_ADMIN_PASSWORD } from '@/lib/mockData'
 import { Lang, LANG_ENGLISH_NAME, TranslatedLang } from '@/lib/langs'
 import { Question, QuestionType } from '@/types'
+import ModalPortal from '@/components/ModalPortal'
 
 const TYPE_LABELS: { value: QuestionType; label: string }[] = [
   { value: 'text', label: 'Short text' },
@@ -201,6 +202,7 @@ export default function PasteQuestionsDialog({
   const lang = translatedInto && translatedInto !== 'en' ? (translatedInto as TranslatedLang) : null
 
   return (
+    <ModalPortal>
     <div className="fixed inset-0 bg-black/70 z-[70] flex items-center justify-center p-3 sm:p-4" onClick={onClose}>
       <div
         className="bg-white rounded-2xl w-full max-w-3xl max-h-[92vh] flex flex-col shadow-2xl animate-modal-in overflow-hidden"
@@ -476,5 +478,6 @@ export default function PasteQuestionsDialog({
         )}
       </div>
     </div>
+    </ModalPortal>
   )
 }
