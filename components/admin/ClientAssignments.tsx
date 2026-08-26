@@ -13,6 +13,7 @@ import { MOCK_ADMIN_PASSWORD } from '@/lib/mockData'
 import { AnswerValue, Assignment, AssignmentDetail, QuestionSet, QuestionnaireState } from '@/types'
 import { LANGUAGES, LANG_ENGLISH_NAME, Lang, toLang } from '@/lib/langs'
 import { submissionLanguage, translateAnswersToEnglish } from '@/lib/machineTranslate'
+import PasteQuestionsDialog from '@/components/admin/PasteQuestionsDialog'
 import type { RecommendedBank } from '@/lib/recommendedQuestions'
 
 const STATUS_BADGE: Record<Assignment['status'], { label: string; cls: string }> = {
@@ -47,6 +48,7 @@ export default function ClientAssignments({
   const [sets, setSets] = useState<QuestionSet[]>([])
   const [loading, setLoading] = useState(true)
   const [picking, setPicking] = useState(false)
+  const [pasting, setPasting] = useState(false)
   const [asDraft, setAsDraft] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
   const [viewing, setViewing] = useState<AssignmentDetail | null>(null)
@@ -419,12 +421,46 @@ export default function ClientAssignments({
           </button>
         </div>
       ) : (
-        <button
-          onClick={() => setPicking(true)}
-          className="w-full border-2 border-dashed border-gray-200 rounded-xl py-3 text-sm font-semibold text-gray-500 hover:border-gold hover:text-gold transition-colors"
-        >
-          + Assign Question Set
-        </button>
+        <div className="grid sm:grid-cols-2 gap-2">
+          <button
+            onClick={() => setPicking(true)}
+            className="border-2 border-dashed border-gray-200 rounded-xl py-3 text-sm font-semibold text-gray-500 hover:border-gold hover:text-gold transition-colors"
+          >
+            + Assign Question Set
+          </button>
+          {/* The other half of the job: questions written for this client alone,
+              which no reusable set covers. */}
+          <button
+            onClick={() => setPasting(true)}
+            className="border-2 border-dashed border-gold/40 rounded-xl py-3 text-sm font-semibold text-gold hover:border-gold hover:bg-gold/5 transition-colors"
+          >
+            + Paste Extra Questions
+          </button>
+        </div>
+      )}
+
+      {pasting && (
+        <PasteQuestionsDialog
+          clientId={clientId}
+          clientName={clientName}
+          onClose={() => setPasting(false)}
+          onCreated={async (assignmentId, name) => {
+            setPasting(false)
+            await load()
+            if (!assignmentId) { setNotice(`"${name}" was built and assigned.`); return }
+            // Straight into the existing send dialog, so the email, the address
+            // and the language all go through one reviewed path.
+            const res = await fetch(`/api/admin/assignments/${assignmentId}/send`, { headers: adminHeaders })
+            const body = await res.json().catch(() => ({}))
+            if (!res.ok) { setNotice(`"${name}" was assigned. Use Send when you are ready.`); return }
+            setSending({
+              assignment: { id: assignmentId, questionSetName: name } as Assignment,
+              email: body.email ?? '',
+              link: body.link ?? '',
+              lang: toLang(body.lang),
+            })
+          }}
+        />
       )}
 
       {/* Send dialog */}
