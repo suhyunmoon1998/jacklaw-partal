@@ -14,6 +14,7 @@
  */
 
 import { getSupabase } from '@/lib/supabase'
+import { TRANSLATED_LANGS, TranslatedLang } from '@/lib/langs'
 import { QUESTIONNAIRE_SECTIONS } from '@/lib/questionnaireData'
 import { answerFitsType, isVisible } from '@/lib/questionLogic'
 import {
@@ -77,19 +78,21 @@ export function normalizeQuestion(raw: unknown, index: number): Question | null 
     question.showIf = { questionId: showIf.questionId.trim(), value: showIf.value }
   }
 
-  // Spanish, where the admin (or a bank) supplied it. Options are positional
-  // display labels, so a list of the wrong length is dropped rather than
-  // silently pairing the wrong text with the wrong stored value.
-  const es = q.es as Record<string, unknown> | undefined
-  if (es && typeof es === 'object') {
+  // Translations, where the admin (or a bank) supplied them. Options are
+  // positional display labels, so a list of the wrong length is dropped rather
+  // than silently pairing the wrong text with the wrong stored value.
+  for (const lang of TRANSLATED_LANGS) {
+    const raw = q[lang] as Record<string, unknown> | undefined
+    if (!raw || typeof raw !== 'object') continue
+
     const t: QuestionTranslation = {}
-    if (typeof es.label === 'string' && es.label.trim()) t.label = es.label.trim()
-    if (typeof es.helpText === 'string' && es.helpText.trim()) t.helpText = es.helpText.trim()
-    if (typeof es.placeholder === 'string' && es.placeholder.trim()) t.placeholder = es.placeholder.trim()
-    if (Array.isArray(es.options) && question.options && es.options.length === question.options.length) {
-      t.options = es.options.map(o => String(o))
+    if (typeof raw.label === 'string' && raw.label.trim()) t.label = raw.label.trim()
+    if (typeof raw.helpText === 'string' && raw.helpText.trim()) t.helpText = raw.helpText.trim()
+    if (typeof raw.placeholder === 'string' && raw.placeholder.trim()) t.placeholder = raw.placeholder.trim()
+    if (Array.isArray(raw.options) && question.options && raw.options.length === question.options.length) {
+      t.options = raw.options.map(o => String(o))
     }
-    if (Object.keys(t).length > 0) question.es = t
+    if (Object.keys(t).length > 0) question[lang] = t
   }
 
   return question
@@ -124,10 +127,53 @@ export function normalizeQuestions(raw: unknown): Question[] {
   })
 }
 
-interface SetRow {
+/** The question_sets column holding the set's name in each language. */
+export const SET_NAME_COLUMN: Record<TranslatedLang, SetNameColumn> = {
+  es: 'name_es',
+  zh: 'name_zh',
+  ko: 'name_ko',
+}
+
+type SetNameColumn = 'name_es' | 'name_zh' | 'name_ko'
+type SetNameRow = Partial<Record<SetNameColumn, string | null>>
+
+/** Columns to select wherever a set's client-facing names are needed. */
+export const SET_NAME_SELECT = 'name, name_es, name_zh, name_ko'
+
+function nameTranslationsOf(row: SetNameRow): Partial<Record<TranslatedLang, string>> {
+  const out: Partial<Record<TranslatedLang, string>> = {}
+  for (const lang of TRANSLATED_LANGS) {
+    const value = row[SET_NAME_COLUMN[lang]]
+    if (typeof value === 'string' && value.trim()) out[lang] = value.trim()
+  }
+  return out
+}
+
+/** The map as it arrives from the editor, with anything unrecognised dropped. */
+export function nameTranslationsFrom(raw: unknown): Partial<Record<TranslatedLang, string>> {
+  const src = (raw ?? {}) as Record<string, unknown>
+  const out: Partial<Record<TranslatedLang, string>> = {}
+  for (const lang of TRANSLATED_LANGS) {
+    const value = src[lang]
+    if (typeof value === 'string' && value.trim()) out[lang] = value.trim()
+  }
+  return out
+}
+
+/** The same map on its way back to the database, blanks stored as null. */
+export function setNameColumns(
+  translations: Partial<Record<TranslatedLang, string>> | undefined
+): Record<SetNameColumn, string | null> {
+  return {
+    name_es: translations?.es?.trim() || null,
+    name_zh: translations?.zh?.trim() || null,
+    name_ko: translations?.ko?.trim() || null,
+  }
+}
+
+interface SetRow extends SetNameRow {
   id: string
   name: string
-  name_es: string | null
   description: string
   status: string
   is_default: boolean
@@ -139,7 +185,7 @@ function toQuestionSet(row: SetRow, questionCount: number): QuestionSet {
   return {
     id: row.id,
     name: row.name,
-    nameEs: row.name_es ?? '',
+    nameTranslations: nameTranslationsOf(row),
     description: row.description ?? '',
     status: row.status === 'archived' ? 'archived' : 'active',
     isDefault: row.is_default,
@@ -154,7 +200,11 @@ export function defaultQuestionSet(): QuestionSet {
   return {
     id: DEFAULT_SET_ID,
     name: 'Default Onboarding',
-    nameEs: 'Cuestionario Inicial',
+    nameTranslations: {
+      es: 'Cuestionario Inicial',
+      zh: '初始问卷',
+      ko: '기본 접수 설문',
+    },
     description: 'The standard intake questionnaire every client receives. Built into the portal — duplicate it to make an editable copy.',
     status: 'active',
     isDefault: true,
@@ -244,7 +294,7 @@ interface AssignmentRow {
 
 function toAssignment(
   row: AssignmentRow,
-  set: { name: string; name_es?: string | null; description: string },
+  set: SetNameRow & { name: string; description: string },
   questionCount: number,
   answeredCount: number,
   /** The description is the admin's internal note — never send it to a client. */
@@ -255,7 +305,7 @@ function toAssignment(
     clientId: row.client_id,
     questionSetId: row.question_set_id,
     questionSetName: set.name,
-    questionSetNameEs: set.name_es ?? '',
+    questionSetNameTranslations: nameTranslationsOf(set),
     questionSetDescription: includeDescription ? (set.description ?? '') : '',
     questionCount,
     status: row.status as AssignmentStatus,
@@ -293,7 +343,7 @@ export async function listAssignments(
   const assignmentIds = rows.map(r => r.id)
 
   const [{ data: sets }, { data: questions }, { data: responses }] = await Promise.all([
-    supabase.from('question_sets').select('id, name, name_es, description').in('id', setIds),
+    supabase.from('question_sets').select(`id, ${SET_NAME_SELECT}, description`).in('id', setIds),
     supabase
       .from('question_set_questions')
       .select('question_set_id, question')
@@ -385,7 +435,7 @@ export async function getAssignmentDetail(
   if (!row) return null
 
   const [{ data: set }, { data: questionRows }, { data: responses }, { data: client }] = await Promise.all([
-    supabase.from('question_sets').select('id, name, name_es, description').eq('id', row.question_set_id).maybeSingle(),
+    supabase.from('question_sets').select(`id, ${SET_NAME_SELECT}, description`).eq('id', row.question_set_id).maybeSingle(),
     supabase
       .from('question_set_questions')
       .select('question, sort_order')

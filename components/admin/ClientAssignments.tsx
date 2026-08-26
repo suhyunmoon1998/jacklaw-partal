@@ -11,6 +11,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { MOCK_ADMIN_PASSWORD } from '@/lib/mockData'
 import { AnswerValue, Assignment, AssignmentDetail, QuestionSet, QuestionnaireState } from '@/types'
+import { LANGUAGES, LANG_ENGLISH_NAME, Lang, toLang } from '@/lib/langs'
+import { submissionLanguage, translateAnswersToEnglish } from '@/lib/machineTranslate'
 import type { RecommendedBank } from '@/lib/recommendedQuestions'
 
 const STATUS_BADGE: Record<Assignment['status'], { label: string; cls: string }> = {
@@ -48,7 +50,17 @@ export default function ClientAssignments({
   const [asDraft, setAsDraft] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
   const [viewing, setViewing] = useState<AssignmentDetail | null>(null)
-  const [sending, setSending] = useState<{ assignment: Assignment; email: string; link: string; lang: 'en' | 'es' } | null>(null)
+  /**
+   * The viewed assignment's answers rendered in English. An assigned set is
+   * authored in English but answered in whichever language the client read it
+   * in, so the office would otherwise be reading a case file in four
+   * languages. Null means the translation has not arrived (or was not needed).
+   */
+  const [viewTranslated, setViewTranslated] = useState<Record<string, string> | null>(null)
+  const [viewTranslating, setViewTranslating] = useState(false)
+  /** Kept apart from the cache above so the toggle can go both ways. */
+  const [viewOriginal, setViewOriginal] = useState(false)
+  const [sending, setSending] = useState<{ assignment: Assignment; email: string; link: string; lang: Lang } | null>(null)
   const [notice, setNotice] = useState('')
   const [banks, setBanks] = useState<RecommendedBank[]>([])
 
@@ -100,7 +112,7 @@ export default function ClientAssignments({
       headers: adminHeaders,
       body: JSON.stringify({
         name: bank.setName,
-        nameEs: bank.setNameEs,
+        nameTranslations: bank.setNameTranslations,
         description: bank.description,
         questions: bank.questions,
       }),
@@ -120,12 +132,27 @@ export default function ClientAssignments({
     load()
   }
 
+  const viewAnsweredIn = viewing ? submissionLanguage(viewing.answers) : null
+
+  useEffect(() => {
+    if (!viewing || !viewAnsweredIn || viewTranslated || viewTranslating) return
+    let live = true
+    setViewTranslating(true)
+    translateAnswersToEnglish(viewing.answers).then(result => {
+      if (!live) return
+      setViewTranslated(result)
+      setViewTranslating(false)
+    })
+    return () => { live = false }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewing?.id, viewAnsweredIn])
+
   const openSend = async (assignment: Assignment) => {
     setBusy(assignment.id)
     const res = await fetch(`/api/admin/assignments/${assignment.id}/send`, { headers: adminHeaders })
     const body = await res.json().catch(() => ({}))
     setBusy(null)
-    setSending({ assignment, email: body.email ?? '', link: body.link ?? '', lang: body.lang === 'es' ? 'es' : 'en' })
+    setSending({ assignment, email: body.email ?? '', link: body.link ?? '', lang: toLang(body.lang) })
   }
 
   const handleSend = async () => {
@@ -143,7 +170,7 @@ export default function ClientAssignments({
       return
     }
     setSending(null)
-    setNotice(`Sent to ${body.email} in ${body.lang === 'es' ? 'Spanish' : 'English'}.`)
+    setNotice(`Sent to ${body.email} in ${LANG_ENGLISH_NAME[toLang(body.lang)]}.`)
     load()
   }
 
@@ -183,7 +210,11 @@ export default function ClientAssignments({
     setBusy(assignment.id)
     const res = await fetch(`/api/admin/assignments/${assignment.id}`, { headers: adminHeaders })
     setBusy(null)
-    if (res.ok) setViewing((await res.json()).assignment)
+    if (res.ok) {
+      setViewTranslated(null)
+      setViewOriginal(false)
+      setViewing((await res.json()).assignment)
+    }
   }
 
   const remove = async (assignment: Assignment) => {
@@ -419,11 +450,14 @@ export default function ClientAssignments({
             <label className="block text-xs font-semibold text-gray-500 mt-3 mb-1.5">Language</label>
             <select
               value={sending.lang}
-              onChange={e => setSending({ ...sending, lang: e.target.value as 'en' | 'es' })}
+              onChange={e => setSending({ ...sending, lang: toLang(e.target.value) })}
               className="input-field text-sm"
             >
-              <option value="en">English</option>
-              <option value="es">Español</option>
+              {LANGUAGES.map(l => (
+                <option key={l.code} value={l.code}>
+                  {l.code === 'en' ? l.label : `${l.label} · ${LANG_ENGLISH_NAME[l.code]}`}
+                </option>
+              ))}
             </select>
             <p className="text-[11px] text-gray-400 mt-1">
               Taken from the language on their intake. The questions themselves appear in whichever
@@ -450,7 +484,7 @@ export default function ClientAssignments({
 
       {/* Answers */}
       {viewing && (
-        <div className="fixed inset-0 bg-black/70 z-[60] flex items-center justify-center p-4" onClick={() => setViewing(null)}>
+        <div className="fixed inset-0 bg-black/70 z-[60] flex items-center justify-center p-4" onClick={() => { setViewing(null); setViewTranslated(null) }}>
           <div
             className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl animate-modal-in overflow-hidden"
             onClick={e => e.stopPropagation()}
@@ -462,19 +496,43 @@ export default function ClientAssignments({
                   {viewing.clientName} · {viewing.answeredCount}/{viewing.questionCount} answered
                 </p>
               </div>
-              <button onClick={() => setViewing(null)} className="text-white/40 hover:text-white">
+              <button onClick={() => { setViewing(null); setViewTranslated(null) }} className="text-white/40 hover:text-white">
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>
+            {viewAnsweredIn && (
+              <div className="flex items-center justify-between gap-3 px-5 py-2.5 bg-gold/5 border-b border-gold/20 shrink-0">
+                <span className="text-xs text-gray-500">
+                  {viewTranslating
+                    ? `Detected ${LANG_ENGLISH_NAME[viewAnsweredIn]} — translating…`
+                    : viewTranslated && !viewOriginal
+                    ? `Auto-translated from ${LANG_ENGLISH_NAME[viewAnsweredIn]}`
+                    : `${LANG_ENGLISH_NAME[viewAnsweredIn]} detected`}
+                </span>
+                <button
+                  onClick={() => setViewOriginal(v => !v)}
+                  disabled={viewTranslating || !viewTranslated}
+                  className="text-xs font-semibold text-gold hover:underline disabled:opacity-40 disabled:no-underline shrink-0"
+                >
+                  {viewOriginal ? 'Show English' : 'Show original'}
+                </button>
+              </div>
+            )}
             <div className="flex-1 overflow-y-auto divide-y divide-gray-50">
               {viewing.questions.map(q => {
                 const val = viewing.answers[q.id]
+                // The translated text is already flattened, so a multiselect
+                // loses its bullets — worth it to read the file in English.
+                // An empty translation falls through to the original rather
+                // than blanking an answer the client did give.
+                const english = viewOriginal ? '' : viewTranslated?.[q.id]
+                const shown = english || formatAnswer(val)
                 return (
                   <div key={q.id} className="px-5 py-3">
                     <p className="text-xs text-gray-400 mb-1">{q.label}</p>
-                    <p className="text-sm text-gray-800 whitespace-pre-line font-medium">{formatAnswer(val)}</p>
+                    <p className="text-sm text-gray-800 whitespace-pre-line font-medium">{shown}</p>
                   </div>
                 )
               })}

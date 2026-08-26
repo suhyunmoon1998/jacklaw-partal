@@ -6,8 +6,7 @@ import Header from '@/components/Header'
 import MascotWatermark from '@/components/MascotWatermark'
 import SectionIcon from '@/components/SectionIcon'
 import { getSession, addSubmissionNotification } from '@/lib/auth'
-import { QUESTIONNAIRE_SECTIONS } from '@/lib/questionnaireData'
-import { QUESTIONNAIRE_SECTIONS_ES } from '@/lib/questionnaireDataEs'
+import { questionnaireSections } from '@/lib/questionnaireSections'
 import { CHAPTER_LABEL, ChapterId, sectionMeta } from '@/lib/questionnaireMeta'
 import { AnswerValue, QuestionnaireState, Session } from '@/types'
 import { QuestionInput } from '@/components/QuestionField'
@@ -82,7 +81,7 @@ export default function QuestionnairePage() {
   const router = useRouter()
   const { lang, t } = useLanguage()
 
-  const ALL_SECTIONS = lang === 'es' ? QUESTIONNAIRE_SECTIONS_ES : QUESTIONNAIRE_SECTIONS
+  const ALL_SECTIONS = questionnaireSections(lang)
   const SECTIONS = ALL_SECTIONS.filter(s => isVisible(s, qState.answers))
 
   useEffect(() => {

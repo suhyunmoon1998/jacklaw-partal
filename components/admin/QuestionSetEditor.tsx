@@ -11,7 +11,16 @@
 import { useEffect, useState } from 'react'
 import { MOCK_ADMIN_PASSWORD } from '@/lib/mockData'
 import { Question, QuestionSetDetail, QuestionType } from '@/types'
+import { LANGUAGES, TRANSLATED_LANGS, TranslatedLang } from '@/lib/langs'
+import { machineTranslate } from '@/lib/machineTranslate'
 import type { RecommendedBank } from '@/lib/recommendedQuestions'
+
+/** The non-English languages, in the order the tabs show them. */
+const TRANSLATION_TABS = LANGUAGES.filter(l => l.code !== 'en') as {
+  code: TranslatedLang
+  label: string
+  short: string
+}[]
 
 const TYPE_LABELS: { value: QuestionType; label: string }[] = [
   { value: 'text', label: 'Short text' },
@@ -27,6 +36,53 @@ const TYPE_LABELS: { value: QuestionType; label: string }[] = [
 ]
 
 const NEEDS_OPTIONS: QuestionType[] = ['select', 'multiselect']
+
+/** A set name as it would read in each language, so the field shows its shape. */
+const NAME_PLACEHOLDER: Record<TranslatedLang, string> = {
+  es: 'p. ej. Quién es Quién',
+  zh: '例如：谁是谁',
+  ko: '예: 관련자 확인',
+}
+
+/**
+ * Language picker shared by the set name and every question panel, so the
+ * editor is only ever writing one language at a time and the Draft button has
+ * an unambiguous target. `done` marks the languages already filled in.
+ */
+function LangTabs({
+  value,
+  onChange,
+  done,
+}: {
+  value: TranslatedLang
+  onChange: (lang: TranslatedLang) => void
+  done: TranslatedLang[]
+}) {
+  return (
+    <div className="flex items-center gap-1 shrink-0">
+      {TRANSLATION_TABS.map(tab => {
+        const selected = tab.code === value
+        return (
+          <button
+            key={tab.code}
+            type="button"
+            onClick={() => onChange(tab.code)}
+            aria-pressed={selected}
+            title={tab.label}
+            className={`text-[11px] font-semibold px-2 py-0.5 rounded-md border transition-colors ${
+              selected
+                ? 'bg-gold text-white border-gold'
+                : 'bg-white text-gray-500 border-gray-200 hover:border-gold/50 hover:text-gold'
+            }`}
+          >
+            {tab.short}
+            {done.includes(tab.code) && <span className={selected ? 'text-white/80' : 'text-blue-500'}> ✓</span>}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
 
 /** Local editing shape — a stable key so React rows do not jump while typing. */
 interface Draft extends Question {
@@ -97,7 +153,7 @@ export default function QuestionSetEditor({
   onSaved: () => void
 }) {
   const [name, setName] = useState('')
-  const [nameEs, setNameEs] = useState('')
+  const [nameTranslations, setNameTranslations] = useState<Partial<Record<TranslatedLang, string>>>({})
   const [description, setDescription] = useState('')
   const [questions, setQuestions] = useState<Draft[]>([])
   const [loading, setLoading] = useState(!!setId)
@@ -110,8 +166,14 @@ export default function QuestionSetEditor({
   const [banks, setBanks] = useState<RecommendedBank[] | null>(null)
   const [bankCaseType, setBankCaseType] = useState('')
   const [picked, setPicked] = useState<Set<string>>(new Set())
-  const [esOpen, setEsOpen] = useState<Set<string>>(new Set())
+  const [transOpen, setTransOpen] = useState<Set<string>>(new Set())
   const [translating, setTranslating] = useState(false)
+  /**
+   * The language the editor is currently being written in. One shared tab
+   * rather than one per question: staff translate a set a language at a time,
+   * and the Draft button then has an unambiguous target.
+   */
+  const [transLang, setTransLang] = useState<TranslatedLang>('es')
 
   useEffect(() => {
     if (!setId) return
@@ -121,7 +183,7 @@ export default function QuestionSetEditor({
         if (!r.ok || !body?.set) throw new Error(body?.error ?? 'Could not load this question set.')
         const set = body.set as QuestionSetDetail
         setName(set.name)
-        setNameEs(set.nameEs ?? '')
+        setNameTranslations(set.nameTranslations ?? {})
         setDescription(set.description)
         setQuestions(set.questions.map(toDraft))
       })
@@ -142,6 +204,9 @@ export default function QuestionSetEditor({
       })
       .catch(() => setBanks([]))
   }, [suggestOpen, banks])
+
+  const activeTab = TRANSLATION_TABS.find(t => t.code === transLang) ?? TRANSLATION_TABS[0]
+  const translatedNames = TRANSLATED_LANGS.filter(l => nameTranslations[l]?.trim())
 
   const shownBanks = (banks ?? []).filter(b => b.caseType === bankCaseType)
   const caseTypes = Array.from(new Set((banks ?? []).map(b => b.caseType)))
@@ -168,54 +233,65 @@ export default function QuestionSetEditor({
     // Naming the set is the next thing the admin would do anyway.
     const bank = shownBanks[0]
     if (bank && !name.trim()) setName(bank.setName)
-    if (bank && !nameEs.trim() && bank.setNameEs) setNameEs(bank.setNameEs)
+    if (bank) {
+      setNameTranslations(prev => {
+        const next = { ...prev }
+        for (const lang of TRANSLATED_LANGS) {
+          if (!next[lang]?.trim() && bank.setNameTranslations[lang]) next[lang] = bank.setNameTranslations[lang]
+        }
+        return next
+      })
+    }
     if (bank && !description.trim()) setDescription(bank.description)
   }
 
   const update = (key: string, patch: Partial<Draft>) =>
     setQuestions(prev => prev.map(q => (q.key === key ? { ...q, ...patch } : q)))
 
-  const updateEs = (key: string, patch: Partial<NonNullable<Draft['es']>>) =>
+  const updateTranslation = (
+    key: string,
+    lang: TranslatedLang,
+    patch: Partial<NonNullable<Draft['es']>>
+  ) =>
     setQuestions(prev =>
-      prev.map(q => (q.key === key ? { ...q, es: { ...(q.es ?? {}), ...patch } } : q))
+      prev.map(q => (q.key === key ? { ...q, [lang]: { ...(q[lang] ?? {}), ...patch } } : q))
     )
 
+  /** Which languages a question already has a translated label in. */
+  const translatedIn = (q: Draft) => TRANSLATION_TABS.filter(tab => q[tab.code]?.label?.trim())
+
   /**
-   * Machine translation as a STARTING POINT only — the same free endpoint the
-   * admin panel already uses to read Spanish intake answers. Staff review and
-   * correct it before the set goes out; nothing here is sent to a client
-   * unreviewed, because saving is still a deliberate click.
+   * Machine translation as a STARTING POINT only, into the language whose tab
+   * is open. Staff review and correct it before the set goes out; nothing here
+   * reaches a client unreviewed, because saving is still a deliberate click.
+   *
+   * Only empty fields are filled, so running it again after correcting a
+   * translation never overwrites the corrected text.
    */
   const autoTranslate = async () => {
     setTranslating(true)
-    const es = async (text: string) => {
-      if (!text.trim()) return ''
-      try {
-        const r = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=en|es`)
-        const d = await r.json()
-        return String(d.responseData?.translatedText ?? '')
-      } catch {
-        return ''
-      }
-    }
+    const lang = transLang
+    const draft = (text: string) => machineTranslate(text, 'en', lang)
 
     const filled = await Promise.all(
       questions.map(async q => {
         if (!q.label.trim()) return q
-        const next = { ...(q.es ?? {}) }
-        if (!next.label) next.label = (await es(q.label)) || undefined
-        if (q.helpText && !next.helpText) next.helpText = (await es(q.helpText)) || undefined
+        const next = { ...(q[lang] ?? {}) }
+        if (!next.label) next.label = (await draft(q.label)) || undefined
+        if (q.helpText && !next.helpText) next.helpText = (await draft(q.helpText)) || undefined
         if (q.options?.length && !next.options?.length) {
-          const opts = await Promise.all(q.options.map(o => es(o)))
+          const opts = await Promise.all(q.options.map(o => draft(o)))
+          // Options are matched to the English by position, so a partial result
+          // would pair the wrong label with the wrong stored answer.
           if (opts.every(Boolean)) next.options = opts
         }
-        return { ...q, es: next }
+        return { ...q, [lang]: next }
       })
     )
 
     setQuestions(filled)
     setTranslating(false)
-    setEsOpen(new Set(filled.map(q => q.key)))
+    setTransOpen(new Set(filled.map(q => q.key)))
   }
 
   const move = (index: number, delta: number) =>
@@ -238,7 +314,7 @@ export default function QuestionSetEditor({
 
     const payload = {
       name: name.trim(),
-      nameEs: nameEs.trim(),
+      nameTranslations,
       description: description.trim(),
       // Strip the editor-only React key before it reaches the API.
       questions: cleaned.map(q => ({ ...q, key: undefined })),
@@ -318,13 +394,19 @@ export default function QuestionSetEditor({
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-gray-500 mb-1.5">
-                  Name in Spanish <span className="font-normal text-gray-400">· optional</span>
-                </label>
+                <div className="flex items-center justify-between mb-1.5 gap-2">
+                  <label className="block text-xs font-semibold text-gray-500 shrink-0">
+                    Name in <span className="text-gold">{activeTab.label}</span>
+                    <span className="font-normal text-gray-400"> · optional</span>
+                  </label>
+                  <LangTabs value={transLang} onChange={setTransLang} done={translatedNames} />
+                </div>
                 <input
-                  value={nameEs}
-                  onChange={e => setNameEs(e.target.value)}
-                  placeholder="p. ej. Quién es Quién"
+                  value={nameTranslations[transLang] ?? ''}
+                  onChange={e =>
+                    setNameTranslations(prev => ({ ...prev, [transLang]: e.target.value }))
+                  }
+                  placeholder={NAME_PLACEHOLDER[transLang]}
                   className="input-field"
                 />
               </div>
@@ -360,9 +442,9 @@ export default function QuestionSetEditor({
                     onClick={autoTranslate}
                     disabled={translating || questions.length === 0}
                     className="text-xs font-semibold text-gold hover:underline disabled:opacity-40"
-                    title="Fills the empty Spanish fields with a machine translation for staff to correct"
+                    title={`Fills the empty ${activeTab.label} fields with a machine translation for staff to correct`}
                   >
-                    {translating ? 'Translating…' : 'Draft Spanish'}
+                    {translating ? 'Translating…' : `Draft ${activeTab.label}`}
                   </button>
                 </div>
               </div>
@@ -563,48 +645,52 @@ export default function QuestionSetEditor({
                           />
                         )}
 
-                        {/* Spanish shown to clients who switch the portal to Español */}
-                        {esOpen.has(q.key) ? (
+                        {/* Translations shown to clients who switch the portal language */}
+                        {transOpen.has(q.key) ? (
                           <div className="space-y-2 bg-blue-50/60 border border-blue-200 rounded-lg p-2.5">
-                            <div className="flex items-center justify-between">
-                              <span className="text-[11px] font-bold tracking-wider uppercase text-blue-700">Español</span>
+                            <div className="flex items-center justify-between gap-2">
+                              <LangTabs
+                                value={transLang}
+                                onChange={setTransLang}
+                                done={translatedIn(q).map(t => t.code)}
+                              />
                               <button
-                                onClick={() => setEsOpen(prev => { const n = new Set(prev); n.delete(q.key); return n })}
-                                className="text-[11px] text-blue-600 hover:underline"
+                                onClick={() => setTransOpen(prev => { const n = new Set(prev); n.delete(q.key); return n })}
+                                className="text-[11px] text-blue-600 hover:underline shrink-0"
                               >
                                 Hide
                               </button>
                             </div>
                             <input
-                              value={q.es?.label ?? ''}
-                              onChange={e => updateEs(q.key, { label: e.target.value || undefined })}
-                              placeholder="Pregunta en español"
+                              value={q[transLang]?.label ?? ''}
+                              onChange={e => updateTranslation(q.key, transLang, { label: e.target.value || undefined })}
+                              placeholder={`Question in ${activeTab.label}`}
                               className="input-field text-sm"
                             />
                             {q.helpText && (
                               <input
-                                value={q.es?.helpText ?? ''}
-                                onChange={e => updateEs(q.key, { helpText: e.target.value || undefined })}
-                                placeholder="Texto de ayuda en español"
+                                value={q[transLang]?.helpText ?? ''}
+                                onChange={e => updateTranslation(q.key, transLang, { helpText: e.target.value || undefined })}
+                                placeholder={`Help text in ${activeTab.label}`}
                                 className="input-field text-xs"
                               />
                             )}
                             {NEEDS_OPTIONS.includes(q.type) && (
                               <>
                                 <input
-                                  value={(q.es?.options ?? []).join(', ')}
+                                  value={(q[transLang]?.options ?? []).join(', ')}
                                   onChange={e => {
                                     const parts = e.target.value.split(',').map(o => o.trim()).filter(Boolean)
-                                    updateEs(q.key, { options: parts.length ? parts : undefined })
+                                    updateTranslation(q.key, transLang, { options: parts.length ? parts : undefined })
                                   }}
-                                  placeholder="Opciones en español, separadas por comas"
+                                  placeholder={`Choices in ${activeTab.label}, separated by commas`}
                                   className="input-field text-xs"
                                 />
-                                {(q.es?.options?.length ?? 0) > 0 &&
-                                  q.es!.options!.length !== (q.options?.length ?? 0) && (
+                                {(q[transLang]?.options?.length ?? 0) > 0 &&
+                                  q[transLang]!.options!.length !== (q.options?.length ?? 0) && (
                                     <p className="text-[11px] text-red-600">
-                                      {q.es!.options!.length} Spanish choices vs {q.options?.length ?? 0} English —
-                                      they are matched in order, so the counts must agree or the Spanish is ignored.
+                                      {q[transLang]!.options!.length} {activeTab.label} choices vs {q.options?.length ?? 0} English —
+                                      they are matched in order, so the counts must agree or the translation is ignored.
                                     </p>
                                   )}
                               </>
@@ -612,10 +698,12 @@ export default function QuestionSetEditor({
                           </div>
                         ) : (
                           <button
-                            onClick={() => setEsOpen(prev => new Set(prev).add(q.key))}
-                            className={`text-xs hover:text-gold ${q.es?.label ? 'text-blue-600 font-semibold' : 'text-gray-400'}`}
+                            onClick={() => setTransOpen(prev => new Set(prev).add(q.key))}
+                            className={`text-xs hover:text-gold ${translatedIn(q).length ? 'text-blue-600 font-semibold' : 'text-gray-400'}`}
                           >
-                            {q.es?.label ? '✓ Español' : '+ Add Spanish'}
+                            {translatedIn(q).length
+                              ? `✓ ${translatedIn(q).map(t => t.short).join(' · ')}`
+                              : '+ Add translations'}
                           </button>
                         )}
 

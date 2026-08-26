@@ -4,6 +4,7 @@ import { isAdmin } from '@/lib/adminAuth'
 import { getAssignmentDetail } from '@/lib/questionSets'
 import { generateAnswersPdf } from '@/lib/generateAnswersPdf'
 import { formatPhone } from '@/lib/auth'
+import { translateAnswersToEnglish } from '@/lib/machineTranslate'
 
 // GET /api/admin/assignments/[id]/pdf — that one assignment's answers, as a PDF.
 // Same generator and layout the default intake download already uses.
@@ -19,11 +20,15 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     .eq('id', assignment.clientId)
     .maybeSingle()
 
+  // English for the office, and the only text the PDF font can draw — see the
+  // note in the default questionnaire's PDF route.
+  const answers = await translateAnswersToEnglish(assignment.answers)
+
   const pdf = await generateAnswersPdf(
     client?.name ?? assignment.clientName,
     client?.case_type ?? '',
     formatPhone(client?.phone ?? ''),
-    assignment.answers,
+    answers,
     {
       // One flat section: a question set has no chapter structure of its own.
       sections: [{ id: assignment.questionSetId, title: assignment.questionSetName, questions: assignment.questions }],

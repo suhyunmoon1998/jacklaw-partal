@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
 import { generateAnswersPdf } from '@/lib/generateAnswersPdf'
 import { formatPhone } from '@/lib/auth'
+import { translateAnswersToEnglish } from '@/lib/machineTranslate'
 
 function isAdmin(req: NextRequest) {
   return req.headers.get('x-admin-key') === process.env.ADMIN_PASSWORD
@@ -21,11 +22,16 @@ export async function GET(req: NextRequest) {
 
   if (!client) return NextResponse.json({ error: 'Client not found' }, { status: 404 })
 
+  // The office reads case files in English, and the PDF's built-in font cannot
+  // draw Chinese or Korean at all. Answers already in English cost nothing here:
+  // the translator only calls out for text it detects as another language.
+  const answers = await translateAnswersToEnglish(qState?.answers ?? {})
+
   const pdf = await generateAnswersPdf(
     client.name,
     client.case_type,
     formatPhone(client.phone ?? ''),
-    qState?.answers ?? {}
+    answers
   )
 
   const safeName = client.name.replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '')

@@ -3,11 +3,11 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
-import { INTAKE_SECTIONS, IntakeSection } from '@/lib/intakeFormData'
-import { INTAKE_SECTIONS_ES } from '@/lib/intakeFormDataEs'
 import { AnswerValue, Question } from '@/types'
 import { addSubmissionNotification, addIntakeSubmission, saveGeneratedGFROGDraft, markGFROGDraftGenerated } from '@/lib/auth'
 import { useLanguage } from '@/lib/i18n'
+import { intakeSections } from '@/lib/intakeSections'
+import LanguagePicker from '@/components/LanguagePicker'
 import { generateGFROGResponses } from '@/lib/gfrogResponseGenerator'
 
 function QuestionInput({
@@ -150,8 +150,8 @@ function isVisible(q: Question, answers: Record<string, AnswerValue>): boolean {
 
 export default function IntakePage() {
   const router = useRouter()
-  const { lang, setLang, t } = useLanguage()
-  const sections = lang === 'es' ? INTAKE_SECTIONS_ES : INTAKE_SECTIONS
+  const { lang, t } = useLanguage()
+  const sections = intakeSections(lang)
   const [answers, setAnswers] = useState<Record<string, AnswerValue>>({})
   const [submitSuccess, setSubmitSuccess] = useState(false)
   const [submitError, setSubmitError] = useState('')
@@ -190,11 +190,11 @@ export default function IntakePage() {
   const handleEmailSubmit = () => {
     const email = emailInput.trim()
     if (!email) {
-      setSubmitError(lang === 'es' ? 'Por favor ingrese su correo electrónico' : 'Please enter your email address')
+      setSubmitError(t('intake_email_required'))
       return
     }
     if (!email.includes('@')) {
-      setSubmitError(lang === 'es' ? 'Por favor ingrese un correo válido' : 'Please enter a valid email address')
+      setSubmitError(t('intake_email_invalid'))
       return
     }
     setUserEmail(email)
@@ -353,28 +353,7 @@ export default function IntakePage() {
             <Image src="/logo.png" alt="866 JACK LAW" width={60} height={60} className="rounded-sm mx-auto mb-3" priority />
             <p className="text-white/50 text-sm">Law Offices of Jack D. Josephson, APC</p>
           </button>
-          <div className="flex gap-2">
-            <button
-              onClick={() => setLang('en')}
-              className={`px-3 py-2 rounded-lg text-sm font-semibold transition-colors ${
-                lang === 'en'
-                  ? 'bg-gold text-white'
-                  : 'bg-white/10 text-white hover:bg-white/20'
-              }`}
-            >
-              English
-            </button>
-            <button
-              onClick={() => setLang('es')}
-              className={`px-3 py-2 rounded-lg text-sm font-semibold transition-colors ${
-                lang === 'es'
-                  ? 'bg-gold text-white'
-                  : 'bg-white/10 text-white hover:bg-white/20'
-              }`}
-            >
-              Español
-            </button>
-          </div>
+          <LanguagePicker variant="row" />
         </div>
       </header>
 
@@ -385,17 +364,15 @@ export default function IntakePage() {
             <div className="max-w-md w-full animate-slide-up">
               <div className="text-center mb-8">
                 <h2 className="text-2xl font-bold text-black mb-2">
-                  {lang === 'es' ? '¡Bienvenido!' : 'Welcome!'}
+                  {t('intake_welcome')}
                 </h2>
                 <p className="text-gray-600 text-sm">
-                  {lang === 'es'
-                    ? 'Ingrese su correo electrónico para guardar su progreso'
-                    : 'Enter your email to save your progress'}
+                  {t('intake_welcome_sub')}
                 </p>
               </div>
 
               <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-                <label className="label">{lang === 'es' ? 'Correo Electrónico' : 'Email Address'}</label>
+                <label className="label">{t('intake_email_label')}</label>
                 <input
                   type="email"
                   value={emailInput}
@@ -403,14 +380,12 @@ export default function IntakePage() {
                     setEmailInput(e.target.value)
                     setSubmitError('')
                   }}
-                  placeholder={lang === 'es' ? 'su@correo.com' : 'your@email.com'}
+                  placeholder={t('intake_email_placeholder')}
                   className="input-field mb-4"
                   onKeyPress={e => e.key === 'Enter' && handleEmailSubmit()}
                 />
                 <p className="text-xs text-gray-400 mb-4">
-                  {lang === 'es'
-                    ? 'Si ya tiene un formulario guardado, su progreso se cargará automáticamente.'
-                    : 'If you have a saved form, your progress will load automatically.'}
+                  {t('intake_email_note')}
                 </p>
 
                 {submitError && (
@@ -423,7 +398,7 @@ export default function IntakePage() {
                   onClick={handleEmailSubmit}
                   className="btn-primary w-full"
                 >
-                  {lang === 'es' ? 'Continuar' : 'Continue'}
+                  {t('intake_continue')}
                 </button>
               </div>
             </div>
@@ -447,14 +422,14 @@ export default function IntakePage() {
                 }}
                 className="text-xs text-gray-400 hover:text-gray-600 transition-colors px-3 py-1 border border-gray-200 rounded-lg"
               >
-                {lang === 'es' ? 'Cambiar' : 'Change'}
+                {t('intake_change')}
               </button>
             </div>
 
             {/* Current user email */}
             <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-xl">
               <p className="text-xs text-blue-700">
-                <strong>{lang === 'es' ? 'Guardado como:' : 'Saved as:'}</strong> {userEmail}
+                <strong>{t('intake_saved_as')}</strong> {userEmail}
               </p>
             </div>
 
@@ -548,7 +523,7 @@ export default function IntakePage() {
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                 </svg>
-                {lang === 'es' ? 'Enviando…' : 'Submitting…'}
+                {t('intake_submitting')}
               </span>
             ) : (
               t('intake_submit')
@@ -574,7 +549,7 @@ export default function IntakePage() {
             {/* Privacy Notice */}
             <div className="mt-8 p-4 bg-blue-50 border border-blue-200 rounded-xl">
               <p className="text-blue-800 text-xs">
-                <strong>{lang === 'es' ? 'Privacidad:' : 'Privacy:'}</strong> {t('intake_privacy')}
+                <strong>{t('intake_privacy_label')}</strong> {t('intake_privacy')}
               </p>
             </div>
           </>

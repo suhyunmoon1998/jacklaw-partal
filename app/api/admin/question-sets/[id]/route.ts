@@ -1,7 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
 import { isAdmin } from '@/lib/adminAuth'
-import { DEFAULT_SET_ID, getQuestionSetDetail, normalizeQuestions, replaceQuestions } from '@/lib/questionSets'
+import {
+  DEFAULT_SET_ID,
+  getQuestionSetDetail,
+  nameTranslationsFrom,
+  normalizeQuestions,
+  replaceQuestions,
+  setNameColumns,
+} from '@/lib/questionSets'
 
 // GET /api/admin/question-sets/[id] — the set and its ordered questions
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
@@ -32,7 +39,11 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     if (!name) return NextResponse.json({ error: 'Name is required.' }, { status: 400 })
     patch.name = name
   }
-  if (typeof body.nameEs === 'string') patch.name_es = body.nameEs.trim() || null
+  // Sent as a whole map, so clearing one language's name is a real edit rather
+  // than an absent key the patch would silently skip.
+  if (body.nameTranslations && typeof body.nameTranslations === 'object') {
+    Object.assign(patch, setNameColumns(nameTranslationsFrom(body.nameTranslations)))
+  }
   if (typeof body.description === 'string') patch.description = body.description.trim()
   if (body.status === 'active' || body.status === 'archived') patch.status = body.status
 

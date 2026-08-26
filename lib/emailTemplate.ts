@@ -1,3 +1,4 @@
+import { Lang } from '@/lib/langs'
 import { QUESTIONNAIRE_SECTIONS } from '@/lib/questionnaireData'
 import { AnswerValue, Question } from '@/types'
 
@@ -198,6 +199,30 @@ const ASSIGNMENT_EMAIL_COPY = {
     emergencyBody: 'Para asuntos urgentes, por favor llame directamente a nuestra oficina.',
     footer: 'Derecho Laboral de California · Confidencial Abogado-Cliente',
   },
+  zh: {
+    title: (s: string) => `${s} — Jack D. Josephson 律师事务所`,
+    greeting: (n: string) => `${n} 您好：`,
+    intro: '本所有几个关于您案件的简短问题想请您回答。',
+    questions: (n: number) => `共 ${n} 题`,
+    autosave: '您的答案会自动保存，中途停下也可以随时回来接着填。',
+    cta: '开始回答',
+    fallback: '如果按钮无法使用，请把下面的网址复制到浏览器中打开：',
+    emergencyTitle: '紧急情况请勿使用本门户或电子邮件。',
+    emergencyBody: '如有急事，请直接致电本所。',
+    footer: '加州劳动法 · 律师与当事人保密',
+  },
+  ko: {
+    title: (s: string) => `${s} — Jack D. Josephson 법률사무소`,
+    greeting: (n: string) => `${n} 님, 안녕하세요.`,
+    intro: '저희 사무실에서 고객님 사건에 대해 짧은 질문 몇 가지를 드리려 합니다.',
+    questions: (n: number) => `총 ${n}문항`,
+    autosave: '답변은 자동으로 저장되므로, 중간에 멈추셨다가 이어서 하셔도 됩니다.',
+    cta: '질문에 답하기',
+    fallback: '버튼이 작동하지 않으면 아래 주소를 브라우저에 붙여넣어 주세요:',
+    emergencyTitle: '긴급한 일에는 이 포털이나 이메일을 사용하지 마세요.',
+    emergencyBody: '급한 사안은 사무실로 직접 전화해 주세요.',
+    footer: '캘리포니아 노동법 · 변호사-의뢰인 비밀유지',
+  },
 } as const
 
 export function generateAssignmentEmailHtml(
@@ -205,12 +230,12 @@ export function generateAssignmentEmailHtml(
   setName: string,
   questionCount: number,
   link: string,
-  lang: 'en' | 'es' = 'en'
+  lang: Lang = 'en'
 ): string {
   const c = ASSIGNMENT_EMAIL_COPY[lang]
   return `
 <!DOCTYPE html>
-<html lang="en">
+<html lang="${lang}">
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1.0"/>

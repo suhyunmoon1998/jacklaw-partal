@@ -1,9 +1,12 @@
 'use client'
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
-import { en, es } from './translations'
+import { DICTIONARIES, en } from './translations'
+import { Lang, isLang } from './langs'
 
-export type Lang = 'en' | 'es'
+export type { Lang, TranslatedLang } from './langs'
+export { LANGUAGES, TRANSLATED_LANGS, isLang } from './langs'
+
 type Dict = typeof en
 
 interface I18nCtx {
@@ -18,8 +21,8 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
   const [lang, setLangState] = useState<Lang>('en')
 
   useEffect(() => {
-    const saved = localStorage.getItem('jlp_lang') as Lang | null
-    if (saved === 'en' || saved === 'es') setLangState(saved)
+    const saved = localStorage.getItem('jlp_lang')
+    if (isLang(saved)) setLangState(saved)
   }, [])
 
   function setLang(l: Lang) {
@@ -27,9 +30,19 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('jlp_lang', l)
   }
 
+  // Screen readers, font fallback and the browser's own translate prompt all
+  // key off this, and the server renders the document as English.
+  useEffect(() => {
+    document.documentElement.lang = lang
+  }, [lang])
+
+  /**
+   * Falls back to English per key rather than per dictionary, so a string added
+   * to `en` and not yet translated shows in English instead of blank.
+   */
   function t(key: keyof Dict): string {
-    const dict = lang === 'es' ? es : en
-    return dict[key] as string
+    const dict = DICTIONARIES[lang] as Dict
+    return (dict[key] as string) || (en[key] as string)
   }
 
   return <I18n.Provider value={{ lang, setLang, t }}>{children}</I18n.Provider>

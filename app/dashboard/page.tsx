@@ -9,6 +9,7 @@ import { Assignment, Session } from '@/types'
 import { QUESTIONNAIRE_SECTIONS } from '@/lib/questionnaireData'
 import { FIRM_PHONE_LABEL, FIRM_PHONE_LABEL_HYPHENATED, FIRM_PHONE_TEL } from '@/lib/contact'
 import { useLanguage } from '@/lib/i18n'
+import { localizeName } from '@/lib/questionLogic'
 
 export default function DashboardPage() {
   const [session, setSession] = useState<Session | null>(null)
@@ -217,7 +218,7 @@ export default function DashboardPage() {
                     <div className="flex items-start justify-between gap-3 mb-2">
                       <div className="min-w-0">
                         <p className="font-semibold text-black truncate">
-                          {(lang === 'es' && a.questionSetNameEs) || a.questionSetName}
+                          {localizeName(a.questionSetName, a.questionSetNameTranslations, lang)}
                         </p>
                         <p className="text-sm text-gray-500 mt-0.5">
                           {a.questionCount} {a.questionCount === 1 ? t('qs_question') : t('qs_questions')}

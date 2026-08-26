@@ -1,4 +1,5 @@
 import { generateAssignmentEmailHtml, generateAssignmentCompletedEmailHtml } from '@/lib/emailTemplate'
+import { Lang, langFromPreferredAnswer } from '@/lib/langs'
 import { getSupabase } from '@/lib/supabase'
 import { AnswerValue, Question } from '@/types'
 
@@ -28,7 +29,7 @@ export async function lookupClientEmail(clientId: string): Promise<string> {
  * on the default intake — the same place their email address comes from.
  * Defaults to English when there is nothing to go on.
  */
-export async function lookupClientLanguage(clientId: string): Promise<'en' | 'es'> {
+export async function lookupClientLanguage(clientId: string): Promise<Lang> {
   const { data } = await getSupabase()
     .from('questionnaire_states')
     .select('answers')
@@ -36,8 +37,15 @@ export async function lookupClientLanguage(clientId: string): Promise<'en' | 'es
     .maybeSingle()
 
   const answers = data?.answers as Record<string, AnswerValue> | undefined
-  const pref = String(answers?.preferred_language ?? '').toLowerCase()
-  return pref === 'spanish' || pref === 'español' || pref === 'espanol' ? 'es' : 'en'
+  return langFromPreferredAnswer(answers?.preferred_language) ?? 'en'
+}
+
+/** How the firm signs off in each client-facing language, for the subject line. */
+const EMAIL_FIRM_NAME: Record<Lang, string> = {
+  en: 'Law Offices of Jack D. Josephson, APC',
+  es: 'Oficinas Legales de Jack D. Josephson, APC',
+  zh: 'Jack D. Josephson 律师事务所',
+  ko: 'Jack D. Josephson 법률사무소',
 }
 
 /** Emails one client the link to their own assignment. Throws on failure so the route can report it. */
@@ -47,7 +55,7 @@ export async function sendAssignmentEmail(opts: {
   setName: string
   questionCount: number
   link: string
-  lang?: 'en' | 'es'
+  lang?: Lang
 }): Promise<void> {
   const apiKey = process.env.RESEND_API_KEY
   const fromEmail = process.env.FIRM_FROM_EMAIL ?? 'onboarding@resend.dev'
@@ -59,10 +67,7 @@ export async function sendAssignmentEmail(opts: {
   const { error } = await resend.emails.send({
     from: `JACKLAW Portal <${fromEmail}>`,
     to: [opts.to],
-    subject:
-      opts.lang === 'es'
-        ? `${opts.setName} — Oficinas Legales de Jack D. Josephson, APC`
-        : `${opts.setName} — Law Offices of Jack D. Josephson, APC`,
+    subject: `${opts.setName} — ${EMAIL_FIRM_NAME[opts.lang ?? 'en']}`,
     html: generateAssignmentEmailHtml(
       opts.clientName,
       opts.setName,

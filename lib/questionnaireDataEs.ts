@@ -11,7 +11,7 @@ export const QUESTIONNAIRE_SECTIONS_ES: QuestionnaireSection[] = [
       { id: 'city_state_zip', label: 'Ciudad, Estado, Código Postal', type: 'text', required: true },
       { id: 'alt_phone', label: 'Número de Teléfono Alternativo', type: 'phone', placeholder: '(555) 000-0000' },
       { id: 'email', label: 'Correo Electrónico', type: 'text', placeholder: 'usted@ejemplo.com' },
-      { id: 'preferred_language', label: 'Idioma Preferido', type: 'select', options: ['Inglés', 'Español', 'Otro'] },
+      { id: 'preferred_language', label: 'Idioma Preferido', type: 'select', options: ['Inglés', 'Español', 'Chino', 'Coreano', 'Otro'] },
     ],
   },
   {

@@ -4,6 +4,7 @@ import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { clearSession } from '@/lib/auth'
 import { useLanguage } from '@/lib/i18n'
+import LanguagePicker from '@/components/LanguagePicker'
 
 interface HeaderProps {
   showLogout?: boolean
@@ -21,7 +22,7 @@ interface HeaderProps {
 
 export default function Header({ showLogout, showBack, backHref, subtitle, beforeLeave }: HeaderProps) {
   const router = useRouter()
-  const { lang, setLang, t } = useLanguage()
+  const { t } = useLanguage()
 
   const handleLogout = async () => {
     if (beforeLeave && !(await beforeLeave())) return
@@ -75,18 +76,12 @@ export default function Header({ showLogout, showBack, backHref, subtitle, befor
         </div>
 
         {/* Right: Language toggle + Logout */}
-        <div className="flex items-center gap-3 justify-end" style={{ minWidth: '5rem' }}>
-          <button
-            onClick={() => setLang(lang === 'en' ? 'es' : 'en')}
-            className="text-white/50 hover:text-gold text-xs font-bold tracking-wider transition-all duration-150 border border-white/20 hover:border-gold/50 px-2 py-1 rounded-lg active:scale-[0.93]"
-            aria-label="Toggle language"
-          >
-            {lang === 'en' ? 'ES' : 'EN'}
-          </button>
+        <div className="flex items-center gap-2 justify-end shrink-0" style={{ minWidth: '5rem' }}>
+          <LanguagePicker />
           {showLogout && (
             <button
               onClick={handleLogout}
-              className="text-white/60 hover:text-white text-sm font-medium transition-all duration-150 active:scale-[0.93]"
+              className="text-white/60 hover:text-white text-sm font-medium whitespace-nowrap transition-all duration-150 active:scale-[0.93]"
             >
               {t('logout')}
             </button>

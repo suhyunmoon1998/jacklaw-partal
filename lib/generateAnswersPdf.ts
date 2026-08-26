@@ -13,6 +13,28 @@ function hasAnswer(val: AnswerValue | undefined): boolean {
   return String(val).trim().length > 0
 }
 
+/**
+ * Characters PDFKit's built-in fonts can actually draw.
+ *
+ * Those fonts are Latin-1: Spanish accents render, Chinese and Korean do not —
+ * they come out blank. The routes translate a client's answers to English
+ * before they reach this file, but a translation can fail (offline, the free
+ * endpoint rate-limited), and a silently blank answer in a case file is worse
+ * than a visible gap.
+ */
+const RENDERABLE = /^[\u0009\u000a\u000d\u0020-\u007e\u00a0-\u017f\u2013\u2014\u2018\u2019\u201c\u201d\u2022\u2026\u20ac]*$/
+
+const UNRENDERABLE_NOTE =
+  '[Answer is in a language this PDF cannot display. Open this client in the portal to read it in English.]'
+
+/** Drops what the font cannot draw. For headings, where a note would not fit. */
+function safeHeading(text: string): string {
+  return text.replace(
+    /[^\u0009\u000a\u000d\u0020-\u007e\u00a0-\u017f\u2013\u2014\u2018\u2019\u201c\u201d\u2022\u2026\u20ac]+/g,
+    ''
+  ).trim()
+}
+
 function formatAnswer(val: AnswerValue | undefined, question: Question): string {
   if (!hasAnswer(val)) return 'Not answered'
   if (Array.isArray(val)) return val.join(', ')
@@ -72,6 +94,8 @@ export function generateAnswersPdf(
     doc.moveDown(1)
 
     let anySections = false
+    /** Set when an answer could not be drawn, so the reader is told why. */
+    let untranslated = false
 
     for (const section of sections) {
       const answered = section.questions.filter(q => hasAnswer(answers[q.id]))
@@ -80,13 +104,17 @@ export function generateAnswersPdf(
 
       ensureSpace(40)
       doc.fillColor(GOLD).font('Helvetica-Bold').fontSize(11)
-        .text(section.title.toUpperCase(), { characterSpacing: 0.5 })
+        .text((safeHeading(section.title) || section.id).toUpperCase(), { characterSpacing: 0.5 })
       doc.moveDown(0.4)
 
       for (const q of answered) {
         ensureSpace(30)
-        doc.fillColor(GRAY).font('Helvetica-Bold').fontSize(9).text(q.label)
-        doc.fillColor('#000000').font('Helvetica').fontSize(10.5).text(formatAnswer(answers[q.id], q))
+        const answer = formatAnswer(answers[q.id], q)
+        const shown = RENDERABLE.test(answer) ? answer : UNRENDERABLE_NOTE
+        if (shown === UNRENDERABLE_NOTE) untranslated = true
+
+        doc.fillColor(GRAY).font('Helvetica-Bold').fontSize(9).text(safeHeading(q.label) || q.id)
+        doc.fillColor('#000000').font('Helvetica').fontSize(10.5).text(shown)
         doc.moveDown(0.5)
       }
       doc.moveDown(0.5)
@@ -94,6 +122,18 @@ export function generateAnswersPdf(
 
     if (!anySections) {
       doc.fillColor(GRAY).font('Helvetica').fontSize(11).text('No answers submitted yet.')
+    }
+
+    if (untranslated) {
+      ensureSpace(40)
+      doc.moveDown(0.5)
+      doc.fillColor(GOLD).font('Helvetica-Bold').fontSize(9)
+        .text('Some answers are missing from this PDF')
+      doc.fillColor(GRAY).font('Helvetica').fontSize(9).text(
+        'This client answered in a language this document cannot display, and the ' +
+        'translation did not come through. Their answers are complete in the portal, ' +
+        'where they are shown in English.'
+      )
     }
 
     const pageCount = doc.bufferedPageRange().count

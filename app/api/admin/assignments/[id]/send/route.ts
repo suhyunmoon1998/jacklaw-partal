@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
 import { isAdmin } from '@/lib/adminAuth'
 import { advancesTo, assignmentLink, getAssignmentDetail } from '@/lib/questionSets'
+import { Lang, isLang } from '@/lib/langs'
+import { localizeName } from '@/lib/questionLogic'
 import { lookupClientEmail, lookupClientLanguage, sendAssignmentEmail } from '@/lib/sendAssignmentEmail'
 import { AssignmentStatus } from '@/types'
 
@@ -30,8 +32,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   const body = await req.json().catch(() => ({}))
   const to = String(body?.email ?? '').trim() || (await lookupClientEmail(assignment.clientId))
-  const lang: 'en' | 'es' =
-    body?.lang === 'es' || body?.lang === 'en' ? body.lang : await lookupClientLanguage(assignment.clientId)
+  const lang: Lang = isLang(body?.lang) ? body.lang : await lookupClientLanguage(assignment.clientId)
   const link = assignmentLink(req.nextUrl.origin, params.id)
 
   if (!to.includes('@')) {
@@ -45,7 +46,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     await sendAssignmentEmail({
       to,
       clientName: assignment.clientName || 'there',
-      setName: (lang === 'es' && assignment.questionSetNameEs) || assignment.questionSetName,
+      setName: localizeName(assignment.questionSetName, assignment.questionSetNameTranslations, lang),
       // The set description is a staff-only note, so it stays out of the client's email.
       questionCount: assignment.questionCount,
       link,

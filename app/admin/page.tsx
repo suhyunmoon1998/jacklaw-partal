@@ -37,20 +37,11 @@ import { QUESTIONNAIRE_SECTIONS } from '@/lib/questionnaireData'
 import { AnswerValue, QuestionnaireState, UploadedDocument } from '@/types'
 import QuestionSetsPanel from '@/components/admin/QuestionSetsPanel'
 import ClientAssignments from '@/components/admin/ClientAssignments'
+import { LANGUAGES, LANG_ENGLISH_NAME } from '@/lib/langs'
+import { submissionLanguage, translateAnswersToEnglish } from '@/lib/machineTranslate'
 
 const DEFAULT_QUESTION_COUNT = QUESTIONNAIRE_SECTIONS.reduce((n, s) => n + s.questions.length, 0)
 
-// Spanish-specific characters that essentially never appear in English answers.
-const SPANISH_HINT = /[áéíóúñ¿¡]/i
-
-function looksSpanish(answers: Record<string, AnswerValue>): boolean {
-  const pref = String(answers.preferred_language ?? '').toLowerCase()
-  if (pref === 'español' || pref === 'spanish') return true
-  return Object.values(answers).some(v => {
-    const text = Array.isArray(v) ? v.join(' ') : String(v ?? '')
-    return SPANISH_HINT.test(text)
-  })
-}
 
 // ─── Admin Login ──────────────────────────────────────────────────────────────
 function AdminLogin({ onLogin }: { onLogin: () => void }) {
@@ -143,32 +134,21 @@ function ClientDetailModal({
 
   const handleTranslate = useCallback(async () => {
     setTranslating(true)
-    const entries = Object.entries(qState.answers)
-    const translated = await Promise.all(entries.map(async ([id, val]) => {
-      const text = Array.isArray(val) ? val.join(', ') : String(val)
-      if (!text || text === 'yes' || text === 'no' || !SPANISH_HINT.test(text)) return [id, text] as const
-      try {
-        const r = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=es|en`)
-        const d = await r.json()
-        return [id, d.responseData?.translatedText ?? text] as const
-      } catch {
-        return [id, text] as const
-      }
-    }))
-    setTranslatedAnswers(Object.fromEntries(translated))
+    setTranslatedAnswers(await translateAnswersToEnglish(qState.answers))
     setTranslating(false)
   }, [qState.answers])
 
-  const clientIsSpanish = looksSpanish(qState.answers)
+  /** The language this client answered in, or null if they answered in English. */
+  const answeredIn = submissionLanguage(qState.answers)
 
-  // Auto-translate as soon as we detect a Spanish-language submission, so staff
-  // see English by default instead of needing to remember to click Translate.
+  // Auto-translate as soon as a non-English submission is detected, so staff
+  // read English by default instead of having to remember to click Translate.
   useEffect(() => {
-    if (clientIsSpanish && Object.keys(qState.answers).length > 0 && !translatedAnswers && !translating) {
+    if (answeredIn && Object.keys(qState.answers).length > 0 && !translatedAnswers && !translating) {
       handleTranslate()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [client.id, clientIsSpanish])
+  }, [client.id, answeredIn])
   const completedPct = qState.submitted
     ? 100
     : Math.round((qState.completedSections.length / totalSections) * 100)
@@ -327,9 +307,13 @@ function ClientDetailModal({
               ) : (
                 <>
                   <div className="flex items-center justify-end gap-2 mb-3">
-                    {clientIsSpanish && (
+                    {answeredIn && (
                       <span className="text-xs text-gray-400">
-                        {translating ? 'Detected Spanish — translating…' : translatedAnswers ? 'Auto-translated from Spanish' : 'Spanish detected'}
+                        {translating
+                          ? `Detected ${LANG_ENGLISH_NAME[answeredIn]} — translating…`
+                          : translatedAnswers
+                          ? `Auto-translated from ${LANG_ENGLISH_NAME[answeredIn]}`
+                          : `${LANG_ENGLISH_NAME[answeredIn]} detected`}
                       </span>
                     )}
                     <button
@@ -352,7 +336,9 @@ function ClientDetailModal({
                           </svg>
                           Translating…
                         </>
-                      ) : translatedAnswers ? 'Show Original' : 'Translate (ES→EN)'}
+                      ) : translatedAnswers ? 'Show Original' : (
+                        `Translate (${(answeredIn && LANGUAGES.find(l => l.code === answeredIn)?.short) ?? 'ES'}→EN)`
+                      )}
                     </button>
                   </div>
                   <div className="space-y-3">

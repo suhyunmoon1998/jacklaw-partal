@@ -15,7 +15,7 @@ import { useRouter } from 'next/navigation'
 import Header from '@/components/Header'
 import MascotWatermark from '@/components/MascotWatermark'
 import { QuestionInput } from '@/components/QuestionField'
-import { hasAnswer, isAnsweredFor, isFieldControl, isVisible, localize } from '@/lib/questionLogic'
+import { hasAnswer, isAnsweredFor, isFieldControl, isVisible, localize, localizeName } from '@/lib/questionLogic'
 import { getSession } from '@/lib/auth'
 import { useLanguage } from '@/lib/i18n'
 import { AnswerValue, AssignmentDetail, Session } from '@/types'
@@ -79,7 +79,7 @@ export default function AssignmentQuestionnairePage({
 
   const readOnly = assignment?.status === 'completed'
   const setTitle = assignment
-    ? (lang === 'es' && assignment.questionSetNameEs) || assignment.questionSetName
+    ? localizeName(assignment.questionSetName, assignment.questionSetNameTranslations, lang)
     : ''
 
   /**

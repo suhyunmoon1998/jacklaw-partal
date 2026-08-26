@@ -7,6 +7,7 @@
  * questionnaire's.
  */
 
+import { Lang, TranslatedLang } from '@/lib/langs'
 import { AnswerValue, Question, QuestionnaireSection } from '@/types'
 
 export function isVisible(
@@ -51,28 +52,46 @@ export function isFieldControl(type: Question['type']): boolean {
 /**
  * The question as one client should see it.
  *
- * Question sets are authored in English and carry optional Spanish in `es`;
- * anything untranslated falls back to the English so a half-translated set is
- * still usable rather than blank.
+ * Question sets are authored in English and carry optional translations under
+ * a key per language; anything untranslated falls back to the English so a
+ * half-translated set is still usable rather than blank.
  *
  * `optionLabels` is deliberately separate from `options`: the English option
- * strings stay the stored answer, so a Spanish-speaking client's multiple
- * choice answers reach the firm in English and never mix languages in the
- * record. Free text is of course whatever the client typed.
+ * strings stay the stored answer, so a client's multiple choice answers reach
+ * the firm in English and never mix languages in the record, whichever
+ * language they read the question in. Free text is of course whatever the
+ * client typed.
  */
-export function localize(q: Question, lang: 'en' | 'es'): Question & { optionLabels?: string[] } {
-  if (lang !== 'es' || !q.es) return q
+export function localize(q: Question, lang: Lang): Question & { optionLabels?: string[] } {
+  if (lang === 'en') return q
+  const t = q[lang as TranslatedLang]
+  if (!t) return q
 
   const optionLabels =
-    q.options && q.es.options && q.es.options.length === q.options.length
-      ? q.es.options
+    q.options && t.options && t.options.length === q.options.length
+      ? t.options
       : q.options
 
   return {
     ...q,
-    label: q.es.label || q.label,
-    helpText: q.es.helpText || q.helpText,
-    placeholder: q.es.placeholder || q.placeholder,
+    label: t.label || q.label,
+    helpText: t.helpText || q.helpText,
+    placeholder: t.placeholder || q.placeholder,
     optionLabels,
   }
+}
+
+/**
+ * A question set's name as one client should see it.
+ *
+ * Untranslated sets — and every set, in English — fall back to the name the
+ * firm gave it, which is also what staff see in the admin panel.
+ */
+export function localizeName(
+  name: string,
+  translations: Partial<Record<TranslatedLang, string>> | undefined,
+  lang: Lang
+): string {
+  if (lang === 'en') return name
+  return translations?.[lang as TranslatedLang]?.trim() || name
 }

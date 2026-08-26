@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
 import { isAdmin } from '@/lib/adminAuth'
-import { getQuestionSetDetail, replaceQuestions } from '@/lib/questionSets'
+import { getQuestionSetDetail, replaceQuestions, setNameColumns } from '@/lib/questionSets'
 
 // POST /api/admin/question-sets/[id]/duplicate  { name? }
 // Also the way to fork the built-in onboarding questionnaire into an editable set.
@@ -16,7 +16,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   const { data: set, error } = await getSupabase()
     .from('question_sets')
-    .insert({ name, name_es: source.nameEs || null, description: source.description })
+    .insert({ name, ...setNameColumns(source.nameTranslations), description: source.description })
     .select()
     .single()
 

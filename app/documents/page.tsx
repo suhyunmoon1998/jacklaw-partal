@@ -7,6 +7,7 @@ import { getSession } from '@/lib/auth'
 import { DOCUMENT_CATEGORIES } from '@/lib/mockData'
 import { Session, UploadedDocument } from '@/types'
 import { useLanguage } from '@/lib/i18n'
+import { documentCategoryLabel } from '@/lib/documentCategories'
 
 export default function DocumentsPage() {
   const [session, setSession] = useState<Session | null>(null)
@@ -17,7 +18,7 @@ export default function DocumentsPage() {
   const fileRef = useRef<HTMLInputElement>(null)
   const cameraRef = useRef<HTMLInputElement>(null)
   const router = useRouter()
-  const { t } = useLanguage()
+  const { t, lang } = useLanguage()
 
   useEffect(() => {
     const s = getSession()
@@ -120,7 +121,7 @@ export default function DocumentsPage() {
               className="input-field appearance-none bg-white"
             >
               {DOCUMENT_CATEGORIES.map(cat => (
-                <option key={cat} value={cat}>{cat}</option>
+                <option key={cat} value={cat}>{documentCategoryLabel(cat, lang)}</option>
               ))}
             </select>
           </div>
@@ -213,7 +214,7 @@ export default function DocumentsPage() {
                 if (!catDocs?.length) return null
                 return (
                   <div key={cat}>
-                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">{cat}</p>
+                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">{documentCategoryLabel(cat, lang)}</p>
                     <div className="space-y-2">
                       {catDocs.map((doc, i) => {
                         const globalIndex = documents.indexOf(doc)
@@ -266,7 +267,7 @@ export default function DocumentsPage() {
                       </svg>
                     )}
                   </div>
-                  <span className={`text-sm ${uploaded ? 'text-green-700 line-through' : 'text-gray-600'}`}>{cat}</span>
+                  <span className={`text-sm ${uploaded ? 'text-green-700 line-through' : 'text-gray-600'}`}>{documentCategoryLabel(cat, lang)}</span>
                 </div>
               )
             })}

@@ -1,10 +1,11 @@
 /**
  * Visual metadata for the intake questionnaire.
  *
- * The questionnaire data itself (EN + ES) is untouched — this file only adds a
- * chapter grouping and an icon per section so the 20 sections stop looking
- * identical to each other. Keyed by section id, which is shared between
- * questionnaireData.ts and questionnaireDataEs.ts.
+ * The questionnaire data itself is untouched — this file only adds a chapter
+ * grouping and an icon per section so the 20 sections stop looking identical to
+ * each other. Keyed by section id, which every language's file shares, so one
+ * entry here serves all of them. The chapter names are dictionary keys rather
+ * than text, for the same reason.
  */
 
 export type ChapterId = 'basics' | 'pay' | 'records' | 'events' | 'wrap'

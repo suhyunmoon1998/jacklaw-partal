@@ -1,7 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
 import { isAdmin } from '@/lib/adminAuth'
-import { defaultQuestionSet, listQuestionSets, normalizeQuestions, replaceQuestions } from '@/lib/questionSets'
+import {
+  defaultQuestionSet,
+  listQuestionSets,
+  nameTranslationsFrom,
+  normalizeQuestions,
+  replaceQuestions,
+  setNameColumns,
+} from '@/lib/questionSets'
 
 // GET /api/admin/question-sets — every reusable set, plus the built-in default
 export async function GET(req: NextRequest) {
@@ -31,7 +38,7 @@ export async function POST(req: NextRequest) {
     .from('question_sets')
     .insert({
       name,
-      name_es: String(body.nameEs ?? '').trim() || null,
+      ...setNameColumns(nameTranslationsFrom(body.nameTranslations)),
       description: String(body.description ?? '').trim(),
     })
     .select()

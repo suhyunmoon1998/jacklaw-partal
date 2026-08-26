@@ -47,6 +47,8 @@ create table if not exists question_sets (
   id          uuid primary key default gen_random_uuid(),
   name        text not null,
   name_es     text,                       -- shown to clients reading in Spanish
+  name_zh     text,                       -- ... in Chinese
+  name_ko     text,                       -- ... in Korean
   description text not null default '',
   status      text not null default 'active' check (status in ('active', 'archived')),
   is_default  boolean not null default false,
@@ -56,10 +58,12 @@ create table if not exists question_sets (
 
 -- One row per question. `question` holds the same shape the portal renders:
 -- { id, label, type, required, options, placeholder, helpText, showIf }
--- plus optional Spanish in `es`: { label, helpText, placeholder, options }.
--- The Spanish options are display labels only — matched to the English ones by
--- position — so a Spanish-speaking client's choices are still recorded in
--- English and the office never reads a record in two languages.
+-- plus an optional translation per language, keyed by its code:
+--   es / zh / ko: { label, helpText, placeholder, options }
+-- The translated options are display labels only — matched to the English ones
+-- by position — so a client's choices are still recorded in English whichever
+-- language they read the question in, and the office never reads one record in
+-- four languages.
 create table if not exists question_set_questions (
   id              uuid primary key default gen_random_uuid(),
   question_set_id uuid not null references question_sets(id) on delete cascade,

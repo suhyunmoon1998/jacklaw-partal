@@ -74,8 +74,8 @@ export default function SubmittedPage() {
 
           <div className="mt-6 bg-red-50 border border-red-200 rounded-xl p-4">
             <p className="text-red-700 text-sm text-center">
-              <strong>Do not use this portal for emergencies.</strong><br />
-              Call our office directly for urgent matters.
+              <strong>{t('no_emergency')}</strong><br />
+              {t('no_emergency_sub')}
             </p>
           </div>
 

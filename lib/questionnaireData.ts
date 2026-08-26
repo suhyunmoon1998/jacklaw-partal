@@ -16,7 +16,7 @@ export const QUESTIONNAIRE_SECTIONS: QuestionnaireSection[] = [
       { id: 'city_state_zip', label: 'City, State, ZIP Code', type: 'text', required: true },
       { id: 'alt_phone', label: 'Alternative Phone Number', type: 'phone', placeholder: '(555) 000-0000' },
       { id: 'email', label: 'Email Address', type: 'text', placeholder: 'you@example.com' },
-      { id: 'preferred_language', label: 'Preferred Language', type: 'select', options: ['English', 'Spanish', 'Other'] },
+      { id: 'preferred_language', label: 'Preferred Language', type: 'select', options: ['English', 'Spanish', 'Chinese', 'Korean', 'Other'] },
     ],
   },
   {

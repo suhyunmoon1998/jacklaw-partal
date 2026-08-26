@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { normalizePhone, setSession, getSession, formatPhone } from '@/lib/auth'
 import { FIRM_PHONE_LABEL, FIRM_PHONE_TEL } from '@/lib/contact'
 import { useLanguage } from '@/lib/i18n'
+import LanguagePicker from '@/components/LanguagePicker'
 
 /**
  * Where to land after signing in. An emailed question-set link sends the client
@@ -33,7 +34,7 @@ export default function LoginPage() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const router = useRouter()
-  const { lang, setLang, t } = useLanguage()
+  const { t } = useLanguage()
 
   useEffect(() => {
     const session = getSession()
@@ -79,13 +80,10 @@ export default function LoginPage() {
             <p className="text-white/60 text-sm font-medium">Law Offices of Jack D. Josephson, APC</p>
             <p className="text-gold/90 text-xs mt-0.5 tracking-wider uppercase">Client Portal</p>
           </div>
-          {/* Language toggle */}
-          <button
-            onClick={() => setLang(lang === 'en' ? 'es' : 'en')}
-            className="animate-glow mt-2 bg-gold text-white text-sm font-bold tracking-wider border-2 border-gold hover:bg-gold-dark px-6 py-2.5 rounded-full transition-all duration-150 ease-out hover:-translate-y-0.5 active:scale-[0.97]"
-          >
-            {lang === 'en' ? 'Español' : 'English'}
-          </button>
+          {/* Language choice, in every language, before anything has to be read */}
+          <div className="mt-2">
+            <LanguagePicker variant="row" />
+          </div>
         </div>
       </header>
 

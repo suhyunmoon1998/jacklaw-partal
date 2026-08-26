@@ -1,3 +1,5 @@
+import { TranslatedLang } from '@/lib/langs'
+
 export interface MockClient {
   id: string
   name: string
@@ -33,11 +35,12 @@ export interface ShowIfCondition {
 }
 
 /**
- * Spanish text for one question.
+ * One question, written in a language other than the English it is authored in.
  *
  * Only what a client reads is translated. `options` is display text matched to
  * the English options BY POSITION — the English string stays the stored answer,
- * so a Spanish-speaking client's choices arrive in the office in English.
+ * so a client answering in any language has their choices arrive in the office
+ * in English.
  */
 export interface QuestionTranslation {
   label?: string
@@ -55,8 +58,19 @@ export interface Question {
   placeholder?: string
   helpText?: string
   showIf?: ShowIfCondition
-  /** Optional Spanish for question sets. The default questionnaire uses a separate file. */
+  /**
+   * Optional translations for question sets, one key per non-English language.
+   * The default onboarding questionnaire is translated in files of its own
+   * instead (lib/questionnaireData*.ts).
+   *
+   * These are sibling keys rather than a nested map because they live inside
+   * the `question` jsonb of rows that were written when `es` was the only
+   * translation there was. A set the firm translated into Spanish before
+   * Chinese and Korean existed keeps rendering with no migration.
+   */
   es?: QuestionTranslation
+  zh?: QuestionTranslation
+  ko?: QuestionTranslation
 }
 
 export interface QuestionnaireSection {
@@ -115,8 +129,11 @@ export type QuestionSetStatus = 'active' | 'archived'
 export interface QuestionSet {
   id: string
   name: string
-  /** Spanish name shown to clients who read the portal in Spanish. */
-  nameEs: string
+  /**
+   * The set's name in each language it has been translated into. Absent keys
+   * fall back to `name`, so an English-only set needs nothing here.
+   */
+  nameTranslations: Partial<Record<TranslatedLang, string>>
   description: string
   status: QuestionSetStatus
   isDefault: boolean
@@ -137,7 +154,7 @@ export interface Assignment {
   clientId: string
   questionSetId: string
   questionSetName: string
-  questionSetNameEs: string
+  questionSetNameTranslations: Partial<Record<TranslatedLang, string>>
   questionSetDescription: string
   questionCount: number
   status: AssignmentStatus
