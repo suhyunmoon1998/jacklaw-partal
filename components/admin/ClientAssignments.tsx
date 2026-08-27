@@ -64,6 +64,15 @@ export default function ClientAssignments({
   /** Kept apart from the cache above so the toggle can go both ways. */
   const [viewOriginal, setViewOriginal] = useState(false)
   const [sending, setSending] = useState<{ assignment: Assignment; email: string; link: string; lang: Lang } | null>(null)
+  /**
+   * Why a send failed, shown inside the send dialog.
+   *
+   * `notice` renders in the panel's normal flow, which is behind this dialog's
+   * overlay — so reporting a failure there looked to the office like the button
+   * did nothing at all, and they pressed it again and again.
+   */
+  const [sendError, setSendError] = useState('')
+  const [sendingNow, setSendingNow] = useState(false)
   const [notice, setNotice] = useState('')
   const [banks, setBanks] = useState<RecommendedBank[]>([])
 
@@ -155,24 +164,35 @@ export default function ClientAssignments({
     const res = await fetch(`/api/admin/assignments/${assignment.id}/send`, { headers: adminHeaders })
     const body = await res.json().catch(() => ({}))
     setBusy(null)
+    setSendError('')
     setSending({ assignment, email: body.email ?? '', link: body.link ?? '', lang: toLang(body.lang) })
   }
 
   const handleSend = async () => {
-    if (!sending) return
-    setBusy(sending.assignment.id)
+    if (!sending || sendingNow) return
+    setSendingNow(true)
+    setSendError('')
+
     const res = await fetch(`/api/admin/assignments/${sending.assignment.id}/send`, {
       method: 'POST',
       headers: adminHeaders,
       body: JSON.stringify({ email: sending.email, lang: sending.lang }),
-    })
-    const body = await res.json().catch(() => ({}))
-    setBusy(null)
-    if (!res.ok) {
-      setNotice(body.error ?? 'Could not send.')
+    }).catch(() => null)
+
+    setSendingNow(false)
+
+    if (!res) {
+      setSendError('Could not reach the server. Check your connection and try again.')
       return
     }
+    const body = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      setSendError(body.error ?? 'Could not send the email.')
+      return
+    }
+
     setSending(null)
+    setSendError('')
     setNotice(`Sent to ${body.email} in ${LANG_ENGLISH_NAME[toLang(body.lang)]}.`)
     load()
   }
@@ -467,7 +487,7 @@ export default function ClientAssignments({
       {/* Send dialog */}
       {sending && (
         <ModalPortal>
-        <div className="fixed inset-0 bg-black/70 z-[60] flex items-center justify-center p-4" onClick={() => setSending(null)}>
+        <div className="fixed inset-0 bg-black/70 z-[60] flex items-center justify-center p-4" onClick={() => { setSending(null); setSendError('') }}>
           <div className="bg-white rounded-2xl w-full max-w-md p-5 shadow-2xl animate-modal-in" onClick={e => e.stopPropagation()}>
             <h3 className="font-bold text-black">Send “{sending.assignment.questionSetName}”</h3>
             <p className="text-xs text-gray-400 mt-0.5 mb-4">To {clientName}. This link opens only this question set.</p>
@@ -504,16 +524,36 @@ export default function ClientAssignments({
 
             <p className="mt-3 text-[11px] text-gray-400 break-all bg-gray-50 rounded-lg p-2">{sending.link}</p>
 
+            {sendError && (
+              <div className="mt-3 bg-red-50 border border-red-200 rounded-xl px-3.5 py-2.5">
+                <p className="text-sm text-red-700 font-semibold">The email was not sent.</p>
+                <p className="text-xs text-red-600 mt-1">{sendError}</p>
+                <p className="text-xs text-red-500 mt-2">
+                  The questionnaire itself is still assigned. Use Copy Link and send it yourself in
+                  the meantime.
+                </p>
+              </div>
+            )}
+
             <div className="flex justify-end gap-2 mt-4">
-              <button onClick={() => setSending(null)} className="px-4 py-2.5 text-sm font-semibold text-gray-500 hover:text-black">
+              <button
+                onClick={() => { setSending(null); setSendError('') }}
+                className="px-4 py-2.5 text-sm font-semibold text-gray-500 hover:text-black"
+              >
                 Cancel
               </button>
               <button
                 onClick={handleSend}
-                disabled={!sending.email.includes('@')}
-                className="bg-gold text-white px-5 py-2.5 rounded-xl text-sm font-semibold hover:bg-gold-dark transition-colors disabled:opacity-40"
+                disabled={sendingNow || !sending.email.includes('@')}
+                className="bg-gold text-white px-5 py-2.5 rounded-xl text-sm font-semibold hover:bg-gold-dark transition-colors disabled:opacity-40 flex items-center gap-2"
               >
-                Send Email
+                {sendingNow && (
+                  <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                )}
+                {sendingNow ? 'Sending…' : sendError ? 'Try again' : 'Send Email'}
               </button>
             </div>
           </div>
