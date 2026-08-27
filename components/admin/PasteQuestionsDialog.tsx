@@ -203,7 +203,8 @@ export default function PasteQuestionsDialog({
 
   return (
     <ModalPortal>
-    <div className="fixed inset-0 bg-black/70 z-[70] flex items-center justify-center p-3 sm:p-4" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/70 z-[70] overflow-y-auto overscroll-contain" onClick={onClose}>
+      <div className="flex min-h-full items-center justify-center p-3 sm:p-4">
       <div
         className="bg-white rounded-2xl w-full max-w-3xl max-h-[92vh] flex flex-col shadow-2xl animate-modal-in overflow-hidden"
         onClick={e => e.stopPropagation()}
@@ -236,7 +237,7 @@ export default function PasteQuestionsDialog({
         {/* ── Paste ── */}
         {stage === 'paste' ? (
           <>
-            <div className="flex-1 overflow-y-auto p-5">
+            <div className="flex-1 min-h-0 overflow-y-auto p-5">
               <p className="text-sm text-gray-500 mb-3">
                 Paste the questions — from an email, a document, a discovery request. The
                 wording, the question type and the answer choices are worked out for you,
@@ -249,7 +250,7 @@ export default function PasteQuestionsDialog({
                 onDrop={handleDrop}
                 onDragOver={e => { e.preventDefault(); setDragging(true) }}
                 onDragLeave={() => setDragging(false)}
-                rows={14}
+                rows={10}
                 placeholder={'1. What time did you actually start and stop work each day?\n2. Were you given a 30-minute meal break? Yes/No\n3. Which of these do you still have: paystubs, schedules, text messages…'}
                 className={`input-field resize-none font-mono text-[13px] leading-relaxed transition-colors ${
                   dragging ? 'border-gold bg-gold/5' : ''
@@ -281,7 +282,7 @@ export default function PasteQuestionsDialog({
         ) : (
           /* ── Review ── */
           <>
-            <div className="flex-1 overflow-y-auto p-5 space-y-4">
+            <div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-4">
               <div className="flex flex-wrap items-end gap-3">
                 <div className="flex-1 min-w-[200px]">
                   <label className="block text-xs font-semibold text-gray-500 mb-1.5">Name of this batch</label>
@@ -476,6 +477,7 @@ export default function PasteQuestionsDialog({
             </div>
           </>
         )}
+      </div>
       </div>
     </div>
     </ModalPortal>

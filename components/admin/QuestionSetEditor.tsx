@@ -381,7 +381,7 @@ export default function QuestionSetEditor({
             </p>
           </div>
         ) : (
-          <div className="flex-1 overflow-y-auto p-5 space-y-5">
+          <div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-5">
             <div className="grid sm:grid-cols-3 gap-4">
               <div>
                 <label className="block text-xs font-semibold text-gray-500 mb-1.5">Question Set Name</label>

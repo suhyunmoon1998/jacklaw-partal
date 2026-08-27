@@ -560,7 +560,7 @@ export default function ClientAssignments({
                 </button>
               </div>
             )}
-            <div className="flex-1 overflow-y-auto divide-y divide-gray-50">
+            <div className="flex-1 min-h-0 overflow-y-auto divide-y divide-gray-50">
               {viewing.questions.map(q => {
                 const val = viewing.answers[q.id]
                 // The translated text is already flattened, so a multiselect
