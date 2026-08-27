@@ -11,6 +11,7 @@ create table if not exists clients (
   case_type   text not null,
   onboarding_status text not null default 'not_started',
   case_name   text,
+  portal_lang text,                     -- language they picked in the portal
   created_at  timestamptz not null default now()
 );
 

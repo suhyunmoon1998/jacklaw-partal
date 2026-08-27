@@ -290,7 +290,7 @@ export default function QuestionnairePage() {
     <div className="relative min-h-screen bg-gray-50 flex flex-col">
       <MascotWatermark />
 
-      <div className="relative z-10">
+      <div className="relative z-20">
         <Header showBack backHref="/dashboard" showLogout subtitle="Questionnaire" />
       </div>
 

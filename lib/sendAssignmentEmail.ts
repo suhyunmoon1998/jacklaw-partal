@@ -1,5 +1,5 @@
 import { generateAssignmentEmailHtml, generateAssignmentCompletedEmailHtml } from '@/lib/emailTemplate'
-import { Lang, langFromPreferredAnswer } from '@/lib/langs'
+import { Lang, isLang, langFromPreferredAnswer } from '@/lib/langs'
 import { getSupabase } from '@/lib/supabase'
 import { AnswerValue, Question } from '@/types'
 
@@ -25,18 +25,24 @@ export async function lookupClientEmail(clientId: string): Promise<string> {
 /**
  * Which language to write to this client in.
  *
- * The clients table has no language column, so this reads the answer they gave
- * on the default intake — the same place their email address comes from.
- * Defaults to English when there is nothing to go on.
+ * Two signals, and they are not equally good. `clients.portal_lang` is the
+ * language they picked in the portal and have been reading in since — a live
+ * fact about this person. The intake's "Preferred Language" answer is a box
+ * they ticked once and is empty for anyone who never finished the intake. So
+ * the portal wins, the intake answer is the fallback, and English is the
+ * fallback's fallback.
  */
 export async function lookupClientLanguage(clientId: string): Promise<Lang> {
-  const { data } = await getSupabase()
-    .from('questionnaire_states')
-    .select('answers')
-    .eq('client_id', clientId)
-    .maybeSingle()
+  const supabase = getSupabase()
 
-  const answers = data?.answers as Record<string, AnswerValue> | undefined
+  const [{ data: client }, { data: state }] = await Promise.all([
+    supabase.from('clients').select('portal_lang').eq('id', clientId).maybeSingle(),
+    supabase.from('questionnaire_states').select('answers').eq('client_id', clientId).maybeSingle(),
+  ])
+
+  if (isLang(client?.portal_lang)) return client.portal_lang
+
+  const answers = state?.answers as Record<string, AnswerValue> | undefined
   return langFromPreferredAnswer(answers?.preferred_language) ?? 'en'
 }
 

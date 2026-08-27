@@ -39,8 +39,12 @@ export default function Header({ showLogout, showBack, backHref, subtitle, befor
     }
   }
 
+  // Positioned above the page: the language menu drops out of this header over
+  // the content below, and a static header leaves it behind main's own stacking
+  // context — the last option ends up under a card and unclickable. Kept below
+  // the modal layers, which stay on top of everything.
   return (
-    <header className="bg-black shadow-sm border-b border-white/10">
+    <header className="relative z-50 bg-black shadow-sm border-b border-white/10">
       <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between">
         {/* Left: Back button or spacer */}
         <div className="w-20">

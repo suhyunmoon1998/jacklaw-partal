@@ -67,7 +67,7 @@ export default function DashboardPage() {
     <div className="relative min-h-screen bg-gray-50 flex flex-col animate-fade-in">
       <MascotWatermark />
 
-      <div className="relative z-10">
+      <div className="relative z-20">
         <Header showLogout />
       </div>
 

@@ -17,7 +17,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod'
 import { z } from 'zod'
-import { Lang, LANGUAGES, LANG_ENGLISH_NAME, TranslatedLang } from '@/lib/langs'
+import { Lang, LANG_ENGLISH_NAME, TranslatedLang } from '@/lib/langs'
 import { Question, QuestionType } from '@/types'
 
 /**
@@ -78,9 +78,24 @@ export interface GeneratedResult {
   translatedInto: Lang | null
 }
 
+/**
+ * How each language is described to the model.
+ *
+ * The picker's own label is not enough: "中文" leaves the variety open and comes
+ * back in Traditional, which is not what the rest of the portal is written in.
+ * These match the register the translated questionnaires already use, so a
+ * generated question reads like the ones beside it.
+ */
+const TARGET_DESCRIPTION: Record<TranslatedLang, string> = {
+  es: 'Latin American Spanish, addressing the client as "usted"',
+  zh: 'Simplified Chinese (简体中文) as written in mainland China — never Traditional characters',
+  ko: 'Korean, in formal 존댓말 as a law office would address a client',
+}
+
 function systemPrompt(target: Lang): string {
   const translating = target !== 'en'
-  const targetName = LANGUAGES.find(l => l.code === target)?.label ?? 'English'
+  const targetName =
+    target === 'en' ? 'English' : TARGET_DESCRIPTION[target as TranslatedLang]
 
   return `You convert text a law firm's staff pasted in into questions for a client questionnaire.
 

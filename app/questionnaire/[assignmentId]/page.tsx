@@ -289,7 +289,7 @@ export default function AssignmentQuestionnairePage({
     return (
       <div className="relative min-h-screen bg-gray-50 flex flex-col">
         <MascotWatermark />
-        <div className="relative z-10">
+        <div className="relative z-20">
           <Header showBack backHref="/dashboard" showLogout />
         </div>
         <main className="relative z-10 flex-1 px-4 pt-10 max-w-md mx-auto w-full">
@@ -315,7 +315,7 @@ export default function AssignmentQuestionnairePage({
     <div className="relative min-h-screen bg-gray-50 flex flex-col">
       <MascotWatermark />
 
-      <div className="relative z-10">
+      <div className="relative z-20">
         <Header
           showBack
           backHref="/dashboard"
