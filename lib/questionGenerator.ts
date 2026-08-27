@@ -86,7 +86,7 @@ export interface GeneratedResult {
  * These match the register the translated questionnaires already use, so a
  * generated question reads like the ones beside it.
  */
-const TARGET_DESCRIPTION: Record<TranslatedLang, string> = {
+export const TARGET_DESCRIPTION: Record<TranslatedLang, string> = {
   es: 'Latin American Spanish, addressing the client as "usted"',
   zh: 'Simplified Chinese (简体中文) as written in mainland China — never Traditional characters',
   ko: 'Korean, in formal 존댓말 as a law office would address a client',

@@ -15,6 +15,7 @@ export default function QuestionSetsPanel({ onChanged }: { onChanged?: () => voi
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState<{ id: string | null } | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
+  const [notice, setNotice] = useState('')
 
   const load = useCallback(async () => {
     const res = await fetch('/api/admin/question-sets', {
@@ -78,6 +79,13 @@ export default function QuestionSetsPanel({ onChanged }: { onChanged?: () => voi
 
   return (
     <>
+      {notice && (
+        <div className="mb-3 bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 flex items-start justify-between gap-3">
+          <p className="text-sm text-blue-800">{notice}</p>
+          <button onClick={() => setNotice('')} className="text-blue-400 hover:text-blue-700 text-sm shrink-0">✕</button>
+        </div>
+      )}
+
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
           <div>
@@ -172,7 +180,18 @@ export default function QuestionSetsPanel({ onChanged }: { onChanged?: () => voi
         <QuestionSetEditor
           setId={editing.id}
           onClose={() => setEditing(null)}
-          onSaved={() => { setEditing(null); refresh() }}
+          onSaved={drafted => {
+            setEditing(null)
+            refresh()
+            // Machine-drafted translations are a starting point, so say so
+            // rather than letting them go out as if a person had written them.
+            if (drafted) {
+              setNotice(
+                `Saved. ${drafted} translation${drafted === 1 ? ' was' : 's were'} drafted automatically ` +
+                `so no client sees this set in English — open it and check them under each language tab.`
+              )
+            }
+          }}
         />
       )}
     </>

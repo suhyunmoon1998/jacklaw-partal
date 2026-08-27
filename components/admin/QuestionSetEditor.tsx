@@ -12,7 +12,6 @@ import { useEffect, useState } from 'react'
 import { MOCK_ADMIN_PASSWORD } from '@/lib/mockData'
 import { Question, QuestionSetDetail, QuestionType } from '@/types'
 import { LANGUAGES, TRANSLATED_LANGS, TranslatedLang } from '@/lib/langs'
-import { machineTranslate } from '@/lib/machineTranslate'
 import type { RecommendedBank } from '@/lib/recommendedQuestions'
 
 /** The non-English languages, in the order the tabs show them. */
@@ -150,7 +149,8 @@ export default function QuestionSetEditor({
   /** null creates a new set. */
   setId: string | null
   onClose: () => void
-  onSaved: () => void
+  /** `draftedCount` is how many translations were filled in automatically. */
+  onSaved: (draftedCount?: number) => void
 }) {
   const [name, setName] = useState('')
   const [nameTranslations, setNameTranslations] = useState<Partial<Record<TranslatedLang, string>>>({})
@@ -168,6 +168,8 @@ export default function QuestionSetEditor({
   const [picked, setPicked] = useState<Set<string>>(new Set())
   const [transOpen, setTransOpen] = useState<Set<string>>(new Set())
   const [translating, setTranslating] = useState(false)
+  /** Filling in what was left untranslated, on the way to saving. */
+  const [drafting, setDrafting] = useState(false)
   /**
    * The language the editor is currently being written in. One shared tab
    * rather than one per question: staff translate a set a language at a time,
@@ -257,41 +259,85 @@ export default function QuestionSetEditor({
       prev.map(q => (q.key === key ? { ...q, [lang]: { ...(q[lang] ?? {}), ...patch } } : q))
     )
 
+  /**
+   * Whether this question still needs work in one language.
+   *
+   * A label is the minimum; help text and options count too, because a question
+   * whose choices are in English is answered in English no matter how well the
+   * question itself reads.
+   */
+  const missingFor = (q: Draft, lang: TranslatedLang): boolean => {
+    const t = q[lang]
+    if (!t?.label?.trim()) return true
+    if (q.helpText && !t.helpText?.trim()) return true
+    if (q.options?.length && t.options?.length !== q.options.length) return true
+    return false
+  }
+
   /** Which languages a question already has a translated label in. */
   const translatedIn = (q: Draft) => TRANSLATION_TABS.filter(tab => q[tab.code]?.label?.trim())
 
   /**
-   * Machine translation as a STARTING POINT only, into the language whose tab
-   * is open. Staff review and correct it before the set goes out; nothing here
-   * reaches a client unreviewed, because saving is still a deliberate click.
+   * Asks for the fields this language is still missing, and fills only those.
    *
-   * Only empty fields are filled, so running it again after correcting a
-   * translation never overwrites the corrected text.
+   * A starting point, not a finished translation — but it is the same engine
+   * that writes the questions in the paste-and-generate flow, so a set built by
+   * hand reads the way a generated one does. A translation staff have already
+   * corrected is never sent, so running this again cannot undo their work.
    */
+  const draftMissing = async (
+    langs: TranslatedLang[],
+    { silent = false } = {}
+  ): Promise<{ filled: number; questions: Draft[] }> => {
+    const needing = questions.filter(q => q.label.trim() && langs.some(l => missingFor(q, l)))
+    if (needing.length === 0) return { filled: 0, questions }
+
+    const res = await fetch('/api/admin/questions/translate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-admin-key': MOCK_ADMIN_PASSWORD },
+      body: JSON.stringify({
+        langs,
+        questions: needing.map(q => ({
+          id: q.id, label: q.label, helpText: q.helpText, options: q.options,
+        })),
+      }),
+    }).catch(() => null)
+
+    if (!res?.ok) {
+      const body = await res?.json().catch(() => ({}))
+      if (!silent) setError(body?.error ?? 'Could not draft the translations.')
+      return { filled: 0, questions }
+    }
+
+    const { translations } = (await res.json()) as {
+      translations: Record<string, Partial<Record<TranslatedLang, NonNullable<Draft['es']>>>>
+    }
+
+    let filled = 0
+    const merged = questions.map(q => {
+      const forQuestion = translations[q.id]
+      if (!forQuestion) return q
+      const next = { ...q }
+      for (const lang of langs) {
+        const drafted = forQuestion[lang]
+        if (!drafted || !missingFor(q, lang)) continue
+        // Merge under what is already there: corrections win over drafts.
+        next[lang] = { ...drafted, ...(q[lang] ?? {}) }
+        filled++
+      }
+      return next
+    })
+
+    setQuestions(merged)
+    return { filled, questions: merged }
+  }
+
   const autoTranslate = async () => {
     setTranslating(true)
-    const lang = transLang
-    const draft = (text: string) => machineTranslate(text, 'en', lang)
-
-    const filled = await Promise.all(
-      questions.map(async q => {
-        if (!q.label.trim()) return q
-        const next = { ...(q[lang] ?? {}) }
-        if (!next.label) next.label = (await draft(q.label)) || undefined
-        if (q.helpText && !next.helpText) next.helpText = (await draft(q.helpText)) || undefined
-        if (q.options?.length && !next.options?.length) {
-          const opts = await Promise.all(q.options.map(o => draft(o)))
-          // Options are matched to the English by position, so a partial result
-          // would pair the wrong label with the wrong stored answer.
-          if (opts.every(Boolean)) next.options = opts
-        }
-        return { ...q, [lang]: next }
-      })
-    )
-
-    setQuestions(filled)
+    setError('')
+    const { filled, questions: updated } = await draftMissing([transLang])
     setTranslating(false)
-    setTransOpen(new Set(filled.map(q => q.key)))
+    if (filled > 0) setTransOpen(new Set(updated.map(q => q.key)))
   }
 
   const move = (index: number, delta: number) =>
@@ -312,12 +358,28 @@ export default function QuestionSetEditor({
     setSaving(true)
     setError('')
 
+    // Anything still untranslated is filled in before the set can be assigned.
+    // Forgetting the Draft button used to mean a Spanish- or Korean-speaking
+    // client opened this set and found it in English; the questions are written
+    // in one language and read in another, and that gap should not depend on
+    // remembering a button. Drafts are marked below so staff know to check them.
+    const needing = cleaned.filter(q => TRANSLATED_LANGS.some(l => missingFor(q, l)))
+    let drafted = 0
+    let toSave = cleaned
+    if (needing.length > 0) {
+      setDrafting(true)
+      const result = await draftMissing([...TRANSLATED_LANGS], { silent: true })
+      setDrafting(false)
+      drafted = result.filled
+      toSave = result.questions.filter(q => q.label.trim())
+    }
+
     const payload = {
       name: name.trim(),
       nameTranslations,
       description: description.trim(),
       // Strip the editor-only React key before it reaches the API.
-      questions: cleaned.map(q => ({ ...q, key: undefined })),
+      questions: toSave.map(q => ({ ...q, key: undefined })),
     }
 
     const res = await fetch(
@@ -335,7 +397,7 @@ export default function QuestionSetEditor({
       setError(body.error ?? 'Could not save.')
       return
     }
-    onSaved()
+    onSaved(drafted)
   }
 
   /**
@@ -772,7 +834,13 @@ export default function QuestionSetEditor({
               disabled={saving || !!loadError}
               className="bg-gold text-white px-5 py-2.5 rounded-xl text-sm font-semibold hover:bg-gold-dark transition-colors disabled:opacity-50"
             >
-              {saving ? 'Saving…' : setId ? 'Save Changes' : 'Create Question Set'}
+              {drafting
+                ? 'Translating what was left…'
+                : saving
+                ? 'Saving…'
+                : setId
+                ? 'Save Changes'
+                : 'Create Question Set'}
             </button>
           </div>
         </div>
