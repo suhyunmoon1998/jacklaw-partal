@@ -15,9 +15,9 @@
  *
  * A long paste is split into batches that are read at the same time rather than
  * in one call. Measured against a real discovery list, twenty questions with
- * Korean translations come back in about thirty-five seconds; a hundred and
- * twenty in a single call would be several minutes, past any request the
- * platform will hold open. Batches turn that into the time of the slowest one.
+ * Korean translations come back in about thirty-five seconds, and the whole
+ * ceiling below in roughly the same — batches turn the total into the time of
+ * the slowest one rather than the sum of them.
  */
 
 import Anthropic from '@anthropic-ai/sdk'
@@ -27,14 +27,19 @@ import { Lang, LANG_ENGLISH_NAME, TranslatedLang } from '@/lib/langs'
 import { Question, QuestionType } from '@/types'
 
 /**
- * Long enough for a full discovery request several times over. Longer pastes
- * are rejected with a message telling the admin to send it in parts, rather
- * than silently losing the tail.
+ * Comfortably more source text than the ceiling below can turn into questions,
+ * and no more: a paste far past it would be read in full and then mostly thrown
+ * away. Longer pastes are rejected with a message telling the admin to send it
+ * in parts, rather than silently losing the tail.
  */
-export const MAX_INPUT_CHARS = 60_000
+export const MAX_INPUT_CHARS = 20_000
 
-/** The most one paste can produce. Beyond this the admin is told what was cut. */
-export const MAX_QUESTIONS = 120
+/**
+ * The most one paste can produce — more than a client will answer in one
+ * sitting. Beyond this the admin is told what was cut rather than left to
+ * assume the batch came back whole.
+ */
+export const MAX_QUESTIONS = 40
 
 /**
  * What one batch aims for, and the ceiling it is allowed to reach.
@@ -51,9 +56,8 @@ const MAX_QUESTIONS_PER_BATCH = 40
 const CHARS_PER_BATCH = 6_000
 
 /**
- * Batches read at once. Six covers a full hundred-and-twenty-question paste in
- * a single wave — measured at about forty seconds, against eighty when the same
- * paste went through in two.
+ * Batches read at once — enough that a paste at the ceiling goes through in a
+ * single wave, so the wait is one batch rather than a queue of them.
  */
 const BATCH_CONCURRENCY = 6
 

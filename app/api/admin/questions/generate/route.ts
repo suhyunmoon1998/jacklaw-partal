@@ -11,10 +11,10 @@ import { lookupClientLanguage } from '@/lib/sendAssignmentEmail'
  * failure for work that was actually still running.
  *
  * A long paste is read in batches that run at the same time, so the wait is the
- * slowest batch rather than the sum of them — about forty seconds for a hundred
- * and twenty questions. This is headroom, not the expected time.
+ * slowest batch rather than the sum of them — measured at about forty seconds
+ * for a full one. This is headroom, not the expected time.
  */
-export const maxDuration = 300
+export const maxDuration = 120
 
 /**
  * POST /api/admin/questions/generate  { text, clientId?, lang? }
