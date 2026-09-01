@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
+import { isLang } from '@/lib/langs'
 
 function isAdmin(req: NextRequest) {
   return req.headers.get('x-admin-key') === process.env.ADMIN_PASSWORD
@@ -53,7 +54,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   if (!isAdmin(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { name, phone, caseType } = await req.json()
+  const { name, phone, caseType, lang } = await req.json()
   const digits = (phone ?? '').replace(/\D/g, '')
 
   if (!name || digits.length < 7 || !caseType) {
@@ -63,7 +64,16 @@ export async function POST(req: NextRequest) {
   const id = `client-${Date.now()}`
   const { data, error } = await getSupabase()
     .from('clients')
-    .insert({ id, name, phone: digits, case_type: caseType })
+    .insert({
+      id,
+      name,
+      phone: digits,
+      case_type: caseType,
+      // A starting language, so the first thing sent to a client who has answered
+      // nothing yet still reads in theirs. The moment they pick one in the portal
+      // themselves, that write wins — this is a seed, not a setting.
+      ...(isLang(lang) ? { portal_lang: lang } : {}),
+    })
     .select()
     .single()
 

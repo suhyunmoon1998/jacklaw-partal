@@ -59,16 +59,30 @@ const adminHeaders = {
 export default function PasteQuestionsDialog({
   clientId,
   clientName,
+  initialText = '',
+  autoGenerate = false,
   onClose,
   onCreated,
 }: {
   clientId: string
   clientName: string
+  /** Text already pasted elsewhere — on the add-client screen, for instance. */
+  initialText?: string
+  /**
+   * Read `initialText` straight away instead of showing it back for a second
+   * paste. The admin has already typed the questions once by the time this is
+   * set; the review step below is still where they approve them.
+   */
+  autoGenerate?: boolean
   onClose: () => void
-  /** Fired with the new assignment id once it exists, so the caller can send it. */
-  onCreated: (assignmentId: string, setName: string) => void
+  /**
+   * Fired with the new assignment id once it exists, so the caller can send it.
+   * `asDraft` is passed on because a draft is deliberately not shown to the
+   * client yet — emailing it the moment it was built would undo the choice.
+   */
+  onCreated: (assignmentId: string, setName: string, asDraft: boolean) => void
 }) {
-  const [text, setText] = useState('')
+  const [text, setText] = useState(initialText)
   const [stage, setStage] = useState<'paste' | 'review'>('paste')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -121,6 +135,19 @@ export default function PasteQuestionsDialog({
     setShowTranslation(Boolean(body.translatedInto))
     setStage('review')
   }
+
+  /**
+   * Runs the paste through the generator once, on open, when the caller already
+   * has the text. The guard is a ref rather than state so a re-render while the
+   * request is in flight cannot start a second one.
+   */
+  const autoRan = useRef(false)
+  useEffect(() => {
+    if (!autoGenerate || autoRan.current || !initialText.trim()) return
+    autoRan.current = true
+    generate()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const update = (key: string, patch: Partial<Draft>) =>
     setQuestions(prev => prev.map(q => (q.key === key ? { ...q, ...patch } : q)))
@@ -193,9 +220,10 @@ export default function PasteQuestionsDialog({
       return
     }
 
-    const { assignment } = await assigned.json()
+    // The route answers with the bare assignment id.
+    const { id: assignmentId } = await assigned.json().catch(() => ({}))
     setBusy(false)
-    onCreated(assignment?.id ?? '', setName.trim())
+    onCreated(typeof assignmentId === 'string' ? assignmentId : '', setName.trim(), asDraft)
   }
 
   const translatedName = translatedInto ? LANG_ENGLISH_NAME[translatedInto] : ''

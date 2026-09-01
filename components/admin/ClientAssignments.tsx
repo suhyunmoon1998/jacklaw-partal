@@ -11,9 +11,10 @@
 import { useCallback, useEffect, useState } from 'react'
 import { MOCK_ADMIN_PASSWORD } from '@/lib/mockData'
 import { AnswerValue, Assignment, AssignmentDetail, QuestionSet, QuestionnaireState } from '@/types'
-import { LANGUAGES, LANG_ENGLISH_NAME, Lang, toLang } from '@/lib/langs'
+import { LANG_ENGLISH_NAME, Lang, toLang } from '@/lib/langs'
 import { submissionLanguage, translateAnswersToEnglish } from '@/lib/machineTranslate'
 import PasteQuestionsDialog from '@/components/admin/PasteQuestionsDialog'
+import SendAssignmentDialog from '@/components/admin/SendAssignmentDialog'
 import ModalPortal from '@/components/ModalPortal'
 import type { RecommendedBank } from '@/lib/recommendedQuestions'
 
@@ -64,15 +65,6 @@ export default function ClientAssignments({
   /** Kept apart from the cache above so the toggle can go both ways. */
   const [viewOriginal, setViewOriginal] = useState(false)
   const [sending, setSending] = useState<{ assignment: Assignment; email: string; link: string; lang: Lang } | null>(null)
-  /**
-   * Why a send failed, shown inside the send dialog.
-   *
-   * `notice` renders in the panel's normal flow, which is behind this dialog's
-   * overlay — so reporting a failure there looked to the office like the button
-   * did nothing at all, and they pressed it again and again.
-   */
-  const [sendError, setSendError] = useState('')
-  const [sendingNow, setSendingNow] = useState(false)
   const [notice, setNotice] = useState('')
   const [banks, setBanks] = useState<RecommendedBank[]>([])
 
@@ -164,37 +156,7 @@ export default function ClientAssignments({
     const res = await fetch(`/api/admin/assignments/${assignment.id}/send`, { headers: adminHeaders })
     const body = await res.json().catch(() => ({}))
     setBusy(null)
-    setSendError('')
     setSending({ assignment, email: body.email ?? '', link: body.link ?? '', lang: toLang(body.lang) })
-  }
-
-  const handleSend = async () => {
-    if (!sending || sendingNow) return
-    setSendingNow(true)
-    setSendError('')
-
-    const res = await fetch(`/api/admin/assignments/${sending.assignment.id}/send`, {
-      method: 'POST',
-      headers: adminHeaders,
-      body: JSON.stringify({ email: sending.email, lang: sending.lang }),
-    }).catch(() => null)
-
-    setSendingNow(false)
-
-    if (!res) {
-      setSendError('Could not reach the server. Check your connection and try again.')
-      return
-    }
-    const body = await res.json().catch(() => ({}))
-    if (!res.ok) {
-      setSendError(body.error ?? 'Could not send the email.')
-      return
-    }
-
-    setSending(null)
-    setSendError('')
-    setNotice(`Sent to ${body.email} in ${LANG_ENGLISH_NAME[toLang(body.lang)]}.`)
-    load()
   }
 
   const markSent = async (assignment: Assignment) => {
@@ -465,9 +427,10 @@ export default function ClientAssignments({
           clientId={clientId}
           clientName={clientName}
           onClose={() => setPasting(false)}
-          onCreated={async (assignmentId, name) => {
+          onCreated={async (assignmentId, name, asDraft) => {
             setPasting(false)
             await load()
+            if (asDraft) { setNotice(`"${name}" was saved as a draft. Release it when it is ready to go out.`); return }
             if (!assignmentId) { setNotice(`"${name}" was built and assigned.`); return }
             // Straight into the existing send dialog, so the email, the address
             // and the language all go through one reviewed path.
@@ -486,79 +449,16 @@ export default function ClientAssignments({
 
       {/* Send dialog */}
       {sending && (
-        <ModalPortal>
-        <div className="fixed inset-0 bg-black/70 z-[60] flex items-center justify-center p-4" onClick={() => { setSending(null); setSendError('') }}>
-          <div className="bg-white rounded-2xl w-full max-w-md p-5 shadow-2xl animate-modal-in" onClick={e => e.stopPropagation()}>
-            <h3 className="font-bold text-black">Send “{sending.assignment.questionSetName}”</h3>
-            <p className="text-xs text-gray-400 mt-0.5 mb-4">To {clientName}. This link opens only this question set.</p>
-
-            <label className="block text-xs font-semibold text-gray-500 mb-1.5">Client email</label>
-            <input
-              value={sending.email}
-              onChange={e => setSending({ ...sending, email: e.target.value })}
-              placeholder="client@example.com"
-              className="input-field text-sm"
-            />
-            {!sending.email && (
-              <p className="text-xs text-amber-600 mt-1.5">
-                No email on file — type one, or use Copy Link and send it yourself.
-              </p>
-            )}
-
-            <label className="block text-xs font-semibold text-gray-500 mt-3 mb-1.5">Language</label>
-            <select
-              value={sending.lang}
-              onChange={e => setSending({ ...sending, lang: toLang(e.target.value) })}
-              className="input-field text-sm"
-            >
-              {LANGUAGES.map(l => (
-                <option key={l.code} value={l.code}>
-                  {l.code === 'en' ? l.label : `${l.label} · ${LANG_ENGLISH_NAME[l.code]}`}
-                </option>
-              ))}
-            </select>
-            <p className="text-[11px] text-gray-400 mt-1">
-              Taken from the language on their intake. The questions themselves appear in whichever
-              language the client picks in the portal.
-            </p>
-
-            <p className="mt-3 text-[11px] text-gray-400 break-all bg-gray-50 rounded-lg p-2">{sending.link}</p>
-
-            {sendError && (
-              <div className="mt-3 bg-red-50 border border-red-200 rounded-xl px-3.5 py-2.5">
-                <p className="text-sm text-red-700 font-semibold">The email was not sent.</p>
-                <p className="text-xs text-red-600 mt-1">{sendError}</p>
-                <p className="text-xs text-red-500 mt-2">
-                  The questionnaire itself is still assigned. Use Copy Link and send it yourself in
-                  the meantime.
-                </p>
-              </div>
-            )}
-
-            <div className="flex justify-end gap-2 mt-4">
-              <button
-                onClick={() => { setSending(null); setSendError('') }}
-                className="px-4 py-2.5 text-sm font-semibold text-gray-500 hover:text-black"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSend}
-                disabled={sendingNow || !sending.email.includes('@')}
-                className="bg-gold text-white px-5 py-2.5 rounded-xl text-sm font-semibold hover:bg-gold-dark transition-colors disabled:opacity-40 flex items-center gap-2"
-              >
-                {sendingNow && (
-                  <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                  </svg>
-                )}
-                {sendingNow ? 'Sending…' : sendError ? 'Try again' : 'Send Email'}
-              </button>
-            </div>
-          </div>
-        </div>
-        </ModalPortal>
+        <SendAssignmentDialog
+          assignmentId={sending.assignment.id}
+          setName={sending.assignment.questionSetName}
+          clientName={clientName}
+          link={sending.link}
+          initialEmail={sending.email}
+          initialLang={sending.lang}
+          onClose={() => setSending(null)}
+          onSent={message => { setSending(null); setNotice(message); load() }}
+        />
       )}
 
       {/* Answers */}

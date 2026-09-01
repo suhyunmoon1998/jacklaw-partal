@@ -37,7 +37,9 @@ import { QUESTIONNAIRE_SECTIONS } from '@/lib/questionnaireData'
 import { AnswerValue, QuestionnaireState, UploadedDocument } from '@/types'
 import QuestionSetsPanel from '@/components/admin/QuestionSetsPanel'
 import ClientAssignments from '@/components/admin/ClientAssignments'
-import { LANGUAGES, LANG_ENGLISH_NAME } from '@/lib/langs'
+import PasteQuestionsDialog from '@/components/admin/PasteQuestionsDialog'
+import SendAssignmentDialog from '@/components/admin/SendAssignmentDialog'
+import { LANGUAGES, LANG_ENGLISH_NAME, Lang, toLang } from '@/lib/langs'
 import { submissionLanguage, translateAnswersToEnglish } from '@/lib/machineTranslate'
 
 const DEFAULT_QUESTION_COUNT = QUESTIONNAIRE_SECTIONS.reduce((n, s) => n + s.questions.length, 0)
@@ -481,11 +483,31 @@ const CASE_TYPES = [
 ]
 
 // ─── Add Client Modal ─────────────────────────────────────────────────────────
+/**
+ * Adds the client and, in the same pass, the questions written for them alone.
+ *
+ * Most new clients need something the reusable sets do not cover, and the
+ * questions almost always already exist as text — an email from the attorney, a
+ * page of a discovery request. Pasting them here means they are read, reviewed
+ * and sent in the same sitting as the client is created, instead of the office
+ * having to come back to the client's page and do it a second time.
+ *
+ * The client row is saved first and on its own. Everything after it is optional:
+ * abandoning the questions leaves a perfectly good client behind.
+ */
 function AddClientModal({ onClose, onAdded }: { onClose: () => void; onAdded: () => void }) {
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
   const [caseType, setCaseType] = useState(CASE_TYPES[0])
+  const [lang, setLang] = useState<Lang>('en')
+  const [special, setSpecial] = useState('')
   const [error, setError] = useState('')
+  const [saving, setSaving] = useState(false)
+  /** Set once the client exists — from here the modal is the questions flow. */
+  const [created, setCreated] = useState<{ id: string; name: string } | null>(null)
+  const [sending, setSending] = useState<
+    { assignmentId: string; setName: string; email: string; link: string; lang: Lang } | null
+  >(null)
 
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const digits = e.target.value.replace(/\D/g, '').slice(0, 10)
@@ -495,28 +517,92 @@ function AddClientModal({ onClose, onAdded }: { onClose: () => void; onAdded: ()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (saving) return
     const digits = phone.replace(/\D/g, '')
     if (!name.trim()) { setError('Name is required.'); return }
     if (digits.length < 7) { setError('Enter a valid phone number.'); return }
 
+    setSaving(true)
     const res = await fetch('/api/admin/clients', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-admin-key': MOCK_ADMIN_PASSWORD },
-      body: JSON.stringify({ name: name.trim(), phone: digits, caseType }),
-    })
-    const data = await res.json()
+      body: JSON.stringify({ name: name.trim(), phone: digits, caseType, lang }),
+    }).catch(() => null)
+    setSaving(false)
+
+    if (!res) { setError('Could not reach the server. Check your connection and try again.'); return }
+    const data = await res.json().catch(() => ({}))
     if (!res.ok) { setError(data.error ?? 'Failed to add client.'); return }
+
+    // The list is refreshed here rather than at the end: the client is added,
+    // whatever the admin does with the questions next.
     onAdded()
-    onClose()
+
+    const newId: string = data.client?.id ?? ''
+    if (!special.trim()) { onClose(); return }
+    if (!newId) {
+      setError('The client was added, but the questions could not be attached. Open the client and paste them there.')
+      return
+    }
+    setCreated({ id: newId, name: name.trim() })
+  }
+
+  /** Fetches the address, link and language, then hands over to the send dialog. */
+  const openSend = async (assignmentId: string, setName: string) => {
+    const res = await fetch(`/api/admin/assignments/${assignmentId}/send`, {
+      headers: { 'x-admin-key': MOCK_ADMIN_PASSWORD },
+    }).catch(() => null)
+    const body = res?.ok ? await res.json().catch(() => ({})) : {}
+    setSending({
+      assignmentId,
+      setName,
+      email: body.email ?? '',
+      // A link built here if the lookup failed, so the admin still has something
+      // to copy rather than a dead end.
+      link: body.link ?? `${window.location.origin}/questionnaire/${assignmentId}`,
+      lang: toLang(body.lang ?? lang),
+    })
+  }
+
+  if (created) {
+    return sending ? (
+      <SendAssignmentDialog
+        assignmentId={sending.assignmentId}
+        setName={sending.setName}
+        clientName={created.name}
+        link={sending.link}
+        initialEmail={sending.email}
+        initialLang={sending.lang}
+        onClose={onClose}
+        onSent={onClose}
+      />
+    ) : (
+      <PasteQuestionsDialog
+        clientId={created.id}
+        clientName={created.name}
+        initialText={special}
+        autoGenerate
+        onClose={onClose}
+        onCreated={(assignmentId, setName, asDraft) => {
+          if (asDraft) {
+            alert(`"${setName}" was saved as a draft for ${created.name}. Open the client to release and send it.`)
+            onClose()
+            return
+          }
+          if (!assignmentId) { onClose(); return }
+          openSend(assignmentId, setName)
+        }}
+      />
+    )
   }
 
   return (
     <div className="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 animate-fade-in" onClick={onClose}>
       <div
-        className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden animate-modal-in"
+        className="bg-white w-full sm:max-w-lg rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden animate-modal-in max-h-[92vh] flex flex-col"
         onClick={e => e.stopPropagation()}
       >
-        <div className="bg-black px-5 py-4 flex items-center justify-between">
+        <div className="bg-black px-5 py-4 flex items-center justify-between shrink-0">
           <h3 className="text-white font-bold">Add New Client</h3>
           <button onClick={onClose} className="text-white/50 hover:text-white transition-colors">
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -525,54 +611,104 @@ function AddClientModal({ onClose, onAdded }: { onClose: () => void; onAdded: ()
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-5 space-y-4">
-          <div>
-            <label className="label">Client Name</label>
-            <input
-              type="text"
-              value={name}
-              onChange={e => { setName(e.target.value); setError('') }}
-              placeholder="Full name"
-              className="input-field"
-              autoFocus
-            />
-          </div>
-          <div>
-            <label className="label">Phone Number</label>
-            <input
-              type="tel"
-              inputMode="numeric"
-              value={phone}
-              onChange={handlePhoneChange}
-              placeholder="(310) 555-0000"
-              className="input-field"
-            />
-            <p className="text-xs text-gray-400 mt-1">This is what the client will use to log in.</p>
-          </div>
-          <div>
-            <label className="label">Case Type</label>
-            <select
-              value={caseType}
-              onChange={e => setCaseType(e.target.value)}
-              className="input-field appearance-none bg-white"
-            >
-              {CASE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-            </select>
-          </div>
-
-          {error && (
-            <div className="bg-red-50 border border-red-200 rounded-xl p-3">
-              <p className="text-red-700 text-sm">{error}</p>
+        <form onSubmit={handleSubmit} className="flex-1 min-h-0 flex flex-col">
+          <div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-4">
+            <div>
+              <label className="label">Client Name</label>
+              <input
+                type="text"
+                value={name}
+                onChange={e => { setName(e.target.value); setError('') }}
+                placeholder="Full name"
+                className="input-field"
+                autoFocus
+              />
             </div>
-          )}
+            <div>
+              <label className="label">Phone Number</label>
+              <input
+                type="tel"
+                inputMode="numeric"
+                value={phone}
+                onChange={handlePhoneChange}
+                placeholder="(310) 555-0000"
+                className="input-field"
+              />
+              <p className="text-xs text-gray-400 mt-1">This is what the client will use to log in.</p>
+            </div>
+            <div>
+              <label className="label">Case Type</label>
+              <select
+                value={caseType}
+                onChange={e => setCaseType(e.target.value)}
+                className="input-field appearance-none bg-white"
+              >
+                {CASE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="label">Language</label>
+              <select
+                value={lang}
+                onChange={e => setLang(toLang(e.target.value))}
+                className="input-field appearance-none bg-white"
+              >
+                {LANGUAGES.map(l => (
+                  <option key={l.code} value={l.code}>
+                    {l.code === 'en' ? l.label : `${l.label} · ${LANG_ENGLISH_NAME[l.code]}`}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-gray-400 mt-1">
+                What this client reads until they pick a language themselves — the invitation email
+                and any questions below are written in it.
+              </p>
+            </div>
 
-          <div className="flex gap-3 pt-1">
-            <button type="button" onClick={onClose} className="flex-1 py-3 border-2 border-gray-200 rounded-xl text-gray-600 font-semibold text-sm hover:border-gray-300 transition-colors">
-              Cancel
-            </button>
-            <button type="submit" className="flex-1 py-3 bg-gold text-white rounded-xl font-semibold text-sm hover:bg-gold-dark transition-colors">
-              Add Client
-            </button>
+            {/* Questions for this client alone, which no reusable set covers. */}
+            <div className="border-t border-gray-100 pt-4">
+              <label className="label">
+                Special Questions <span className="font-normal text-gray-400">· optional</span>
+              </label>
+              <textarea
+                value={special}
+                onChange={e => { setSpecial(e.target.value); setError('') }}
+                rows={5}
+                placeholder={'1. What time did you actually start and stop work each day?\n2. Were you given a 30-minute meal break? Yes/No\n3. Which of these do you still have: paystubs, schedules, text messages…'}
+                className="input-field resize-none font-mono text-[13px] leading-relaxed"
+              />
+              <p className="text-xs text-gray-400 mt-1">
+                Paste questions meant only for this client — from an email, a discovery request, a
+                list in Word. The wording, the question type and the answer choices are worked out
+                as soon as the client is added, and you check every one before anything is sent.
+              </p>
+            </div>
+          </div>
+
+          <div className="border-t border-gray-100 p-5 shrink-0 space-y-3">
+            {error && (
+              <div className="bg-red-50 border border-red-200 rounded-xl p-3">
+                <p className="text-red-700 text-sm">{error}</p>
+              </div>
+            )}
+            <div className="flex gap-3">
+              <button type="button" onClick={onClose} className="flex-1 py-3 border-2 border-gray-200 rounded-xl text-gray-600 font-semibold text-sm hover:border-gray-300 transition-colors">
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={saving}
+                className="flex-1 py-3 bg-gold text-white rounded-xl font-semibold text-sm hover:bg-gold-dark transition-colors disabled:opacity-40 flex items-center justify-center gap-2"
+              >
+                {saving && (
+                  <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                )}
+                {saving ? 'Adding…' : special.trim() ? 'Add & Build Questions' : 'Add Client'}
+              </button>
+            </div>
           </div>
         </form>
       </div>
