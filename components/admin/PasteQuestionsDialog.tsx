@@ -91,6 +91,8 @@ export default function PasteQuestionsDialog({
   const [setName, setSetName] = useState('')
   const [questions, setQuestions] = useState<Draft[]>([])
   const [translatedInto, setTranslatedInto] = useState<Lang | null>(null)
+  /** Questions found past the ceiling and left out, so the review screen can say so. */
+  const [dropped, setDropped] = useState(0)
   const [showTranslation, setShowTranslation] = useState(false)
   const [asDraft, setAsDraft] = useState(false)
 
@@ -130,6 +132,7 @@ export default function PasteQuestionsDialog({
     if (generated.length === 0) { setError('No questions were found in that text.'); return }
 
     setQuestions(generated.map(q => ({ ...q, key: nextKey() })))
+    setDropped(typeof body.dropped === 'number' ? body.dropped : 0)
     setSetName(body.setName ?? 'Additional Questions')
     setTranslatedInto(body.translatedInto ?? null)
     setShowTranslation(Boolean(body.translatedInto))
@@ -287,6 +290,12 @@ export default function PasteQuestionsDialog({
               <p className="text-xs text-gray-400 mt-2">
                 {text.trim().length.toLocaleString()} characters · you can also drop a text file here
               </p>
+              {busy && (
+                <p className="text-xs text-gray-400 mt-1">
+                  A long list is read in parts at the same time — up to a minute for a full
+                  discovery request. Leave this open.
+                </p>
+              )}
             </div>
             <div className="border-t border-gray-100 px-5 py-4 flex items-center justify-end gap-2 shrink-0">
               <button onClick={onClose} className="px-4 py-2.5 text-sm font-semibold text-gray-500 hover:text-black">
@@ -330,6 +339,14 @@ export default function PasteQuestionsDialog({
                   </button>
                 )}
               </div>
+
+              {dropped > 0 && (
+                <p className="text-xs text-amber-800 bg-amber-50 border border-amber-300 rounded-lg px-3 py-2">
+                  This paste held more than {questions.length} questions. The first{' '}
+                  {questions.length} are here and {dropped} more were left out — paste the rest
+                  separately if this client needs them too.
+                </p>
+              )}
 
               {lang && (
                 <p className="text-xs text-blue-700 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">

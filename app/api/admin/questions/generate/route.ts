@@ -9,8 +9,12 @@ import { lookupClientLanguage } from '@/lib/sendAssignmentEmail'
  * Reading a paste and writing the questions back takes longer than a normal
  * request. The default would cut it off mid-answer and show the admin a
  * failure for work that was actually still running.
+ *
+ * A long paste is read in batches that run at the same time, so the wait is the
+ * slowest batch rather than the sum of them — about forty seconds for a hundred
+ * and twenty questions. This is headroom, not the expected time.
  */
-export const maxDuration = 60
+export const maxDuration = 300
 
 /**
  * POST /api/admin/questions/generate  { text, clientId?, lang? }

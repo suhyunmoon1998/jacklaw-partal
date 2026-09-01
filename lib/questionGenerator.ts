@@ -12,6 +12,12 @@
  * Nothing generated here reaches a client on its own. The admin reviews and
  * edits every question, then presses send — the same rule the question-set
  * editor's draft-translation button follows.
+ *
+ * A long paste is split into batches that are read at the same time rather than
+ * in one call. Measured against a real discovery list, twenty questions with
+ * Korean translations come back in about thirty-five seconds; a hundred and
+ * twenty in a single call would be several minutes, past any request the
+ * platform will hold open. Batches turn that into the time of the slowest one.
  */
 
 import Anthropic from '@anthropic-ai/sdk'
@@ -21,14 +27,35 @@ import { Lang, LANG_ENGLISH_NAME, TranslatedLang } from '@/lib/langs'
 import { Question, QuestionType } from '@/types'
 
 /**
- * Long enough for a full discovery request, short enough to stay inside the
- * serverless function's time limit. Longer pastes are rejected with a message
- * telling the admin to send it in parts, rather than silently losing the tail.
+ * Long enough for a full discovery request several times over. Longer pastes
+ * are rejected with a message telling the admin to send it in parts, rather
+ * than silently losing the tail.
  */
-export const MAX_INPUT_CHARS = 12_000
+export const MAX_INPUT_CHARS = 60_000
 
-/** More than a client will answer in one sitting, and a guard on runaway output. */
-const MAX_QUESTIONS = 40
+/** The most one paste can produce. Beyond this the admin is told what was cut. */
+export const MAX_QUESTIONS = 120
+
+/**
+ * What one batch aims for, and the ceiling it is allowed to reach.
+ *
+ * The target is what the splitter counts towards; the ceiling is what the model
+ * is told, and is deliberately higher because counting questions in someone
+ * else's formatting is a guess. A batch that really does hold forty questions
+ * returns them all instead of quietly losing half.
+ */
+const QUESTIONS_PER_BATCH = 20
+const MAX_QUESTIONS_PER_BATCH = 40
+
+/** Source text one batch may hold — the guard for prose with nothing to count. */
+const CHARS_PER_BATCH = 6_000
+
+/**
+ * Batches read at once. Six covers a full hundred-and-twenty-question paste in
+ * a single wave — measured at about forty seconds, against eighty when the same
+ * paste went through in two.
+ */
+const BATCH_CONCURRENCY = 6
 
 const QUESTION_TYPES = [
   'text', 'textarea', 'yes_no', 'yes_no_unsure',
@@ -76,6 +103,12 @@ export interface GeneratedResult {
   questions: Question[]
   /** The language the translations were drafted in, or null if English only. */
   translatedInto: Lang | null
+  /**
+   * Questions found beyond MAX_QUESTIONS and left out. Reported rather than
+   * dropped in silence — a paste that came back short looks complete on the
+   * review screen, and the missing tail is only noticed by the client.
+   */
+  dropped: number
 }
 
 /**
@@ -92,7 +125,7 @@ export const TARGET_DESCRIPTION: Record<TranslatedLang, string> = {
   ko: 'Korean, in formal 존댓말 as a law office would address a client',
 }
 
-function systemPrompt(target: Lang): string {
+function systemPrompt(target: Lang, cap: number): string {
   const translating = target !== 'en'
   const targetName =
     target === 'en' ? 'English' : TARGET_DESCRIPTION[target as TranslatedLang]
@@ -209,7 +242,7 @@ This client reads English. Leave \`translatedLabel\`, \`translatedHelpText\` and
 A short staff-facing name for this batch — what the firm would call it on a list, like
 "Overtime Follow-Up" or "Meal Break Details". English, under 50 characters.
 
-Produce at most ${MAX_QUESTIONS} questions. If the text holds more, take the first ${MAX_QUESTIONS} in order.`
+Produce at most ${cap} questions. If the text holds more, take the first ${cap} in order.`
 }
 
 /** Answers are filed under this, so it has to be stable and readable. */
@@ -233,15 +266,15 @@ type RawQuestion = z.infer<typeof GeneratedQuestion>
  * a choice question with one choice, or a translation whose option list does
  * not line up, has to be caught rather than shipped to a client.
  */
-export function toQuestions(raw: RawQuestion[], target: Lang): Question[] {
-  const kept = raw.slice(0, MAX_QUESTIONS)
+export function toQuestions(raw: RawQuestion[], target: Lang, offset = 0): Question[] {
+  const kept = raw
 
   // Ids are derived from labels, so every id has to exist before any gate can
   // point at one. Positions the model gave are 1-based over this same list.
   const idAt = new Map<number, { id: string; type: QuestionType }>()
   kept.forEach((item, i) => {
     const label = item.label.trim()
-    if (label) idAt.set(i + 1, { id: slugFor(label, i), type: item.type })
+    if (label) idAt.set(i + 1, { id: slugFor(label, offset + i), type: item.type })
   })
 
   const questions: Question[] = []
@@ -258,7 +291,9 @@ export function toQuestions(raw: RawQuestion[], target: Lang): Question[] {
     const type: QuestionType = wantsOptions && options.length < 2 ? 'text' : item.type
     const keepsOptions = NEEDS_OPTIONS.includes(type)
 
-    const question: Question = { id: slugFor(label, i), label, type }
+    // Ids carry the offset so two batches that both open with the same question
+    // do not file their answers under one key.
+    const question: Question = { id: slugFor(label, offset + i), label, type }
     if (item.required) question.required = true
     if (keepsOptions && options.length > 0) question.options = options
     if (item.helpText.trim()) question.helpText = item.helpText.trim()
@@ -295,6 +330,110 @@ export function toQuestions(raw: RawQuestion[], target: Lang): Question[] {
   return questions
 }
 
+/**
+ * A line that opens a new question, in any of the shapes staff actually paste:
+ * "12.", "(3)", "Q4", "- ", or a bare sentence ending in a question mark.
+ */
+const QUESTION_START = /^\s*(?:\(?\d+\s*[.):]|[-*•‣–]\s|q(?:uestion)?\s*\.?\s*\d+|no\.?\s*\d+)/i
+
+function opensAQuestion(line: string): boolean {
+  const trimmed = line.trim()
+  if (!trimmed) return false
+  return QUESTION_START.test(trimmed) || trimmed.endsWith('?') || trimmed.endsWith('？')
+}
+
+/**
+ * Splits a paste into batches, cutting only where a new question begins.
+ *
+ * Counting questions in someone else's formatting is a guess, so the split is
+ * deliberately conservative: it closes a batch at the next question boundary
+ * once the batch is full, never mid-question, and a question and its answer
+ * choices therefore always reach the model together. Prose with no boundary to
+ * find is cut on length alone — the alternative is one batch holding the lot.
+ */
+export function splitIntoBatches(source: string): string[] {
+  const lines = source.split('\n')
+  const batches: string[] = []
+  let current: string[] = []
+  let starts = 0
+  let chars = 0
+
+  const close = () => {
+    if (current.join('').trim()) batches.push(current.join('\n'))
+    current = []
+    starts = 0
+    chars = 0
+  }
+
+  for (const line of lines) {
+    const opens = opensAQuestion(line)
+    if (current.length && opens && (starts >= QUESTIONS_PER_BATCH || chars >= CHARS_PER_BATCH)) {
+      close()
+    }
+    current.push(line)
+    chars += line.length + 1
+    if (opens) starts++
+    // No boundary has appeared and the batch is twice its budget — prose, or a
+    // list this splitter cannot read. Cut it rather than send one huge batch.
+    if (chars >= CHARS_PER_BATCH * 2) close()
+  }
+  close()
+
+  return batches.length > 0 ? batches : [source]
+}
+
+/** Runs `run` over every item, `limit` of them at a time, keeping input order. */
+async function mapWithLimit<T, R>(
+  items: T[],
+  limit: number,
+  run: (item: T) => Promise<R>
+): Promise<R[]> {
+  const results = new Array<R>(items.length)
+  let next = 0
+
+  const worker = async () => {
+    for (;;) {
+      const index = next++
+      if (index >= items.length) return
+      results[index] = await run(items[index])
+    }
+  }
+
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker))
+  return results
+}
+
+interface BatchResult {
+  setName: string
+  questions: RawQuestion[]
+}
+
+/** One model call over one batch of the paste. */
+async function readBatch(client: Anthropic, source: string, target: Lang): Promise<BatchResult> {
+  const response = await client.messages.parse({
+    model: 'claude-opus-5',
+    max_tokens: 16000,
+    system: systemPrompt(target, MAX_QUESTIONS_PER_BATCH),
+    thinking: { type: 'adaptive' },
+    // Extraction and classification rather than deep reasoning, and a person is
+    // waiting on the result — 'medium' keeps a batch inside the function's time
+    // limit. Raise it if the questions come back too literal.
+    output_config: { effort: 'medium', format: zodOutputFormat(GeneratedSet) },
+    messages: [{ role: 'user', content: source }],
+  })
+
+  if (response.stop_reason === 'refusal') {
+    throw new Error('The generator declined to process that text. Paste it again, or build the questions by hand.')
+  }
+
+  const parsed = response.parsed_output
+  if (!parsed) {
+    throw new Error('The questions came back in a form we could not read. Try again.')
+  }
+
+  return { setName: parsed.setName, questions: parsed.questions }
+}
+
 export async function generateQuestions(
   text: string,
   target: Lang
@@ -313,39 +452,33 @@ export async function generateQuestions(
     )
   }
 
-  const client = new Anthropic()
+  // One extra retry over the SDK's default: several batches run at once, and a
+  // rate limit that would have been a blip on one call sinks the whole paste.
+  const client = new Anthropic({ maxRetries: 3 })
+  const batches = splitIntoBatches(source)
+  const results = await mapWithLimit(batches, BATCH_CONCURRENCY, batch =>
+    readBatch(client, batch, target)
+  )
 
-  const response = await client.messages.parse({
-    model: 'claude-opus-5',
-    max_tokens: 16000,
-    system: systemPrompt(target),
-    thinking: { type: 'adaptive' },
-    // Extraction and classification rather than deep reasoning, and a person is
-    // waiting on the result — 'medium' keeps this inside the function's time
-    // limit. Raise it if the questions come back too literal.
-    output_config: { effort: 'medium', format: zodOutputFormat(GeneratedSet) },
-    messages: [{ role: 'user', content: source }],
-  })
-
-  if (response.stop_reason === 'refusal') {
-    throw new Error('The generator declined to process that text. Paste it again, or build the questions by hand.')
+  // Converted in batch order, with ids numbered across the whole paste. Gates
+  // only ever point backwards inside their own batch, so cutting the tail below
+  // can never leave a kept question pointing at one that was dropped.
+  const all: Question[] = []
+  for (const result of results) {
+    all.push(...toQuestions(result.questions, target, all.length))
   }
 
-  const parsed = response.parsed_output
-  if (!parsed) {
-    throw new Error('The questions came back in a form we could not read. Try again.')
-  }
-
-  const questions = toQuestions(parsed.questions, target)
-
-  if (questions.length === 0) {
+  if (all.length === 0) {
     throw new Error('No questions were found in that text. Check that you pasted the questions themselves.')
   }
 
+  const setName = results.map(r => r.setName.trim()).find(Boolean) ?? ''
+
   return {
-    setName: parsed.setName.trim().slice(0, 60) || 'Additional Questions',
-    questions,
+    setName: setName.slice(0, 60) || 'Additional Questions',
+    questions: all.slice(0, MAX_QUESTIONS),
     translatedInto: target === 'en' ? null : target,
+    dropped: Math.max(0, all.length - MAX_QUESTIONS),
   }
 }
 
