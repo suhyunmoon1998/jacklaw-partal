@@ -292,7 +292,12 @@ export default function QuestionnairePage() {
     <div className="relative min-h-screen bg-gray-50 flex flex-col">
       <MascotWatermark />
 
-      <div className="relative z-20">
+      {/* Above the sticky progress bar below it. The header holds the language
+          menu, which opens downward across that bar; while this wrapper sat
+          under it, the menu's middle — Español and 中文 — was painted over and
+          a client reading neither English nor Korean could not reach their own
+          language. */}
+      <div className="relative z-40">
         <Header showBack backHref="/dashboard" showLogout subtitle="Questionnaire" />
       </div>
 
