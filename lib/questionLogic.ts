@@ -10,12 +10,31 @@
 import { Lang, TranslatedLang } from '@/lib/langs'
 import { AnswerValue, Question, QuestionnaireSection } from '@/types'
 
+/**
+ * Does one answer satisfy one condition?
+ *
+ * A multi-select answer is an array, and satisfies the condition when any of
+ * the wanted values is among the options chosen — "was a clock, scan, app or
+ * register used" is a question about a checklist, not about one string.
+ */
+function conditionHolds(
+  answer: AnswerValue | undefined,
+  cond: { value: string; orValues?: string[] }
+): boolean {
+  const wanted = cond.orValues ? [cond.value, ...cond.orValues] : [cond.value]
+  if (Array.isArray(answer)) return answer.some(a => wanted.includes(a))
+  return typeof answer === 'string' && wanted.includes(answer)
+}
+
 export function isVisible(
   q: Question | QuestionnaireSection,
   answers: Record<string, AnswerValue>
 ): boolean {
-  if (!q.showIf) return true
-  return answers[q.showIf.questionId] === q.showIf.value
+  const gate = q.showIf
+  if (!gate) return true
+  if (!conditionHolds(answers[gate.questionId], gate)) return false
+  if (gate.and && !conditionHolds(answers[gate.and.questionId], gate.and)) return false
+  return true
 }
 
 export function hasAnswer(val: AnswerValue | undefined): boolean {
@@ -42,6 +61,69 @@ export function answerFitsType(val: AnswerValue | undefined, type: Question['typ
 /** hasAnswer, but only counting answers the client can actually see and edit. */
 export function isAnsweredFor(q: Question, answers: Record<string, AnswerValue>): boolean {
   return answerFitsType(answers[q.id], q.type)
+}
+
+/**
+ * The answers that are actually in effect, with the stale ones dropped.
+ *
+ * A gate that closes leaves its answer behind. Ask someone whether they were
+ * fired, follow that to "was it unlawful", let them answer Yes, then let them
+ * go back and say they quit: the middle question is gone from the screen, but
+ * its Yes is still on file, and reading the file alone would reopen the
+ * question below it to a client who was never asked the one above.
+ *
+ * The project-wide rule is that an answer is retained in storage and ignored
+ * for routing. Nothing is deleted — a client who changes their mind back finds
+ * their answer where they left it — but a hidden question's answer decides
+ * nothing while it is hidden. One forward pass is enough because a gate always
+ * points at an earlier question; a test holds the questionnaire to that.
+ */
+export function effectiveAnswers(
+  sections: QuestionnaireSection[],
+  answers: Record<string, AnswerValue>
+): Record<string, AnswerValue> {
+  const inEffect: Record<string, AnswerValue> = {}
+  for (const section of sections) {
+    if (!isVisible(section, inEffect)) continue
+    for (const q of section.questions) {
+      if (!isVisible(q, inEffect)) continue
+      if (q.id in answers) inEffect[q.id] = answers[q.id]
+    }
+  }
+  return inEffect
+}
+
+/**
+ * The visible, required questions of one section that have not been answered.
+ *
+ * The rule the Next button enforces, in one place so a test can hold it to
+ * account: a question is only ever required of someone who can see it. A gate
+ * that closes takes its questions' required-ness with it, and an answer left
+ * behind by a gate that has since closed is not what the client is being asked
+ * for now.
+ */
+export function missingRequired(
+  section: QuestionnaireSection,
+  answers: Record<string, AnswerValue>
+): Question[] {
+  if (!isVisible(section, answers)) return []
+  return section.questions.filter(
+    q => q.required && isVisible(q, answers) && !hasAnswer(answers[q.id])
+  )
+}
+
+/**
+ * How far through the questionnaire a client is, as a percentage.
+ *
+ * `completedSections` holds indices, and the questionnaire has not always had
+ * the same number of sections. A client who started the twenty-section version
+ * carries indices the ten-section one does not have, and dividing straight
+ * through showed them as 200% complete.
+ */
+export function sectionProgressPercent(completed: number[], total: number): number {
+  if (total === 0) return 0
+  const inRange = completed.filter(i => i >= 0 && i < total).length
+  return Math.min(100, Math.round((inRange / total) * 100))
 }
 
 /** Button groups have no single control to point a <label for> at. */

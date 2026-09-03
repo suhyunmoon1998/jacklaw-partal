@@ -30,8 +30,28 @@ export type QuestionType =
   | 'currency'
 
 export interface ShowIfCondition {
+  /** The question whose answer decides whether this one is asked. */
   questionId: string
+  /**
+   * The answer that reveals this question. When the gate is a multi-select, the
+   * question is revealed if this value is among the options chosen.
+   */
   value: string
+  /**
+   * Further answers that also reveal it — "Yes or Sometimes", "a close guess or
+   * a range or I do not know". Additive and optional, so every gate written
+   * before this existed, and every gate an admin builds in the question-set
+   * editor, still means exactly what it meant.
+   */
+  orValues?: string[]
+  /**
+   * A second condition that must hold as well. Module 1 needs it exactly once —
+   * "did you enter your end time the same way as your start time" is only worth
+   * asking of someone who entered both — and nothing else in the portal reads
+   * it, so a consumer that only understands `questionId`/`value` still sees a
+   * true, if incomplete, description of the gate.
+   */
+  and?: { questionId: string; value: string; orValues?: string[] }
 }
 
 /**

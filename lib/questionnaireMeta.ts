@@ -2,10 +2,14 @@
  * Visual metadata for the intake questionnaire.
  *
  * The questionnaire data itself is untouched — this file only adds a chapter
- * grouping and an icon per section so the 20 sections stop looking identical to
+ * grouping and an icon per section so the sections stop looking identical to
  * each other. Keyed by section id, which every language's file shares, so one
  * entry here serves all of them. The chapter names are dictionary keys rather
  * than text, for the same reason.
+ *
+ * ICONS holds more than Module 1 uses. The extras belong to the sections later
+ * modules bring back — meal breaks, harassment, witnesses — and are cheaper to
+ * keep than to redraw.
  */
 
 export type ChapterId = 'basics' | 'pay' | 'records' | 'events' | 'wrap'
@@ -96,23 +100,12 @@ export const SECTION_META: Record<string, SectionMeta> = {
 
   pay_rate: { chapter: 'pay', icon: ICONS.cash },
   schedule: { chapter: 'pay', icon: ICONS.clock },
-  timekeeping: { chapter: 'pay', icon: ICONS.clipboard },
-  meal_breaks: { chapter: 'pay', icon: ICONS.mug },
-  rest_breaks: { chapter: 'pay', icon: ICONS.pause },
-  overtime: { chapter: 'pay', icon: ICONS.bolt },
 
-  final_wages: { chapter: 'records', icon: ICONS.document },
-  wage_statements: { chapter: 'records', icon: ICONS.list },
-  reimbursements: { chapter: 'records', icon: ICONS.refund },
+  timekeeping: { chapter: 'records', icon: ICONS.clipboard },
+  time_check: { chapter: 'records', icon: ICONS.bolt },
 
+  final_wages: { chapter: 'events', icon: ICONS.document },
   wrongful_termination: { chapter: 'events', icon: ICONS.exit },
-  retaliation: { chapter: 'events', icon: ICONS.shieldAlert },
-  disability_leave: { chapter: 'events', icon: ICONS.heart },
-  harassment: { chapter: 'events', icon: ICONS.alert },
-
-  witnesses: { chapter: 'wrap', icon: ICONS.users },
-  documents_available: { chapter: 'wrap', icon: ICONS.folder },
-  additional: { chapter: 'wrap', icon: ICONS.chat },
 }
 
 const FALLBACK: SectionMeta = { chapter: 'wrap', icon: ICONS.document }

@@ -1,5 +1,7 @@
 import PDFDocument from 'pdfkit'
 import { QUESTIONNAIRE_SECTIONS } from '@/lib/questionnaireData'
+import { legacyAnswerGroups, liveQuestionIds } from '@/lib/questionnaireLegacy'
+import { canonicalAnswers } from '@/lib/answerCompat'
 import { AnswerValue, Question, QuestionnaireSection } from '@/types'
 
 const GOLD = '#E07820'
@@ -57,9 +59,12 @@ export function generateAnswersPdf(
   clientName: string,
   caseType: string,
   phone: string,
-  answers: Record<string, AnswerValue>,
+  rawAnswers: Record<string, AnswerValue>,
   options: { sections?: QuestionnaireSection[]; title?: string } = {}
 ): Promise<Buffer> {
+  // An answer chosen in Spanish before Module 1 prints as the choice it was,
+  // rather than as a word the reader of this file will not recognise.
+  const answers = canonicalAnswers(rawAnswers)
   const sections = options.sections ?? QUESTIONNAIRE_SECTIONS
   const title = options.title ?? 'CLIENT INTAKE QUESTIONNAIRE'
   return new Promise((resolve, reject) => {
@@ -114,6 +119,30 @@ export function generateAnswersPdf(
         if (shown === UNRENDERABLE_NOTE) untranslated = true
 
         doc.fillColor(GRAY).font('Helvetica-Bold').fontSize(9).text(safeHeading(q.label) || q.id)
+        doc.fillColor('#000000').font('Helvetica').fontSize(10.5).text(shown)
+        doc.moveDown(0.5)
+      }
+      doc.moveDown(0.5)
+    }
+
+    // Answers to questions this questionnaire no longer asks. A file printed for
+    // the office has to hold everything the client told us, not only what the
+    // current version happens to ask.
+    const legacy = legacyAnswerGroups(answers, liveQuestionIds(sections))
+    for (const group of legacy) {
+      anySections = true
+      ensureSpace(40)
+      doc.fillColor(GOLD).font('Helvetica-Bold').fontSize(11)
+        .text(`${safeHeading(group.section).toUpperCase() || 'EARLIER ANSWERS'} (EARLIER VERSION)`, { characterSpacing: 0.5 })
+      doc.moveDown(0.4)
+
+      for (const entry of group.entries) {
+        ensureSpace(30)
+        const answer = formatAnswer(entry.value as AnswerValue, { id: entry.id, label: entry.label, type: 'text' })
+        const shown = RENDERABLE.test(answer) ? answer : UNRENDERABLE_NOTE
+        if (shown === UNRENDERABLE_NOTE) untranslated = true
+
+        doc.fillColor(GRAY).font('Helvetica-Bold').fontSize(9).text(safeHeading(entry.label) || entry.id)
         doc.fillColor('#000000').font('Helvetica').fontSize(10.5).text(shown)
         doc.moveDown(0.5)
       }

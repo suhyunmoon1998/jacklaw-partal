@@ -10,7 +10,8 @@ import { questionnaireSections } from '@/lib/questionnaireSections'
 import { CHAPTER_LABEL, ChapterId, sectionMeta } from '@/lib/questionnaireMeta'
 import { AnswerValue, QuestionnaireState, Session } from '@/types'
 import { QuestionInput } from '@/components/QuestionField'
-import { hasAnswer, isFieldControl, isVisible } from '@/lib/questionLogic'
+import { effectiveAnswers, hasAnswer, isFieldControl, isVisible, missingRequired } from '@/lib/questionLogic'
+import { canonicalAnswers } from '@/lib/answerCompat'
 import { useLanguage } from '@/lib/i18n'
 
 /** Fixed (not random) so the celebration renders identically on every pass. */
@@ -82,7 +83,13 @@ export default function QuestionnairePage() {
   const { lang, t } = useLanguage()
 
   const ALL_SECTIONS = questionnaireSections(lang)
-  const SECTIONS = ALL_SECTIONS.filter(s => isVisible(s, qState.answers))
+  /**
+   * Routing, validation and progress all read this rather than the raw answers,
+   * so a question whose gate has since closed cannot decide what comes next.
+   * The raw answers are what gets saved — nothing is thrown away.
+   */
+  const liveAnswers = effectiveAnswers(ALL_SECTIONS, canonicalAnswers(qState.answers))
+  const SECTIONS = ALL_SECTIONS.filter(s => isVisible(s, liveAnswers))
 
   useEffect(() => {
     const s = getSession()
@@ -163,15 +170,10 @@ export default function QuestionnairePage() {
   }, [mapOpen])
 
   const validateSection = (): boolean => {
-    for (const q of section.questions) {
-      if (!q.required) continue
-      if (!isVisible(q, qState.answers)) continue
-      const val = qState.answers[q.id]
-      const isEmpty = !val || (Array.isArray(val) && val.length === 0) || val === ''
-      if (isEmpty) {
-        setValidationError(t('q_required_error') + ` "${q.label}"`)
-        return false
-      }
+    const [firstMissing] = missingRequired(section, liveAnswers)
+    if (firstMissing) {
+      setValidationError(t('q_required_error') + ` "${firstMissing.label}"`)
+      return false
     }
     return true
   }
@@ -243,16 +245,16 @@ export default function QuestionnairePage() {
   if (!session || !section) return null
 
   const meta = sectionMeta(section.id)
-  const visibleQuestions = section.questions.filter(q => isVisible(q, qState.answers))
-  const sectionAnswered = visibleQuestions.filter(q => hasAnswer(qState.answers[q.id])).length
+  const visibleQuestions = section.questions.filter(q => isVisible(q, liveAnswers))
+  const sectionAnswered = visibleQuestions.filter(q => hasAnswer(liveAnswers[q.id])).length
 
   // Progress is answer-based, so the bar moves while you type instead of
   // only jumping once per section.
   const allVisibleQuestions = SECTIONS.flatMap(s =>
-    s.questions.filter(q => isVisible(q, qState.answers))
+    s.questions.filter(q => isVisible(q, liveAnswers))
   )
   const totalQuestions = allVisibleQuestions.length
-  const answeredQuestions = allVisibleQuestions.filter(q => hasAnswer(qState.answers[q.id])).length
+  const answeredQuestions = allVisibleQuestions.filter(q => hasAnswer(liveAnswers[q.id])).length
   const answeredPct = totalQuestions > 0 ? Math.round((answeredQuestions / totalQuestions) * 100) : 0
 
   const cheerKey =
@@ -268,14 +270,14 @@ export default function QuestionnairePage() {
   })
 
   const statusOf = (index: number) => {
-    const qs = SECTIONS[index].questions.filter(q => isVisible(q, qState.answers))
-    const answered = qs.filter(q => hasAnswer(qState.answers[q.id])).length
+    const qs = SECTIONS[index].questions.filter(q => isVisible(q, liveAnswers))
+    const answered = qs.filter(q => hasAnswer(liveAnswers[q.id])).length
     return { answered, total: qs.length, done: qs.length > 0 && answered === qs.length }
   }
 
   const unanswered = SECTIONS.flatMap((s, sIdx) =>
     s.questions
-      .filter(q => isVisible(q, qState.answers) && !hasAnswer(qState.answers[q.id]))
+      .filter(q => isVisible(q, liveAnswers) && !hasAnswer(liveAnswers[q.id]))
       .map(q => ({ sectionIndex: sIdx, sectionTitle: s.title, question: q }))
   )
 
@@ -384,7 +386,7 @@ export default function QuestionnairePage() {
 
           <div className="space-y-5">
             {visibleQuestions.map((q, i) => {
-              const answered = hasAnswer(qState.answers[q.id])
+              const answered = hasAnswer(liveAnswers[q.id])
               const inputId = `q-${q.id}`
               return (
                 <div
@@ -422,12 +424,13 @@ export default function QuestionnairePage() {
                     <QuestionInput
                       question={q}
                       inputId={inputId}
-                      value={qState.answers[q.id] ?? (q.type === 'multiselect' ? [] : '')}
+                      value={liveAnswers[q.id] ?? (q.type === 'multiselect' ? [] : '')}
                       onChange={handleAnswerChange}
                       yesLabel={t('q_yes')}
                       noLabel={t('q_no')}
                       notSureLabel={t('q_not_sure')}
                       selectPlaceholder={t('q_select')}
+                      optionLabels={q.optionLabels}
                       maxDate={new Date().toISOString().split('T')[0]}
                     />
                   </div>

@@ -34,6 +34,9 @@ interface AdminClient {
   documentCount: number
 }
 import { QUESTIONNAIRE_SECTIONS } from '@/lib/questionnaireData'
+import { legacyAnswerGroups, liveQuestionIds } from '@/lib/questionnaireLegacy'
+import { sectionProgressPercent } from '@/lib/questionLogic'
+import { canonicalAnswers } from '@/lib/answerCompat'
 import { AnswerValue, QuestionnaireState, UploadedDocument } from '@/types'
 import QuestionSetsPanel from '@/components/admin/QuestionSetsPanel'
 import ClientAssignments from '@/components/admin/ClientAssignments'
@@ -43,6 +46,10 @@ import { LANGUAGES, LANG_ENGLISH_NAME, Lang, toLang } from '@/lib/langs'
 import { submissionLanguage, translateAnswersToEnglish } from '@/lib/machineTranslate'
 
 const DEFAULT_QUESTION_COUNT = QUESTIONNAIRE_SECTIONS.reduce((n, s) => n + s.questions.length, 0)
+
+/** Every id the questionnaire asks today — anything else on file is from before. */
+const LIVE_QUESTION_IDS = liveQuestionIds(QUESTIONNAIRE_SECTIONS)
+
 
 
 // ─── Admin Login ──────────────────────────────────────────────────────────────
@@ -133,6 +140,12 @@ function ClientDetailModal({
   const [translatedAnswers, setTranslatedAnswers] = useState<Record<string, string> | null>(null)
   const [translating, setTranslating] = useState(false)
   const totalSections = QUESTIONNAIRE_SECTIONS.length
+  /**
+   * The record as the questionnaire would store it today. A client who answered
+   * in Spanish before Module 1 has "Español" on file where the office expects
+   * "Spanish"; this reads it as the choice it was, and leaves the row alone.
+   */
+  const shownAnswers = canonicalAnswers(qState.answers)
 
   const handleTranslate = useCallback(async () => {
     setTranslating(true)
@@ -266,7 +279,7 @@ function ClientDetailModal({
                 {QUESTIONNAIRE_SECTIONS.map((section, idx) => {
                   const isCompleted = qState.completedSections.includes(idx)
                   const answeredQs = section.questions.filter(q => {
-                    const v = qState.answers[q.id]
+                    const v = shownAnswers[q.id]
                     return v !== undefined && v !== '' && !(Array.isArray(v) && v.length === 0)
                   })
                   const isCurrent = !isCompleted && answeredQs.length > 0
@@ -346,7 +359,7 @@ function ClientDetailModal({
                   <div className="space-y-3">
                     {QUESTIONNAIRE_SECTIONS.map((section, idx) => {
                       const filled = section.questions.filter(q => {
-                        const v = qState.answers[q.id]
+                        const v = shownAnswers[q.id]
                         return v !== undefined && v !== '' && !(Array.isArray(v) && v.length === 0)
                       })
                       if (!filled.length) return null
@@ -373,7 +386,7 @@ function ClientDetailModal({
                           {isOpen && (
                             <div className="divide-y divide-gray-50">
                               {filled.map(q => {
-                                const val = qState.answers[q.id]
+                                const val = shownAnswers[q.id]
                                 const raw = Array.isArray(val)
                                   ? val.map(v => `• ${v}`).join('\n')
                                   : val === 'yes' ? '✓ Yes' : val === 'no' ? '✗ No' : String(val)
@@ -390,6 +403,36 @@ function ClientDetailModal({
                         </div>
                       )
                     })}
+
+                    {/* Answers to questions the questionnaire no longer asks.
+                        Module 1 narrowed it; without this the office would open
+                        a client's file and find half of it gone. */}
+                    {legacyAnswerGroups(qState.answers, LIVE_QUESTION_IDS).map(group => (
+                      <div key={group.section} className="border border-gray-200 rounded-xl overflow-hidden">
+                        <div className="px-4 py-3 bg-gray-50 border-b border-gray-100">
+                          <p className="text-sm font-semibold text-black">{group.section}</p>
+                          <p className="text-xs text-gray-400 mt-0.5">
+                            From an earlier version of the questionnaire · {group.entries.length}{' '}
+                            {group.entries.length === 1 ? 'answer' : 'answers'}
+                          </p>
+                        </div>
+                        <div className="divide-y divide-gray-50">
+                          {group.entries.map(entry => {
+                            const val = entry.value
+                            const shown = Array.isArray(val)
+                              ? val.map(v => `• ${v}`).join('\n')
+                              : val === 'yes' ? '✓ Yes' : val === 'no' ? '✗ No'
+                              : val === 'not_sure' ? '? Not Sure' : String(val)
+                            return (
+                              <div key={entry.id} className="px-4 py-3">
+                                <p className="text-xs text-gray-400 mb-1">{entry.label}</p>
+                                <p className="text-sm text-gray-800 whitespace-pre-line font-medium">{shown}</p>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </>
               )}
@@ -1246,7 +1289,7 @@ export default function AdminPage() {
           <div className="divide-y divide-gray-50 sm:hidden">
             {allClients.map(client => {
               const status = getStatus(client)
-              const pct = client.questionnaire.submitted ? 100 : Math.round((client.questionnaire.completedSections.length / QUESTIONNAIRE_SECTIONS.length) * 100)
+              const pct = client.questionnaire.submitted ? 100 : sectionProgressPercent(client.questionnaire.completedSections, QUESTIONNAIRE_SECTIONS.length)
               return (
                 <div key={client.id} className="p-4 transition-colors duration-150 hover:bg-gray-50/80 active:bg-gray-100">
                   <div className="flex items-start justify-between mb-3">
@@ -1332,7 +1375,7 @@ export default function AdminPage() {
               <tbody className="divide-y divide-gray-50">
                 {allClients.map(client => {
                   const status = getStatus(client)
-                  const pct = client.questionnaire.submitted ? 100 : Math.round((client.questionnaire.completedSections.length / QUESTIONNAIRE_SECTIONS.length) * 100)
+                  const pct = client.questionnaire.submitted ? 100 : sectionProgressPercent(client.questionnaire.completedSections, QUESTIONNAIRE_SECTIONS.length)
 
                   return (
                     <tr key={client.id} className="hover:bg-gray-50/50 transition-colors group">
