@@ -32,14 +32,27 @@ import { Question, QuestionType } from '@/types'
  * away. Longer pastes are rejected with a message telling the admin to send it
  * in parts, rather than silently losing the tail.
  */
-export const MAX_INPUT_CHARS = 20_000
+export const MAX_INPUT_CHARS = 30_000
 
 /**
- * The most one paste can produce — more than a client will answer in one
- * sitting. Beyond this the admin is told what was cut rather than left to
- * assume the batch came back whole.
+ * The most one paste can produce.
+ *
+ * A real questionnaire is longer than it looks. A twenty-one item sheet from a
+ * case file — vehicle details, the day someone was let go, who said what —
+ * came out as forty-three questions, because a numbered item that asks for a
+ * year, a make and a model is three questions to a client, and "what did you
+ * complain about, to whom, and when" is three more. Forty cut the last three
+ * off that sheet, and the three it cut were the ones the claim rested on.
+ *
+ * Sixty is not what a client will answer in one sitting; it is the ceiling on
+ * what the office can build in one go, and the office decides what to send.
+ * Batching is what makes the height affordable — sixty questions is three
+ * batches read at the same time, not one long call.
+ *
+ * Beyond this the admin is told what was cut rather than left to assume the
+ * batch came back whole.
  */
-export const MAX_QUESTIONS = 40
+export const MAX_QUESTIONS = 60
 
 /**
  * What one batch aims for, and the ceiling it is allowed to reach.
@@ -141,6 +154,18 @@ people who have never dealt with a lawyer, and who may be reading in their secon
 language. The questions they receive have to be answerable by someone recalling their
 own job, not by someone who knows employment law.
 
+## Which language you answer in
+
+The pasted text can be in any language. Staff paste an attorney's email in English,
+a sheet typed in Chinese for a Chinese-speaking client, a page of Spanish notes.
+
+Whatever language it arrives in, \`label\`, \`helpText\`, \`placeholder\` and \`options\`
+are ALWAYS English. They are the firm's own record of the question — what staff read
+in the admin panel, what prints into the case file, and what a client's answer is
+filed against. A case file that comes back in four languages is a case file nobody
+in the office can read. So a Chinese sheet becomes English questions here, and its
+Chinese wording belongs only in the translated fields below.
+
 ## What you are given
 
 Whatever the staff pasted: a numbered list, an email, a page from a Word document, a
@@ -229,7 +254,9 @@ A client blocked by a required question they cannot answer will abandon the form
 ${translating ? `## Translation
 
 This client reads the portal in ${targetName}. Fill \`translatedLabel\`,
-\`translatedHelpText\` and \`translatedOptions\` with ${targetName}.
+\`translatedHelpText\` and \`translatedOptions\` with ${targetName}. These are the ONLY
+fields ${targetName} belongs in — even when the text you were given was already
+written in ${targetName}, the English fields above are still English.
 
 - Translate meaning, not words. Match the register the client would expect from a law
   office: polite, plain, addressed directly to them.
