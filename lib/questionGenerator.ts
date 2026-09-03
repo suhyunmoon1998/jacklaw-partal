@@ -24,6 +24,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod'
 import { z } from 'zod'
 import { Lang, LANG_ENGLISH_NAME, TranslatedLang } from '@/lib/langs'
+import { DICTIONARIES } from '@/lib/translations'
 import { Question, QuestionType } from '@/types'
 
 /**
@@ -146,6 +147,10 @@ function systemPrompt(target: Lang, cap: number): string {
   const translating = target !== 'en'
   const targetName =
     target === 'en' ? 'English' : TARGET_DESCRIPTION[target as TranslatedLang]
+  // Named from the portal's own dictionary rather than typed out here, so the
+  // instruction cannot start pointing at a screen the client no longer has.
+  const docsScreen = DICTIONARIES.en.docs_title
+  const docsScreenTarget = DICTIONARIES[target].docs_title
 
   return `You convert text a law firm's staff pasted in into questions for a client questionnaire.
 
@@ -165,6 +170,26 @@ in the admin panel, what prints into the case file, and what a client's answer i
 filed against. A case file that comes back in four languages is a case file nobody
 in the office can read. So a Chinese sheet becomes English questions here, and its
 Chinese wording belongs only in the translated fields below.
+
+## Photos and documents
+
+A question cannot take a file. There is no upload control in this questionnaire —
+the portal collects paperwork on a separate screen the client opens from their
+dashboard, called "${docsScreen}"${translating ? ` ("${docsScreenTarget}" to this client)` : ''}.
+
+So when the pasted text asks the client to upload, attach, scan, photograph or
+send in a document, do not write it as a free-text question. A text box asks
+someone to type a photograph, and they will leave it empty or write "yes". Ask
+instead whether they have the thing, and tell them where it goes:
+
+    label:    Do you have <the document the source asked for>?
+    type:     yes_no
+    helpText: If you do, please upload it on the ${docsScreen} screen of the portal.
+
+Keep whatever the source said about WHICH document is wanted — a registration, a
+door label showing a weight rating, a paystub — in the label. That detail is the
+point of the question.${translating ? ` Write the screen's name as "${docsScreenTarget}" in the
+translated help text, which is what this client sees on it.` : ''}
 
 ## What you are given
 
