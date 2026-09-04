@@ -32,10 +32,12 @@ interface AdminClient {
   createdAt: string
   questionnaire: { completedSections: number[]; submitted: boolean; lastSaved: string }
   documentCount: number
+  /** Question sets this client can see, and how many they have finished. */
+  assignments: AssignmentRollup
 }
 import { QUESTIONNAIRE_SECTIONS } from '@/lib/questionnaireData'
 import { legacyAnswerGroups, liveQuestionIds } from '@/lib/questionnaireLegacy'
-import { sectionProgressPercent } from '@/lib/questionLogic'
+import { AssignmentRollup, STATUS_LABEL, clientProgressPercent, clientStatus } from '@/lib/clientProgress'
 import { canonicalAnswers } from '@/lib/answerCompat'
 import { AnswerValue, QuestionnaireState, UploadedDocument } from '@/types'
 import QuestionSetsPanel from '@/components/admin/QuestionSetsPanel'
@@ -49,6 +51,7 @@ const DEFAULT_QUESTION_COUNT = QUESTIONNAIRE_SECTIONS.reduce((n, s) => n + s.que
 
 /** Every id the questionnaire asks today — anything else on file is from before. */
 const LIVE_QUESTION_IDS = liveQuestionIds(QUESTIONNAIRE_SECTIONS)
+
 
 
 
@@ -139,13 +142,13 @@ function ClientDetailModal({
   const [expandedSection, setExpandedSection] = useState<number | null>(null)
   const [translatedAnswers, setTranslatedAnswers] = useState<Record<string, string> | null>(null)
   const [translating, setTranslating] = useState(false)
-  const totalSections = QUESTIONNAIRE_SECTIONS.length
   /**
    * The record as the questionnaire would store it today. A client who answered
    * in Spanish before Module 1 has "Español" on file where the office expects
    * "Spanish"; this reads it as the choice it was, and leaves the row alone.
    */
   const shownAnswers = canonicalAnswers(qState.answers)
+  const totalSections = QUESTIONNAIRE_SECTIONS.length
 
   const handleTranslate = useCallback(async () => {
     setTranslating(true)
@@ -1049,11 +1052,7 @@ export default function AdminPage() {
     setSelectedClient(client)
   }
 
-  const getStatus = (client: AdminClient) => {
-    if (client.questionnaire.submitted) return { label: 'Submitted', cls: 'bg-green-100 text-green-700' }
-    if (client.questionnaire.completedSections.length > 0) return { label: 'In Progress', cls: 'bg-amber-100 text-amber-700' }
-    return { label: 'Not Started', cls: 'bg-gray-100 text-gray-500' }
-  }
+  const getStatus = (client: AdminClient) => STATUS_LABEL[clientStatus(client)]
 
   if (loading) return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
@@ -1289,7 +1288,7 @@ export default function AdminPage() {
           <div className="divide-y divide-gray-50 sm:hidden">
             {allClients.map(client => {
               const status = getStatus(client)
-              const pct = client.questionnaire.submitted ? 100 : sectionProgressPercent(client.questionnaire.completedSections, QUESTIONNAIRE_SECTIONS.length)
+              const pct = clientProgressPercent(client)
               return (
                 <div key={client.id} className="p-4 transition-colors duration-150 hover:bg-gray-50/80 active:bg-gray-100">
                   <div className="flex items-start justify-between mb-3">
@@ -1375,7 +1374,7 @@ export default function AdminPage() {
               <tbody className="divide-y divide-gray-50">
                 {allClients.map(client => {
                   const status = getStatus(client)
-                  const pct = client.questionnaire.submitted ? 100 : sectionProgressPercent(client.questionnaire.completedSections, QUESTIONNAIRE_SECTIONS.length)
+                  const pct = clientProgressPercent(client)
 
                   return (
                     <tr key={client.id} className="hover:bg-gray-50/50 transition-colors group">
@@ -1406,6 +1405,12 @@ export default function AdminPage() {
                           </div>
                           <span className="text-xs text-gray-400 w-8">{pct}%</span>
                         </div>
+                        {client.assignments.total > 0 && (
+                          <p className="text-[11px] text-gray-400 mt-1">
+                            {client.assignments.completed}/{client.assignments.total} question{' '}
+                            {client.assignments.total === 1 ? 'set' : 'sets'} done
+                          </p>
+                        )}
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-1">

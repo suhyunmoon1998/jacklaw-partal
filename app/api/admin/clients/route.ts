@@ -17,10 +17,15 @@ export async function GET(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: 'Fetch failed' }, { status: 500 })
 
-  // Fetch questionnaire states and document counts in parallel
-  const [{ data: qStates }, { data: docs }] = await Promise.all([
+  // Questionnaire states, documents, and the question sets each client can see.
+  // Assignments are here because the list's status column speaks for everything
+  // asked of a client, not only the onboarding questionnaire — a client added
+  // solely to be sent a set would otherwise read as "Not Started" after
+  // finishing it.
+  const [{ data: qStates }, { data: docs }, { data: assignments }] = await Promise.all([
     getSupabase().from('questionnaire_states').select('client_id, completed_sections, submitted, last_saved'),
     getSupabase().from('documents').select('client_id'),
+    getSupabase().from('client_question_set_assignments').select('client_id, status'),
   ])
 
   const qMap = Object.fromEntries((qStates ?? []).map(q => [q.client_id, q]))
@@ -28,6 +33,19 @@ export async function GET(req: NextRequest) {
     acc[d.client_id] = (acc[d.client_id] ?? 0) + 1
     return acc
   }, {})
+
+  // A draft is a set the office has built but not released, so it was never
+  // asked of the client and does not count towards their progress.
+  const setCount = (assignments ?? []).reduce<Record<string, { total: number; completed: number }>>(
+    (acc, a) => {
+      if (a.status === 'draft') return acc
+      const row = (acc[a.client_id] ??= { total: 0, completed: 0 })
+      row.total += 1
+      if (a.status === 'completed') row.completed += 1
+      return acc
+    },
+    {}
+  )
 
   const enriched = (clients ?? []).map(c => ({
     id: c.id,
@@ -45,6 +63,7 @@ export async function GET(req: NextRequest) {
         }
       : { completedSections: [], submitted: false, lastSaved: '' },
     documentCount: docCount[c.id] ?? 0,
+    assignments: setCount[c.id] ?? { total: 0, completed: 0 },
   }))
 
   return NextResponse.json({ clients: enriched })
