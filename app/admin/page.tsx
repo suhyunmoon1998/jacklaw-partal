@@ -37,6 +37,8 @@ interface AdminClient {
 }
 import { QUESTIONNAIRE_SECTIONS } from '@/lib/questionnaireData'
 import { legacyAnswerGroups, liveQuestionIds } from '@/lib/questionnaireLegacy'
+import { sectionsForReading } from '@/lib/modules'
+import { FLAG_LABEL, staffFlags } from '@/lib/staffFlags'
 import { AssignmentRollup, STATUS_LABEL, clientProgressPercent, clientStatus } from '@/lib/clientProgress'
 import { canonicalAnswers } from '@/lib/answerCompat'
 import { AnswerValue, QuestionnaireState, UploadedDocument } from '@/types'
@@ -48,9 +50,6 @@ import { LANGUAGES, LANG_ENGLISH_NAME, Lang, toLang } from '@/lib/langs'
 import { submissionLanguage, translateAnswersToEnglish } from '@/lib/machineTranslate'
 
 const DEFAULT_QUESTION_COUNT = QUESTIONNAIRE_SECTIONS.reduce((n, s) => n + s.questions.length, 0)
-
-/** Every id the questionnaire asks today — anything else on file is from before. */
-const LIVE_QUESTION_IDS = liveQuestionIds(QUESTIONNAIRE_SECTIONS)
 
 
 
@@ -148,7 +147,15 @@ function ClientDetailModal({
    * "Spanish"; this reads it as the choice it was, and leaves the row alone.
    */
   const shownAnswers = canonicalAnswers(qState.answers)
-  const totalSections = QUESTIONNAIRE_SECTIONS.length
+  /**
+   * Module 1 and Module 2 together, with this client's repeating wage-and-hour
+   * branches expanded. Reading Module 1 alone would push every Module 2 answer
+   * into the "earlier version" list at the bottom.
+   */
+  const readingSections = sectionsForReading(qState.answers)
+  const liveIds = liveQuestionIds(readingSections)
+  const flags = staffFlags(shownAnswers)
+  const totalSections = readingSections.length
 
   const handleTranslate = useCallback(async () => {
     setTranslating(true)
@@ -279,7 +286,7 @@ function ClientDetailModal({
 
               {/* Section checklist */}
               <div className="space-y-2">
-                {QUESTIONNAIRE_SECTIONS.map((section, idx) => {
+                {readingSections.map((section, idx) => {
                   const isCompleted = qState.completedSections.includes(idx)
                   const answeredQs = section.questions.filter(q => {
                     const v = shownAnswers[q.id]
@@ -359,8 +366,31 @@ function ClientDetailModal({
                       )}
                     </button>
                   </div>
+                  {flags.length > 0 && (
+                    <div className="mb-4 border border-amber-200 bg-amber-50/60 rounded-xl p-4">
+                      <p className="text-xs font-bold tracking-wider uppercase text-amber-700 mb-2">
+                        Worth a read · staff only
+                      </p>
+                      <div className="space-y-2.5">
+                        {flags.map(f => (
+                          <div key={f.flag}>
+                            <p className="text-sm font-semibold text-amber-900">{FLAG_LABEL[f.flag]}</p>
+                            <ul className="mt-0.5 space-y-0.5">
+                              {f.because.map((reason, i) => (
+                                <li key={i} className="text-xs text-amber-800/90">· {reason}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        ))}
+                      </div>
+                      <p className="text-[11px] text-amber-700/80 mt-2.5">
+                        Raised from the client&apos;s own answers. Not a conclusion, and never shown to them.
+                      </p>
+                    </div>
+                  )}
+
                   <div className="space-y-3">
-                    {QUESTIONNAIRE_SECTIONS.map((section, idx) => {
+                    {readingSections.map((section, idx) => {
                       const filled = section.questions.filter(q => {
                         const v = shownAnswers[q.id]
                         return v !== undefined && v !== '' && !(Array.isArray(v) && v.length === 0)
@@ -410,7 +440,7 @@ function ClientDetailModal({
                     {/* Answers to questions the questionnaire no longer asks.
                         Module 1 narrowed it; without this the office would open
                         a client's file and find half of it gone. */}
-                    {legacyAnswerGroups(qState.answers, LIVE_QUESTION_IDS).map(group => (
+                    {legacyAnswerGroups(qState.answers, liveIds).map(group => (
                       <div key={group.section} className="border border-gray-200 rounded-xl overflow-hidden">
                         <div className="px-4 py-3 bg-gray-50 border-b border-gray-100">
                           <p className="text-sm font-semibold text-black">{group.section}</p>

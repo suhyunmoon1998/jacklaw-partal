@@ -434,7 +434,7 @@ export default function PasteQuestionsDialog({
                           <span className="font-semibold text-gray-700">
                             {gateLabel(questions, q.showIf.questionId)}
                           </span>{' '}
-                          is <span className="font-semibold text-gray-700">{q.showIf.value}</span>
+                          is <span className="font-semibold text-gray-700">{q.showIf.value ?? ''}</span>
                         </span>
                         <button
                           onClick={() => update(q.key, { showIf: undefined })}

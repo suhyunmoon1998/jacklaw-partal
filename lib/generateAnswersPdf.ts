@@ -1,7 +1,7 @@
 import PDFDocument from 'pdfkit'
-import { QUESTIONNAIRE_SECTIONS } from '@/lib/questionnaireData'
 import { legacyAnswerGroups, liveQuestionIds } from '@/lib/questionnaireLegacy'
 import { canonicalAnswers } from '@/lib/answerCompat'
+import { sectionsForReading } from '@/lib/modules'
 import { AnswerValue, Question, QuestionnaireSection } from '@/types'
 
 const GOLD = '#E07820'
@@ -65,7 +65,10 @@ export function generateAnswersPdf(
   // An answer chosen in Spanish before Module 1 prints as the choice it was,
   // rather than as a word the reader of this file will not recognise.
   const answers = canonicalAnswers(rawAnswers)
-  const sections = options.sections ?? QUESTIONNAIRE_SECTIONS
+  // Both modules, with this client's repeating branches expanded, so a
+  // wage-and-hour answer prints under its own heading rather than as an
+  // unrecognised leftover.
+  const sections = options.sections ?? sectionsForReading(rawAnswers)
   const title = options.title ?? 'CLIENT INTAKE QUESTIONNAIRE'
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ margin: 50, size: 'LETTER', bufferPages: true })

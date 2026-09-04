@@ -9,6 +9,8 @@
  */
 
 import { AnswerValue, Question } from '@/types'
+import { applyExclusivity } from '@/lib/repeatSections'
+import { NumberRange, parseNumberRange, withPart } from '@/lib/numberRange'
 
 export function QuestionInput({
   question,
@@ -19,6 +21,9 @@ export function QuestionInput({
   noLabel,
   notSureLabel,
   selectPlaceholder,
+  bestLabel = 'Best guess',
+  lowLabel = 'Lowest',
+  highLabel = 'Highest',
   optionLabels,
   maxDate,
 }: {
@@ -30,6 +35,10 @@ export function QuestionInput({
   noLabel: string
   notSureLabel: string
   selectPlaceholder: string
+  /** Sub-labels for a best/low/high estimate, in the client's language. */
+  bestLabel?: string
+  lowLabel?: string
+  highLabel?: string
   /**
    * Display text for `question.options`, matched by position. The option itself
    * is still what gets stored, so a translated form records the same answer as
@@ -178,7 +187,8 @@ export function QuestionInput({
                     const next = e.target.checked
                       ? [...arrVal, opt]
                       : arrVal.filter(v => v !== opt)
-                    onChange(question.id, next)
+                    // "None of these" cannot be held alongside four things.
+                    onChange(question.id, applyExclusivity(next, opt, question.exclusiveOptions))
                   }}
                 />
               </label>
@@ -196,6 +206,43 @@ export function QuestionInput({
           placeholder={question.placeholder ?? 'Type your answer here…'}
           rows={4}
           className="input-field resize-none"
+        />
+      )
+
+    case 'number_range': {
+      const range = parseNumberRange(strVal)
+      const field = (part: keyof NumberRange, label: string, hint: string) => (
+        <label key={part} className="flex-1 min-w-[6.5rem]">
+          <span className="block text-xs font-semibold text-gray-500 mb-1">{label}</span>
+          <input
+            id={part === 'best' ? inputId : undefined}
+            type="number"
+            inputMode="numeric"
+            min={0}
+            value={range[part] ?? ''}
+            placeholder={hint}
+            onChange={e => onChange(question.id, withPart(strVal, part, e.target.value))}
+            className="input-field"
+          />
+        </label>
+      )
+      return (
+        <div className="flex flex-wrap gap-2">
+          {field('best', bestLabel, '20')}
+          {field('low', lowLabel, '15')}
+          {field('high', highLabel, '30')}
+        </div>
+      )
+    }
+
+    case 'time':
+      return (
+        <input
+          id={inputId}
+          type="time"
+          value={strVal}
+          onChange={e => onChange(question.id, e.target.value)}
+          className="input-field"
         />
       )
 

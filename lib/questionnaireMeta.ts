@@ -106,10 +106,23 @@ export const SECTION_META: Record<string, SectionMeta> = {
 
   final_wages: { chapter: 'events', icon: ICONS.document },
   wrongful_termination: { chapter: 'events', icon: ICONS.exit },
+
+  // Module 2 — wage and hour.
+  m2_meal_breaks: { chapter: 'pay', icon: ICONS.mug },
+  m2_rest_breaks: { chapter: 'pay', icon: ICONS.pause },
+  m2_find_off_clock: { chapter: 'records', icon: ICONS.clock },
+  m2_pattern: { chapter: 'records', icon: ICONS.clipboard },
+  m2_overtime: { chapter: 'pay', icon: ICONS.bolt },
+  m2_retaliation: { chapter: 'events', icon: ICONS.shieldAlert },
 }
 
 const FALLBACK: SectionMeta = { chapter: 'wrap', icon: ICONS.document }
 
+/**
+ * A repeating section's instances carry the thing they are about in their id —
+ * `m2_pattern::Waited at a gate` — so the icon is looked up by the section the
+ * instance came from, not by the instance.
+ */
 export function sectionMeta(sectionId: string): SectionMeta {
-  return SECTION_META[sectionId] ?? FALLBACK
+  return SECTION_META[sectionId] ?? SECTION_META[sectionId.split('::')[0]] ?? FALLBACK
 }

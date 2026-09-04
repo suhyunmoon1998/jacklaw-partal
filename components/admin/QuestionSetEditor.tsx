@@ -785,7 +785,7 @@ export default function QuestionSetEditor({
                             </select>
                             <span className="text-xs text-gray-500">is</span>
                             <input
-                              value={q.showIf.value}
+                              value={q.showIf.value ?? ''}
                               onChange={e => update(q.key, { showIf: { ...q.showIf!, value: e.target.value } })}
                               placeholder="yes"
                               className="input-field text-xs py-1.5 w-24"

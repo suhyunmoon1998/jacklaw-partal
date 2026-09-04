@@ -19,6 +19,8 @@ export interface Session {
 
 export type QuestionType =
   | 'text'
+  | 'time'
+  | 'number_range'
   | 'phone'
   | 'date'
   | 'yes_no'
@@ -35,8 +37,12 @@ export interface ShowIfCondition {
   /**
    * The answer that reveals this question. When the gate is a multi-select, the
    * question is revealed if this value is among the options chosen.
+   *
+   * Optional only because of `answered` below, where the gate is about there
+   * being an answer at all rather than about which one. Every gate an admin can
+   * author still has one.
    */
-  value: string
+  value?: string
   /**
    * Further answers that also reveal it — "Yes or Sometimes", "a close guess or
    * a range or I do not know". Additive and optional, so every gate written
@@ -52,6 +58,18 @@ export interface ShowIfCondition {
    * true, if incomplete, description of the gate.
    */
   and?: { questionId: string; value: string; orValues?: string[] }
+  /**
+   * A second condition where EITHER is enough. "Unless they never worked over
+   * eight hours in a day and never over forty in a week" is two questions, and
+   * one of them saying yes is the whole point of asking.
+   */
+  or?: { questionId: string; value: string; orValues?: string[] }
+  /**
+   * True when the gating question has any answer at all, whatever it is. Used
+   * where the packet says "ask when M2Q070 is shown" — the follow-ups belong to
+   * the fact that the worker said something, not to what they said.
+   */
+  answered?: true
 }
 
 /**
@@ -75,6 +93,20 @@ export interface Question {
   type: QuestionType
   required?: boolean
   options?: string[]
+  /**
+   * Choices that cannot be held alongside a substantive one — "None of these",
+   * "No", "Not sure". Picking one clears the rest; picking anything else clears
+   * it. Without this a worker can file "None of these" and four things at once,
+   * and neither the routing nor the office can tell what they meant.
+   */
+  exclusiveOptions?: string[]
+  /**
+   * Options taken at render time from what the worker already chose elsewhere,
+   * rather than written here — "which of the kinds of unpaid work you picked
+   * happened most often". Values are the other questions' ids; their selected
+   * answers become this question's options, minus their own exclusive ones.
+   */
+  optionsFrom?: string[]
   placeholder?: string
   helpText?: string
   showIf?: ShowIfCondition
@@ -98,6 +130,20 @@ export interface QuestionnaireSection {
   title: string
   questions: Question[]
   showIf?: ShowIfCondition
+  /**
+   * A section asked once per thing the worker named, instead of once.
+   *
+   * Module 2 needs the same twenty-eight questions about every kind of unpaid
+   * work someone did, and a worker who did three kinds has three sets of
+   * answers that must not overwrite each other. The instances come from the
+   * answers to `fromQuestionIds`, and each one gets its own copy of every
+   * question id, suffixed with the thing it is about. `titleTemplate` puts that
+   * thing in the heading so the worker knows which one they are answering about.
+   */
+  repeatFor?: {
+    fromQuestionIds: string[]
+    titleTemplate: string
+  }
 }
 
 export type AnswerValue = string | string[]

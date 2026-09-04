@@ -7,6 +7,8 @@ import MascotWatermark from '@/components/MascotWatermark'
 import { getSession } from '@/lib/auth'
 import { Assignment, Session } from '@/types'
 import { QUESTIONNAIRE_SECTIONS } from '@/lib/questionnaireData'
+import { MODULE_2_SECTIONS } from '@/lib/module2Data'
+import { sectionProgressPercent } from '@/lib/questionLogic'
 import { FIRM_PHONE_LABEL, FIRM_PHONE_LABEL_HYPHENATED, FIRM_PHONE_TEL } from '@/lib/contact'
 import { useLanguage } from '@/lib/i18n'
 import { localizeName } from '@/lib/questionLogic'
@@ -14,6 +16,8 @@ import { localizeName } from '@/lib/questionLogic'
 export default function DashboardPage() {
   const [session, setSession] = useState<Session | null>(null)
   const [questionnaireProgress, setQuestionnaireProgress] = useState(0)
+  const [module2Progress, setModule2Progress] = useState(0)
+  const [module2Submitted, setModule2Submitted] = useState(false)
   const [documentCount, setDocumentCount] = useState(0)
   const [assignments, setAssignments] = useState<Assignment[]>([])
   const router = useRouter()
@@ -29,8 +33,17 @@ export default function DashboardPage() {
       fetch(`/api/questionnaire?clientId=${s.clientId}`).then(r => r.json()),
       fetch(`/api/documents?clientId=${s.clientId}`).then(r => r.json()),
     ]).then(([{ state }, { documents }]) => {
-      const completed = state?.submitted ? total : (state?.completedSections?.length ?? 0)
-      setQuestionnaireProgress(Math.round((completed / total) * 100))
+      // Clamped, because a client who started the questionnaire when it had
+      // twenty sections still carries those indices and would otherwise be told
+      // they are 190% done.
+      setQuestionnaireProgress(
+        state?.submitted ? 100 : sectionProgressPercent(state?.completedSections ?? [], total)
+      )
+      const m2 = state?.module2
+      setModule2Submitted(Boolean(m2?.submitted))
+      setModule2Progress(
+        m2?.submitted ? 100 : sectionProgressPercent(m2?.completedSections ?? [], MODULE_2_SECTIONS.length)
+      )
       setDocumentCount(documents?.length ?? 0)
     })
 
@@ -159,7 +172,7 @@ export default function DashboardPage() {
                 {onboardingDone
                   ? t('submitted_thanks')
                   : questionnaireProgress > 0
-                  ? `Resume — ${questionnaireProgress}% complete`
+                  ? `${t('m2_resume')} — ${questionnaireProgress}%`
                   : `${QUESTIONNAIRE_SECTIONS.length} sections · ~15–25 min`}
               </p>
             </div>
@@ -167,6 +180,35 @@ export default function DashboardPage() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
             </svg>
           </button>
+
+          {/* Module 2 — wage and hour. Offered once the intake behind it is in,
+              because it asks nothing Module 1 has not already established. */}
+          {onboardingDone && (
+            <button
+              onClick={() => router.push('/questionnaire/module2')}
+              className="w-full bg-white border-2 border-transparent hover:border-gold rounded-2xl p-5 text-left flex items-center gap-4 transition-all duration-200 shadow-sm hover:shadow-md active:scale-[0.98] group animate-slide-up stagger-3"
+            >
+              <div className="w-12 h-12 bg-gold/10 rounded-xl flex items-center justify-center shrink-0 group-hover:bg-gold group-active:bg-gold transition-colors">
+                <svg className="w-6 h-6 text-gold group-hover:text-white group-active:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-black">{t('m2_title')}</p>
+                <p className="text-sm text-gray-500 mt-0.5 truncate">
+                  {module2Submitted
+                    ? t('m2_done')
+                    : module2Progress > 0
+                    ? `${t('m2_resume')} — ${module2Progress}%`
+                    : t('m2_sub')}
+                </p>
+              </div>
+              <svg className="w-5 h-5 text-gray-300 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+          )}
 
           <button
             onClick={() => router.push('/documents')}

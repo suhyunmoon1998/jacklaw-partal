@@ -18,9 +18,14 @@ import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
-/** Pages that put a sticky bar directly beneath the header. */
+/**
+ * Screens that put a sticky bar directly beneath the header.
+ *
+ * ModuleQuestionnaire is one file serving two routes — Module 1 and Module 2 —
+ * so guarding it guards both.
+ */
 const PAGES = [
-  'app/questionnaire/page.tsx',
+  'components/ModuleQuestionnaire.tsx',
   'app/questionnaire/[assignmentId]/page.tsx',
 ]
 
@@ -59,7 +64,7 @@ describe('the language menu is never painted over', () => {
   }
 
   it('still lets a full-screen dialog cover the header', () => {
-    const source = readFileSync(path.join(process.cwd(), 'app/questionnaire/page.tsx'), 'utf8')
+    const source = readFileSync(path.join(process.cwd(), 'components/ModuleQuestionnaire.tsx'), 'utf8')
     const headerWrapper = source
       .split('\n')
       .find((line, i, lines) => /className="relative z-\d+"/.test(line) && /<Header/.test(lines[i + 1] ?? ''))

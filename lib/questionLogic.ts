@@ -19,8 +19,10 @@ import { AnswerValue, Question, QuestionnaireSection } from '@/types'
  */
 function conditionHolds(
   answer: AnswerValue | undefined,
-  cond: { value: string; orValues?: string[] }
+  cond: { value?: string; orValues?: string[]; answered?: true }
 ): boolean {
+  if (cond.answered) return hasAnswer(answer)
+  if (cond.value === undefined) return false
   const wanted = cond.orValues ? [cond.value, ...cond.orValues] : [cond.value]
   if (Array.isArray(answer)) return answer.some(a => wanted.includes(a))
   return typeof answer === 'string' && wanted.includes(answer)
@@ -30,9 +32,18 @@ export function isVisible(
   q: Question | QuestionnaireSection,
   answers: Record<string, AnswerValue>
 ): boolean {
+  // A question whose choices come from earlier answers has nothing to ask until
+  // those answers exist. Rendering an empty dropdown asks the worker to pick
+  // from nothing.
+  if ('optionsFrom' in q && q.optionsFrom && (q.options?.length ?? 0) === 0) return false
+
   const gate = q.showIf
   if (!gate) return true
-  if (!conditionHolds(answers[gate.questionId], gate)) return false
+
+  const head = conditionHolds(answers[gate.questionId], gate)
+  const either = gate.or ? conditionHolds(answers[gate.or.questionId], gate.or) : false
+  if (!head && !either) return false
+
   if (gate.and && !conditionHolds(answers[gate.and.questionId], gate.and)) return false
   return true
 }
