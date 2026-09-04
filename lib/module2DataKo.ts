@@ -66,7 +66,7 @@ export const MODULE_2_SECTIONS_KO: QuestionnaireSection[] = [
     repeatFor: { fromQuestionIds: ["m2_most_frequent_pattern", "m2_other_frequent_patterns"], titleTemplate: "임금을 받지 못한 근로 — {instance}" },
     questions: [
       { id: "m2_p_what", label: "이 무급 근로가 있었을 때 정확히 어떤 일을 하셨습니까?", type: "textarea" },
-      { id: "m2_p_who_asked", label: "누가 이 일을 하라고 했거나 그런 규칙을 정했습니까?", type: "select", options: ["사업주", "사장 또는 관리자", "조장(리드 직원)", "고객 또는 거래처", "회사 규정이나 시스템", "직접 지시한 사람은 없음", "다른 사람", "잘 모르겠음"] },
+      { id: "m2_p_who_asked", label: "누가 이 일을 하라고 했거나 그런 규칙을 정했습니까?", type: "select", options: ["사업주", "상사 또는 관리자", "조장(리드 직원)", "고객 또는 거래처", "회사 규정이나 시스템", "직접 지시한 사람은 없음", "다른 사람", "잘 모르겠음"] },
       { id: "m2_p_why_did_it", label: "직접 지시한 사람이 없었다면, 왜 그 일을 하셨습니까?", type: "multiselect", options: ["그 일을 하지 않으면 업무를 시작할 수 없어서", "그 일을 하지 않으면 업무를 마무리할 수 없어서", "그 작업을 끝내야 했기 때문에", "고객이 기다리고 있어서", "다음 근무조에 필요해서", "그 일을 할 사람이 저밖에 없어서", "하지 않으면 불이익을 받을 것 같아서", "모두가 그렇게 해 왔기 때문에", "돕고 싶었을 뿐, 아무도 기대하지 않았음", "제 자신의 선택이었음", "기타", "잘 모르겠음"] },
       { id: "m2_p_if_not_done", label: "그 일을 하지 않았다면 어떤 일이 생겼을 가능성이 큽니까?", type: "select", options: ["아무 일도 없음", "업무 준비가 안 되었을 것임", "일이 끝나지 않은 채 남았을 것임", "고객이 항의했을 것임", "상사가 화를 냈을 것임", "경고장(징계 기록)을 받았을 수 있음", "근무 시간이나 근무조가 줄었을 수 있음", "다음 근무조에 문제가 생겼을 것임", "기타", "잘 모르겠음"] },
       { id: "m2_p_could_wait", label: "출근 시간을 찍은(clock in) 후에 하거나, 퇴근 시간을 찍기(clock out) 전에 그 일을 할 수 있었습니까?", type: "select", options: ["예", "아니요", "때때로 가능했음", "잘 모르겠음"] },
