@@ -153,6 +153,15 @@ export interface QuestionnaireState {
   completedSections: number[]
   lastSaved: string
   submitted: boolean
+  /**
+   * How far the client has got with Module 2. The answers are not in here —
+   * both modules share the record above — only where they are in it.
+   */
+  module2?: {
+    completedSections: number[]
+    submitted: boolean
+    lastSaved?: string
+  }
 }
 
 export interface UploadedDocument {

@@ -10,7 +10,7 @@ import { ModuleId, liveAnswersFor, preparedSections } from '@/lib/modules'
 import { CHAPTER_LABEL, ChapterId, sectionMeta } from '@/lib/questionnaireMeta'
 import { AnswerValue, QuestionnaireState, Session } from '@/types'
 import { QuestionInput } from '@/components/QuestionField'
-import { hasAnswer, isFieldControl, isVisible, missingRequired } from '@/lib/questionLogic'
+import { hasAnswer, isFieldControl, isVisible, missingRequired, resumeSectionIndex } from '@/lib/questionLogic'
 import { useLanguage } from '@/lib/i18n'
 
 /** Fixed (not random) so the celebration renders identically on every pass. */
@@ -95,6 +95,11 @@ export default function ModuleQuestionnaire({
   const [saving, setSaving] = useState(false)
   const [autoSaved, setAutoSaved] = useState(false)
   const [mapOpen, setMapOpen] = useState(false)
+  /**
+   * Whether the office has handed this module to this client. Null while we are
+   * still finding out — the questionnaire is not drawn on a guess either way.
+   */
+  const [wasSent, setWasSent] = useState<boolean | null>(null)
   const [toast, setToast] = useState<{ title: string; sub: string; celebrate: boolean } | null>(null)
   const router = useRouter()
   const { lang, t } = useLanguage()
@@ -112,6 +117,11 @@ export default function ModuleQuestionnaire({
     const s = getSession()
     if (!s) { router.replace('/client'); return }
     setSession(s)
+    fetch(`/api/modules?clientId=${encodeURIComponent(s.clientId)}`)
+      .then(r => r.json())
+      .then(({ sent }) => setWasSent(Array.isArray(sent) && sent.includes(moduleId)))
+      .catch(() => setWasSent(false))
+
     fetch(`/api/questionnaire?clientId=${s.clientId}`)
       .then(r => r.json())
       .then(({ state }) => {
@@ -123,10 +133,12 @@ export default function ModuleQuestionnaire({
             submitted: Boolean(mine.submitted),
             lastSaved: mine.lastSaved ?? '',
           })
-          if ((mine.completedSections ?? []).length > 0) {
-            const visibleCount = ALL_SECTIONS.filter(sec => isVisible(sec, state.answers)).length
-            setCurrentSection(Math.min(mine.completedSections.length, Math.max(visibleCount - 1, 0)))
-          }
+          // Where they left off is worked out from what is still unanswered, not
+          // from a count of sections that may belong to an older questionnaire.
+          const resumed = liveAnswersFor(lang, state.answers ?? {})
+          setCurrentSection(
+            resumeSectionIndex(preparedSections(moduleId, lang, state.answers ?? {}), resumed)
+          )
         }
       })
   }, [router]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -267,7 +279,34 @@ export default function ModuleQuestionnaire({
     router.push(submitHref)
   }
 
-  if (!session || !section) return null
+  if (!session || wasSent === null) return null
+
+  // A module the office has not sent is not theirs to open yet, however they
+  // arrived at the address.
+  if (!wasSent) {
+    return (
+      <div className="relative min-h-screen bg-gray-50 flex flex-col">
+        <MascotWatermark />
+        <div className="relative z-40">
+          <Header showBack backHref="/dashboard" showLogout subtitle={subtitle} />
+        </div>
+        <main className="relative z-10 flex-1 px-4 pt-10 max-w-md mx-auto w-full">
+          <div className="card text-center">
+            <p className="font-semibold text-black">{t('m_not_sent')}</p>
+            <p className="text-sm text-gray-500 mt-1.5">{t('m_not_sent_sub')}</p>
+            <button
+              onClick={() => router.push('/dashboard')}
+              className="btn-primary mt-5"
+            >
+              {t('back')}
+            </button>
+          </div>
+        </main>
+      </div>
+    )
+  }
+
+  if (!section) return null
 
   const meta = sectionMeta(section.id)
   const visibleQuestions = section.questions.filter(q => isVisible(q, liveAnswers))

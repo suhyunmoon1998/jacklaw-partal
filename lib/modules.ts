@@ -23,7 +23,58 @@ import { effectiveAnswers } from '@/lib/questionLogic'
 import { prepareSections } from '@/lib/repeatSections'
 import { canonicalAnswers } from '@/lib/answerCompat'
 
-export type ModuleId = 'module1' | 'module2'
+export type ModuleId = 'module1' | 'module2' | 'module3'
+
+/**
+ * The modules the office can hand to a client.
+ *
+ * Module 3 is listed because it is planned and the office asks about it; it has
+ * no questions yet, so it cannot be sent. Saying that plainly is better than
+ * leaving a gap where a row should be, or a button that does nothing.
+ */
+export interface ModuleDefinition {
+  id: ModuleId
+  /** What the office calls it. */
+  name: string
+  /** What it covers, in one line, for the admin list. */
+  summary: string
+  /** Where the client opens it. */
+  href: string
+  built: boolean
+}
+
+export const MODULES: ModuleDefinition[] = [
+  {
+    id: 'module1',
+    name: 'Module 1 · Intake',
+    summary: 'Who they are, the employer, the dates, the job, the pay, the schedule and the time records',
+    href: '/questionnaire',
+    built: true,
+  },
+  {
+    id: 'module2',
+    name: 'Module 2 · Wage & Hour',
+    summary: 'Meal and rest breaks, unpaid time, overtime, and retaliation for asking about any of it',
+    href: '/questionnaire/module2',
+    built: true,
+  },
+  {
+    id: 'module3',
+    name: 'Module 3 · Who’s Who',
+    summary: 'The people in the workplace and possible witnesses',
+    href: '',
+    built: false,
+  },
+]
+
+export const moduleById = (id: ModuleId) => MODULES.find(m => m.id === id)
+
+/** How many questions a built module asks. Module 3 has none yet. */
+export function moduleQuestionCount(id: ModuleId): number {
+  if (id === 'module1') return QUESTIONNAIRE_SECTIONS.reduce((n, s) => n + s.questions.length, 0)
+  if (id === 'module2') return MODULE_2_SECTIONS.reduce((n, s) => n + s.questions.length, 0)
+  return 0
+}
 
 /** Every section of every module, in the order a client meets them. */
 export function allSections(lang: Lang): LocalizedSection[] {
@@ -31,7 +82,9 @@ export function allSections(lang: Lang): LocalizedSection[] {
 }
 
 export function sectionsFor(moduleId: ModuleId, lang: Lang): LocalizedSection[] {
-  return moduleId === 'module1' ? questionnaireSections(lang) : module2Sections(lang)
+  if (moduleId === 'module1') return questionnaireSections(lang)
+  if (moduleId === 'module2') return module2Sections(lang)
+  return []
 }
 
 /**

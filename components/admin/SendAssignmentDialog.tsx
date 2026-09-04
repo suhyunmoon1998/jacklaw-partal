@@ -3,11 +3,12 @@
 /**
  * Emailing one client the link to one assignment.
  *
- * A component of its own because two screens now hand a client questions: the
- * assignments panel of a client who already exists, and the add-client screen
- * where the questions are pasted before that client has any history at all.
- * One dialog is what keeps the address, the language and the wording of a
- * failure identical whichever door the questions came through.
+ * A component of its own because several screens now hand a client questions:
+ * the assignments panel, the add-client screen where the questions are pasted
+ * before that client has any history at all, and the module rows where the
+ * office sends Module 1 or Module 2. One dialog is what keeps the address, the
+ * language and the wording of a failure identical whichever door they came
+ * through.
  */
 
 import { useState } from 'react'
@@ -19,6 +20,7 @@ const adminHeaders = { 'Content-Type': 'application/json', 'x-admin-key': MOCK_A
 
 export default function SendAssignmentDialog({
   assignmentId,
+  sendTo,
   setName,
   clientName,
   link,
@@ -27,7 +29,14 @@ export default function SendAssignmentDialog({
   onClose,
   onSent,
 }: {
+  /** The assignment being sent. Ignored when `sendTo` names a module instead. */
   assignmentId: string
+  /**
+   * Send a built-in module rather than an assignment. The two go to different
+   * routes and record different things; everything the person doing the sending
+   * sees and types is the same, which is why they share this.
+   */
+  sendTo?: { clientId: string; moduleId: string }
   setName: string
   clientName: string
   link: string
@@ -54,11 +63,14 @@ export default function SendAssignmentDialog({
     setSending(true)
     setError('')
 
-    const res = await fetch(`/api/admin/assignments/${assignmentId}/send`, {
-      method: 'POST',
-      headers: adminHeaders,
-      body: JSON.stringify({ email, lang }),
-    }).catch(() => null)
+    const res = await fetch(
+      sendTo ? '/api/admin/modules/send' : `/api/admin/assignments/${assignmentId}/send`,
+      {
+        method: 'POST',
+        headers: adminHeaders,
+        body: JSON.stringify(sendTo ? { ...sendTo, email, lang } : { email, lang }),
+      }
+    ).catch(() => null)
 
     setSending(false)
 
@@ -69,6 +81,15 @@ export default function SendAssignmentDialog({
     const body = await res.json().catch(() => ({}))
     if (!res.ok) {
       setError(body.error ?? 'Could not send the email.')
+      return
+    }
+
+    // Sending a module records it whether or not the email got out, because the
+    // record is what opens the questionnaire to the client. Say which happened.
+    if (body.recorded && !body.sent) {
+      onSent(
+        `${setName} is now open to ${clientName}, but no email went out. ${body.error ?? ''}`.trim()
+      )
       return
     }
 

@@ -124,6 +124,32 @@ export function missingRequired(
 }
 
 /**
+ * Where to put a client who comes back.
+ *
+ * Not "however many sections they had finished". A section count is an index
+ * into a questionnaire that has not always had the same number of sections: a
+ * client who left the twenty-section version carries nineteen, and the
+ * ten-section one clamps that to its last section — which is the one with the
+ * Submit button on it. Someone one section from the end of the old form was
+ * being handed the end of a form they had never seen.
+ *
+ * So the question is not how far they got, it is what is still unanswered. They
+ * land on the first section that still wants something, and on the last one only
+ * when everything before it is done.
+ */
+export function resumeSectionIndex(
+  sections: QuestionnaireSection[],
+  answers: Record<string, AnswerValue>
+): number {
+  const visible = sections.filter(s => isVisible(s, answers))
+  const firstUnfinished = visible.findIndex(section =>
+    section.questions.some(q => isVisible(q, answers) && !hasAnswer(answers[q.id]))
+  )
+  if (firstUnfinished !== -1) return firstUnfinished
+  return Math.max(visible.length - 1, 0)
+}
+
+/**
  * How far through the questionnaire a client is, as a percentage.
  *
  * `completedSections` holds indices, and the questionnaire has not always had

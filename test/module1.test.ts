@@ -15,6 +15,7 @@ import {
   hasAnswer,
   isVisible,
   missingRequired,
+  resumeSectionIndex,
   sectionProgressPercent,
 } from '@/lib/questionLogic'
 import { LEGACY_QUESTIONS, legacyAnswerGroups, liveQuestionIds } from '@/lib/questionnaireLegacy'
@@ -516,5 +517,61 @@ describe('answers stored in the language the client read', () => {
         if (mapped !== lang) expect(question.options).toContain(mapped)
       }
     }
+  })
+})
+
+describe('coming back to a questionnaire that changed underneath you', () => {
+  // The two clients who were mid-intake when Module 1 shipped, as their rows
+  // actually stand in the database.
+  const ESTER_COMPLETED = Array.from({ length: 19 }, (_, i) => i)
+
+  it('lands on the first section that still wants something, not on Submit', () => {
+    const partly: Answers = {
+      full_name: 'Ester',
+      dob: '1980-01-01',
+      address: '1 Test St',
+      city_state_zip: 'Los Angeles, CA 90017',
+      still_employed: 'no',
+    }
+    const live = effectiveAnswers(QUESTIONNAIRE_SECTIONS, partly)
+    const at = resumeSectionIndex(QUESTIONNAIRE_SECTIONS, live)
+    const visible = QUESTIONNAIRE_SECTIONS.filter(s => isVisible(s, live))
+
+    // Not the last section, which is where the Submit button lives.
+    expect(at).toBeLessThan(visible.length - 1)
+    // And the section it picked really does still want something.
+    const landed = visible[at]
+    expect(landed.questions.some(q => isVisible(q, live) && !hasAnswer(live[q.id]))).toBe(true)
+    // A stale count of nineteen would have clamped to the end.
+    expect(ESTER_COMPLETED.length).toBeGreaterThan(visible.length - 1)
+  })
+
+  it('sends someone who has finished everything to the last section', () => {
+    const done: Answers = {}
+    for (const section of QUESTIONNAIRE_SECTIONS) {
+      for (const q of section.questions) done[q.id] = q.type === 'multiselect' ? ['x'] : 'answered'
+    }
+    const live = effectiveAnswers(QUESTIONNAIRE_SECTIONS, done)
+    const visible = QUESTIONNAIRE_SECTIONS.filter(s => isVisible(s, live))
+    expect(resumeSectionIndex(QUESTIONNAIRE_SECTIONS, live)).toBe(visible.length - 1)
+  })
+
+  it('starts a brand new client at the beginning', () => {
+    expect(resumeSectionIndex(QUESTIONNAIRE_SECTIONS, {})).toBe(0)
+  })
+
+  it('skips over a section the client cannot see', () => {
+    // A current employee never sees the two closing sections, so "the last
+    // section" means the last one they are actually shown.
+    const current: Answers = {}
+    for (const section of QUESTIONNAIRE_SECTIONS) {
+      if (section.id === 'final_wages' || section.id === 'wrongful_termination') continue
+      for (const q of section.questions) current[q.id] = q.type === 'multiselect' ? ['x'] : 'answered'
+    }
+    current.still_employed = 'yes'
+    const live = effectiveAnswers(QUESTIONNAIRE_SECTIONS, current)
+    const visible = QUESTIONNAIRE_SECTIONS.filter(s => isVisible(s, live))
+    expect(visible).toHaveLength(8)
+    expect(resumeSectionIndex(QUESTIONNAIRE_SECTIONS, live)).toBe(7)
   })
 })

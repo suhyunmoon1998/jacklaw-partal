@@ -17,6 +17,7 @@ import PasteQuestionsDialog from '@/components/admin/PasteQuestionsDialog'
 import SendAssignmentDialog from '@/components/admin/SendAssignmentDialog'
 import ModalPortal from '@/components/ModalPortal'
 import type { RecommendedBank } from '@/lib/recommendedQuestions'
+import { MODULES, ModuleId, moduleQuestionCount } from '@/lib/modules'
 
 const STATUS_BADGE: Record<Assignment['status'], { label: string; cls: string }> = {
   draft: { label: 'Draft', cls: 'bg-gray-100 text-gray-500' },
@@ -39,12 +40,15 @@ export default function ClientAssignments({
   caseType,
   defaultState,
   defaultQuestionCount,
+  module2State,
 }: {
   clientId: string
   clientName: string
   caseType: string
   defaultState: QuestionnaireState
   defaultQuestionCount: number
+  /** How far this client has got with the wage-and-hour module. */
+  module2State: { completedSections: number[]; submitted: boolean }
 }) {
   const [assignments, setAssignments] = useState<Assignment[]>([])
   const [sets, setSets] = useState<QuestionSet[]>([])
@@ -67,14 +71,26 @@ export default function ClientAssignments({
   const [sending, setSending] = useState<{ assignment: Assignment; email: string; link: string; lang: Lang } | null>(null)
   const [notice, setNotice] = useState('')
   const [banks, setBanks] = useState<RecommendedBank[]>([])
+  /** Which modules the office has handed this client, and when. */
+  const [moduleSends, setModuleSends] = useState<Record<string, string>>({})
+  const [sendingModule, setSendingModule] = useState<
+    { moduleId: ModuleId; name: string; email: string; link: string; lang: Lang } | null
+  >(null)
 
   const load = useCallback(async () => {
-    const [aRes, sRes] = await Promise.all([
+    const [aRes, sRes, mRes] = await Promise.all([
       fetch(`/api/admin/assignments?clientId=${encodeURIComponent(clientId)}`, { headers: adminHeaders }),
       fetch('/api/admin/question-sets', { headers: adminHeaders }),
+      fetch(`/api/admin/modules?clientId=${encodeURIComponent(clientId)}`, { headers: adminHeaders }),
     ])
     if (aRes.ok) setAssignments((await aRes.json()).assignments ?? [])
     if (sRes.ok) setSets((await sRes.json()).sets ?? [])
+    if (mRes.ok) {
+      const { sends } = await mRes.json()
+      setModuleSends(
+        Object.fromEntries((sends ?? []).map((x: { moduleId: string; sentAt: string }) => [x.moduleId, x.sentAt]))
+      )
+    }
     setLoading(false)
   }, [clientId])
 
@@ -151,6 +167,23 @@ export default function ClientAssignments({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viewing?.id, viewAnsweredIn])
 
+  const openModuleSend = async (moduleId: ModuleId, name: string) => {
+    setBusy(moduleId)
+    const res = await fetch(
+      `/api/admin/modules/send?clientId=${encodeURIComponent(clientId)}&moduleId=${moduleId}`,
+      { headers: adminHeaders }
+    ).catch(() => null)
+    const body = res?.ok ? await res.json().catch(() => ({})) : {}
+    setBusy(null)
+    setSendingModule({
+      moduleId,
+      name,
+      email: body.email ?? '',
+      link: body.link ?? `${window.location.origin}/dashboard`,
+      lang: toLang(body.lang),
+    })
+  }
+
   const openSend = async (assignment: Assignment) => {
     setBusy(assignment.id)
     const res = await fetch(`/api/admin/assignments/${assignment.id}/send`, { headers: adminHeaders })
@@ -225,11 +258,15 @@ export default function ClientAssignments({
       })
   }
 
-  const defaultStatus = defaultState.submitted
-    ? { label: 'Completed', cls: 'bg-green-100 text-green-700' }
-    : defaultState.completedSections.length > 0
-    ? { label: 'In Progress', cls: 'bg-amber-100 text-amber-700' }
-    : { label: 'Not Started', cls: 'bg-gray-100 text-gray-500' }
+  const builtInStatus = (state: { submitted: boolean; completedSections: number[] }) =>
+    state.submitted
+      ? { label: 'Completed', cls: 'bg-green-100 text-green-700' }
+      : state.completedSections.length > 0
+      ? { label: 'In Progress', cls: 'bg-amber-100 text-amber-700' }
+      : { label: 'Not Started', cls: 'bg-gray-100 text-gray-500' }
+
+  const defaultStatus = builtInStatus(defaultState)
+  const module2Status = builtInStatus(module2State)
 
   return (
     <div className="p-5 space-y-3">
@@ -240,23 +277,59 @@ export default function ClientAssignments({
         </div>
       )}
 
-      {/* Built-in onboarding questionnaire */}
-      <div className="border border-gray-200 rounded-xl p-4 bg-gray-50/60">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <p className="font-semibold text-gray-900 text-sm">Default Onboarding</p>
-              <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">Built in</span>
+      {/* One row per module the office can hand out. Module 3 is listed because
+          it is planned and people ask about it; it has no questions yet, so it
+          cannot be sent, and saying that is better than an empty gap. */}
+      {MODULES.map(mod => {
+        const sentAt = moduleSends[mod.id]
+        const state =
+          mod.id === 'module1' ? defaultState : mod.id === 'module2' ? module2State : null
+        const status = state ? builtInStatus(state) : null
+
+        return (
+          <div key={mod.id} className="border border-gray-200 rounded-xl p-4 bg-gray-50/60">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className="font-semibold text-gray-900 text-sm">{mod.name}</p>
+                  {!mod.built && (
+                    <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">
+                      Not built yet
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  {mod.built ? `${moduleQuestionCount(mod.id)} questions · ` : ''}
+                  {mod.summary}
+                </p>
+                <p className="text-xs text-gray-400 mt-1">
+                  {!mod.built
+                    ? 'Nothing to send yet.'
+                    : sentAt
+                    ? `Sent ${shortDate(sentAt)}`
+                    : 'Not sent — the client cannot open this yet.'}
+                </p>
+              </div>
+              <div className="flex flex-col items-end gap-2 shrink-0">
+                {status && (
+                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${status.cls}`}>
+                    {status.label}
+                  </span>
+                )}
+                {mod.built && (
+                  <button
+                    onClick={() => openModuleSend(mod.id, mod.name)}
+                    disabled={busy === mod.id}
+                    className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-gold/40 text-gold hover:bg-gold hover:text-white hover:border-gold transition-colors disabled:opacity-40"
+                  >
+                    {busy === mod.id ? 'Opening…' : sentAt ? 'Send again' : 'Send'}
+                  </button>
+                )}
+              </div>
             </div>
-            <p className="text-xs text-gray-400 mt-0.5">
-              {defaultQuestionCount} questions · every client receives this
-            </p>
           </div>
-          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full shrink-0 ${defaultStatus.cls}`}>
-            {defaultStatus.label}
-          </span>
-        </div>
-      </div>
+        )
+      })}
 
       {/* Assigned question sets */}
       {loading ? (
@@ -444,6 +517,20 @@ export default function ClientAssignments({
               lang: toLang(body.lang),
             })
           }}
+        />
+      )}
+
+      {sendingModule && (
+        <SendAssignmentDialog
+          assignmentId=""
+          setName={sendingModule.name}
+          clientName={clientName}
+          link={sendingModule.link}
+          initialEmail={sendingModule.email}
+          initialLang={sendingModule.lang}
+          sendTo={{ clientId, moduleId: sendingModule.moduleId }}
+          onClose={() => setSendingModule(null)}
+          onSent={message => { setSendingModule(null); setNotice(message); load() }}
         />
       )}
 

@@ -480,6 +480,7 @@ function ClientDetailModal({
               caseType={client.caseType}
               defaultState={qState}
               defaultQuestionCount={DEFAULT_QUESTION_COUNT}
+              module2State={qState.module2 ?? { completedSections: [], submitted: false }}
             />
           )}
 

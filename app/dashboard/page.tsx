@@ -18,6 +18,7 @@ export default function DashboardPage() {
   const [questionnaireProgress, setQuestionnaireProgress] = useState(0)
   const [module2Progress, setModule2Progress] = useState(0)
   const [module2Submitted, setModule2Submitted] = useState(false)
+  const [sentModules, setSentModules] = useState<string[]>([])
   const [documentCount, setDocumentCount] = useState(0)
   const [assignments, setAssignments] = useState<Assignment[]>([])
   const router = useRouter()
@@ -46,6 +47,14 @@ export default function DashboardPage() {
       )
       setDocumentCount(documents?.length ?? 0)
     })
+
+    // Which questionnaire modules the office has actually handed them. A module
+    // they have not been sent is not offered, however far along the one before
+    // it is.
+    fetch(`/api/modules?clientId=${encodeURIComponent(s.clientId)}`)
+      .then(r => r.json())
+      .then(({ sent }) => setSentModules(Array.isArray(sent) ? sent : []))
+      .catch(() => setSentModules([]))
 
     // Question sets the office assigned to this client specifically. Kept apart
     // from the onboarding progress above — each has its own status.
@@ -182,8 +191,8 @@ export default function DashboardPage() {
           </button>
 
           {/* Module 2 — wage and hour. Offered once the intake behind it is in,
-              because it asks nothing Module 1 has not already established. */}
-          {onboardingDone && (
+              sent by the office, not opened automatically. */}
+          {sentModules.includes('module2') && (
             <button
               onClick={() => router.push('/questionnaire/module2')}
               className="w-full bg-white border-2 border-transparent hover:border-gold rounded-2xl p-5 text-left flex items-center gap-4 transition-all duration-200 shadow-sm hover:shadow-md active:scale-[0.98] group animate-slide-up stagger-3"

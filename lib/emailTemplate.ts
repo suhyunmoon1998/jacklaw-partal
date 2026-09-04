@@ -1,6 +1,6 @@
 import { Lang } from '@/lib/langs'
 import { QUESTIONNAIRE_SECTIONS } from '@/lib/questionnaireData'
-import { AnswerValue, Question } from '@/types'
+import { AnswerValue, QuestionnaireSection, Question } from '@/types'
 
 function formatAnswer(val: AnswerValue, question?: Question): string {
   if (!val) return '<em style="color:#9ca3af;">Not answered</em>'
@@ -27,9 +27,15 @@ export function generateIntakeEmailHtml(
   clientName: string,
   caseType: string,
   submittedAt: string,
-  answers: Record<string, AnswerValue>
+  answers: Record<string, AnswerValue>,
+  /**
+   * The sections to print. Defaults to the intake questionnaire, which is what
+   * every caller wanted while it was the only one; a wage-and-hour submission
+   * passes its own, with that client's repeating branches already expanded.
+   */
+  sections: QuestionnaireSection[] = QUESTIONNAIRE_SECTIONS
 ): string {
-  const sectionsHtml = QUESTIONNAIRE_SECTIONS.map(section => {
+  const sectionsHtml = sections.map(section => {
     const answeredQuestions = section.questions.filter(q => hasAnswer(answers[q.id]))
     if (answeredQuestions.length === 0) return ''
 

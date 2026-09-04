@@ -113,7 +113,7 @@ export async function POST(req: NextRequest) {
       .maybeSingle()
 
     if (client) {
-      await sendIntakeNotificationEmails(client.name, client.case_type, answers)
+      await sendIntakeNotificationEmails(client.name, client.case_type, answers, moduleId)
     }
   }
 
