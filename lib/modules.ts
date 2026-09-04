@@ -69,6 +69,19 @@ export const MODULES: ModuleDefinition[] = [
 
 export const moduleById = (id: ModuleId) => MODULES.find(m => m.id === id)
 
+/**
+ * The modules a client is given the moment they are added.
+ *
+ * The intake questionnaire is what "every client receives this" means, and it is
+ * what the office is looking at when they type someone's name in. The later
+ * modules are sent deliberately, when the office decides that client is ready
+ * for them.
+ *
+ * This is not a default anyone should be able to forget: while it was missing, a
+ * newly added client opened the portal to nothing at all.
+ */
+export const MODULES_GIVEN_ON_CREATE: ModuleId[] = ['module1']
+
 /** How many questions a built module asks. Module 3 has none yet. */
 export function moduleQuestionCount(id: ModuleId): number {
   if (id === 'module1') return QUESTIONNAIRE_SECTIONS.reduce((n, s) => n + s.questions.length, 0)

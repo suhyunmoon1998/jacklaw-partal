@@ -9,7 +9,14 @@
 import { describe, expect, it } from 'vitest'
 import { MODULE_2_SECTIONS } from '@/lib/module2Data'
 import { QUESTIONNAIRE_SECTIONS } from '@/lib/questionnaireData'
-import { MODULE_1_IDS, MODULE_2_IDS, liveAnswersFor, preparedSections } from '@/lib/modules'
+import {
+  MODULES,
+  MODULES_GIVEN_ON_CREATE,
+  MODULE_1_IDS,
+  MODULE_2_IDS,
+  liveAnswersFor,
+  preparedSections,
+} from '@/lib/modules'
 import { module2Sections } from '@/lib/module2Sections'
 import { hasAnswer, isVisible, missingRequired } from '@/lib/questionLogic'
 import { applyExclusivity, baseId, instanceOf, prepareSections } from '@/lib/repeatSections'
@@ -516,5 +523,27 @@ describe('a client who was part-way through', () => {
     // The translated choice is read back as the choice it was.
     expect(live.preferred_language).toBe('Spanish')
     expect(hasAnswer(live.m2_meal_given)).toBe(true)
+  })
+})
+
+describe('what a client can open the day they are added', () => {
+  it('includes the intake questionnaire', () => {
+    // Gating the modules without this left a newly added client looking at an
+    // empty portal: every module was "not sent to you yet", including the one
+    // the office had just created them for.
+    expect(MODULES_GIVEN_ON_CREATE).toContain('module1')
+  })
+
+  it('does not include the modules the office sends deliberately', () => {
+    expect(MODULES_GIVEN_ON_CREATE).not.toContain('module2')
+    expect(MODULES_GIVEN_ON_CREATE).not.toContain('module3')
+  })
+
+  it('names only modules that exist and are built', () => {
+    for (const id of MODULES_GIVEN_ON_CREATE) {
+      const mod = MODULES.find(m => m.id === id)
+      expect(mod, `${id} is not a module`).toBeDefined()
+      expect(mod!.built, `${id} is not built, so it cannot be given to anyone`).toBe(true)
+    }
   })
 })

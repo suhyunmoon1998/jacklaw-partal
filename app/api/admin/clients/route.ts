@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
 import { isLang } from '@/lib/langs'
+import { MODULES_GIVEN_ON_CREATE } from '@/lib/modules'
 
 function isAdmin(req: NextRequest) {
   return req.headers.get('x-admin-key') === process.env.ADMIN_PASSWORD
@@ -100,6 +101,23 @@ export async function POST(req: NextRequest) {
     const msg = error.code === '23505' ? 'Phone number already registered.' : 'Insert failed.'
     return NextResponse.json({ error: msg }, { status: 400 })
   }
+
+  // The intake questionnaire is theirs from the moment they exist — that is what
+  // "every client receives this" means, and what the person adding them expects.
+  // Without this row the portal opens to nothing at all.
+  const { error: moduleError } = await getSupabase()
+    .from('client_module_sends')
+    .insert(
+      MODULES_GIVEN_ON_CREATE.map(moduleId => ({
+        client_id: id,
+        module_id: moduleId,
+        created_by: 'on-create',
+      }))
+    )
+
+  // The client exists either way; say so rather than failing the whole add, and
+  // leave a trail, because the office can still send the module by hand.
+  if (moduleError) console.error('could not open the intake questionnaire to', id, moduleError)
 
   return NextResponse.json({ client: data })
 }
