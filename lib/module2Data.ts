@@ -340,6 +340,11 @@ export const MODULE_2_SECTIONS: QuestionnaireSection[] = [
         helpText:
           'Whatever you answer, the next questions still ask about particular things. Some of them may not have felt like work at the time.',
       },
+      // Each checklist names its own "something else". The branch below is
+      // expanded once per DISTINCT thing the worker named, so five identical
+      // "Something else" strings would have collapsed a worker who did one
+      // unpaid thing before their shift and another after it into a single set
+      // of answers about neither.
       {
         id: 'm2_before_clock_in',
         label: 'Before you clocked in, did you ever do any of these things?',
@@ -355,7 +360,7 @@ export const MODULE_2_SECTIONS: QuestionnaireSection[] = [
           'Joined a meeting or talked about the shift',
           'Helped a customer or another worker',
           'Waited for a boss, keys, equipment, or the clock',
-          'Something else',
+          'Something else before clocking in',
           'None of these',
           'Not sure',
         ],
@@ -377,7 +382,7 @@ export const MODULE_2_SECTIONS: QuestionnaireSection[] = [
           'Helped a customer, boss, or worker',
           'Waited for a bag check or security check',
           'Waited for someone to let you leave',
-          'Something else',
+          'Something else after clocking out',
           'None of these',
           'Not sure',
         ],
@@ -399,7 +404,7 @@ export const MODULE_2_SECTIONS: QuestionnaireSection[] = [
           'Helped a customer or worker',
           'Did online training',
           'Used your own phone or computer for work',
-          'Something else',
+          'Something else away from work',
           'None of these',
           'Not sure',
         ],
@@ -418,7 +423,7 @@ export const MODULE_2_SECTIONS: QuestionnaireSection[] = [
           'Orientation',
           'Review or write-up meeting',
           'Talk with the last or next shift',
-          'Something else',
+          'Something else I attended',
           'None of these',
           'Not sure',
         ],
@@ -437,7 +442,7 @@ export const MODULE_2_SECTIONS: QuestionnaireSection[] = [
           'Rode in a required company bus or van',
           'Drove or walked from one company area to another',
           'Waited for a customer, load, route, or assignment',
-          'Something else',
+          'Something else while waiting or travelling',
           'No',
           'Not sure',
         ],

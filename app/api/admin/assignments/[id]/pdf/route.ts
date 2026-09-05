@@ -2,9 +2,15 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
 import { isAdmin } from '@/lib/adminAuth'
 import { getAssignmentDetail } from '@/lib/questionSets'
-import { generateAnswersPdf } from '@/lib/generateAnswersPdf'
+import { generateAnswersPdfForOffice } from '@/lib/generateAnswersPdf'
 import { formatPhone } from '@/lib/auth'
 import { translateAnswersToEnglish } from '@/lib/machineTranslate'
+
+/**
+ * Putting a client's own words into English takes longer than drawing a PDF.
+ * This is headroom for that, not the expected time.
+ */
+export const maxDuration = 120
 
 // GET /api/admin/assignments/[id]/pdf — that one assignment's answers, as a PDF.
 // Same generator and layout the default intake download already uses.
@@ -24,7 +30,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   // note in the default questionnaire's PDF route.
   const answers = await translateAnswersToEnglish(assignment.answers)
 
-  const pdf = await generateAnswersPdf(
+  const pdf = await generateAnswersPdfForOffice(
     client?.name ?? assignment.clientName,
     client?.case_type ?? '',
     formatPhone(client?.phone ?? ''),

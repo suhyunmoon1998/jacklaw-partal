@@ -36,6 +36,13 @@ export interface ModuleDefinition {
   id: ModuleId
   /** What the office calls it. */
   name: string
+  /**
+   * What the CLIENT is told it is called, in their own language. The office's
+   * name is an internal one — "Module 2 · Wage & Hour" is the row in the admin
+   * panel, not a subject line a worker should have to decode before deciding
+   * whether to open an email from a law firm.
+   */
+  clientName: Partial<Record<Lang, string>> & { en: string }
   /** What it covers, in one line, for the admin list. */
   summary: string
   /** Where the client opens it. */
@@ -47,6 +54,12 @@ export const MODULES: ModuleDefinition[] = [
   {
     id: 'module1',
     name: 'Module 1 · Intake',
+    clientName: {
+      en: 'Your intake questions',
+      es: 'Sus preguntas iniciales',
+      zh: '您的初步问题',
+      ko: '초기 문진표',
+    },
     summary: 'Who they are, the employer, the dates, the job, the pay, the schedule and the time records',
     href: '/questionnaire',
     built: true,
@@ -54,6 +67,12 @@ export const MODULES: ModuleDefinition[] = [
   {
     id: 'module2',
     name: 'Module 2 · Wage & Hour',
+    clientName: {
+      en: 'Questions about your pay and breaks',
+      es: 'Preguntas sobre su pago y sus descansos',
+      zh: '关于您的工资和休息时间的问题',
+      ko: '급여와 휴게시간에 대한 질문',
+    },
     summary: 'Meal and rest breaks, unpaid time, overtime, and retaliation for asking about any of it',
     href: '/questionnaire/module2',
     built: true,
@@ -61,6 +80,7 @@ export const MODULES: ModuleDefinition[] = [
   {
     id: 'module3',
     name: 'Module 3 · Who’s Who',
+    clientName: { en: 'Questions about the people at work' },
     summary: 'The people in the workplace and possible witnesses',
     href: '',
     built: false,

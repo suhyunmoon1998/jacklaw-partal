@@ -121,7 +121,9 @@ export default function SendAssignmentDialog({
           />
           {!email && (
             <p className="text-xs text-amber-600 mt-1.5">
-              No email on file — type one, or use Copy Link and send it yourself.
+              {sendTo
+                ? 'No email on file. You can still open it to them — the link only works once you do — and send the link yourself.'
+                : 'No email on file — type one, or use Copy Link and send it yourself.'}
             </p>
           )}
 
@@ -170,7 +172,7 @@ export default function SendAssignmentDialog({
             </button>
             <button
               onClick={handleSend}
-              disabled={sending || !email.includes('@')}
+              disabled={sending || (!sendTo && !email.includes('@'))}
               className="bg-gold text-white px-5 py-2.5 rounded-xl text-sm font-semibold hover:bg-gold-dark transition-colors disabled:opacity-40 flex items-center gap-2"
             >
               {sending && (
@@ -179,7 +181,13 @@ export default function SendAssignmentDialog({
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                 </svg>
               )}
-              {sending ? 'Sending…' : error ? 'Try again' : 'Send Email'}
+              {sending
+                ? 'Sending…'
+                : error
+                ? 'Try again'
+                : sendTo && !email.includes('@')
+                ? 'Open to client'
+                : 'Send Email'}
             </button>
           </div>
         </div>

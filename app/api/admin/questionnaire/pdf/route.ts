@@ -1,8 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
-import { generateAnswersPdf } from '@/lib/generateAnswersPdf'
+import { generateAnswersPdfForOffice } from '@/lib/generateAnswersPdf'
 import { formatPhone } from '@/lib/auth'
 import { translateAnswersToEnglish } from '@/lib/machineTranslate'
+
+/**
+ * Putting a client's own words into English takes longer than drawing a PDF.
+ * This is headroom for that, not the expected time.
+ */
+export const maxDuration = 120
 
 function isAdmin(req: NextRequest) {
   return req.headers.get('x-admin-key') === process.env.ADMIN_PASSWORD
@@ -27,7 +33,7 @@ export async function GET(req: NextRequest) {
   // the translator only calls out for text it detects as another language.
   const answers = await translateAnswersToEnglish(qState?.answers ?? {})
 
-  const pdf = await generateAnswersPdf(
+  const pdf = await generateAnswersPdfForOffice(
     client.name,
     client.case_type,
     formatPhone(client.phone ?? ''),

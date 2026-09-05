@@ -108,7 +108,9 @@ export async function POST(req: NextRequest) {
     await sendAssignmentEmail({
       to,
       clientName: client.name || 'there',
-      setName: definition.name,
+      // What the client is told it is called, in their language — not the
+      // office's internal row name.
+      setName: definition.clientName[lang] ?? definition.clientName.en,
       questionCount: moduleQuestionCount(moduleId),
       link,
       lang,

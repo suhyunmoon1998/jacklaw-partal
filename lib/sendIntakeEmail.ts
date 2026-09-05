@@ -2,6 +2,7 @@ import { generateIntakeEmailHtml, generateClientThankYouEmailHtml } from '@/lib/
 import { questionnaireSections } from '@/lib/questionnaireSections'
 import { module2Sections } from '@/lib/module2Sections'
 import { answersForReading } from '@/lib/modules'
+import { toEnglishForOffice } from '@/lib/officeTranslation'
 import { prepareSections } from '@/lib/repeatSections'
 import { AnswerValue, QuestionnaireSection } from '@/types'
 
@@ -64,12 +65,31 @@ export async function sendIntakeNotificationEmails(
 
   const copy = MODULE_EMAIL[moduleId]
 
+  // Whatever the client wrote in their own language, put into English for the
+  // people who have to read it. The original stays in the record; this is only
+  // what the notification prints.
+  const labelFor = (id: string) => {
+    for (const section of sections) {
+      const q = section.questions.find(x => x.id === id)
+      if (q) return q.label
+    }
+    return id
+  }
+  const { english, incomplete } = await toEnglishForOffice(filed, labelFor)
+  const forOffice: Record<string, AnswerValue> = { ...filed }
+  for (const [id, text] of Object.entries(english)) {
+    forOffice[id] = `${text}\n\n— as written: ${String(filed[id])}`
+  }
+  if (incomplete) {
+    console.error('some answers could not be put into English for', clientName)
+  }
+
   try {
     const { error } = await resend.emails.send({
       from: `JACKLAW Portal <${fromEmail}>`,
       to: [firmEmail],
       subject: copy.subject(clientName, caseType),
-      html: generateIntakeEmailHtml(clientName, caseType, submittedAt, filed, sections),
+      html: generateIntakeEmailHtml(clientName, caseType, submittedAt, forOffice, sections),
     })
     if (error) console.error('Resend error (firm notification):', error)
   } catch (err) {

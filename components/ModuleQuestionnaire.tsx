@@ -115,7 +115,14 @@ export default function ModuleQuestionnaire({
 
   useEffect(() => {
     const s = getSession()
-    if (!s) { router.replace('/client'); return }
+    if (!s) {
+      // Sessions last a day, so an emailed link is normally opened logged out.
+      // Carry where they were going, or signing in drops them on the dashboard
+      // and the invitation they just tapped is gone from the screen.
+      const back = moduleId === 'module2' ? '/questionnaire/module2' : '/questionnaire'
+      router.replace(`/client?next=${encodeURIComponent(back)}`)
+      return
+    }
     setSession(s)
     fetch(`/api/modules?clientId=${encodeURIComponent(s.clientId)}`)
       .then(r => r.json())

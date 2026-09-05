@@ -2,6 +2,7 @@ import PDFDocument from 'pdfkit'
 import { legacyAnswerGroups, liveQuestionIds } from '@/lib/questionnaireLegacy'
 import { canonicalAnswers } from '@/lib/answerCompat'
 import { answersForReading } from '@/lib/modules'
+import { toEnglishForOffice } from '@/lib/officeTranslation'
 import { AnswerValue, Question, QuestionnaireSection } from '@/types'
 
 const GOLD = '#E07820'
@@ -55,6 +56,45 @@ function formatAnswer(val: AnswerValue | undefined, question: Question): string 
  * own questions and heading; omitting it keeps the original behaviour — the
  * default onboarding questionnaire, section by section.
  */
+/**
+ * The same document, with anything the fonts cannot draw put into English first.
+ *
+ * PDFKit's built-in faces have no CJK glyphs, so a Chinese-speaking client's
+ * account of what happened printed as a note saying it could not be shown. This
+ * is the entry point the routes use; generateAnswersPdf below still draws
+ * exactly what it is handed.
+ */
+export async function generateAnswersPdfForOffice(
+  clientName: string,
+  caseType: string,
+  phone: string,
+  rawAnswers: Record<string, AnswerValue>,
+  options: { sections?: QuestionnaireSection[]; title?: string } = {}
+): Promise<Buffer> {
+  const reading = answersForReading(rawAnswers)
+  const sections = options.sections ?? reading.sections
+  const labelFor = (id: string) => {
+    for (const section of sections) {
+      const q = section.questions.find(x => x.id === id)
+      if (q) return q.label
+    }
+    return id
+  }
+
+  const { english } = await toEnglishForOffice(reading.filed, labelFor)
+  if (Object.keys(english).length === 0) {
+    return generateAnswersPdf(clientName, caseType, phone, rawAnswers, options)
+  }
+
+  // The English replaces the original in the document, with the original noted
+  // as unprintable rather than silently dropped — the record still holds it.
+  const translated: Record<string, AnswerValue> = { ...rawAnswers }
+  for (const [id, text] of Object.entries(english)) {
+    translated[id] = `${text}  [translated from the client's own words]`
+  }
+  return generateAnswersPdf(clientName, caseType, phone, translated, { ...options, sections })
+}
+
 export function generateAnswersPdf(
   clientName: string,
   caseType: string,
