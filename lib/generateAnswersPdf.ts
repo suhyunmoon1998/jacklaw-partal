@@ -1,7 +1,7 @@
 import PDFDocument from 'pdfkit'
 import { legacyAnswerGroups, liveQuestionIds } from '@/lib/questionnaireLegacy'
 import { canonicalAnswers } from '@/lib/answerCompat'
-import { sectionsForReading } from '@/lib/modules'
+import { answersForReading } from '@/lib/modules'
 import { AnswerValue, Question, QuestionnaireSection } from '@/types'
 
 const GOLD = '#E07820'
@@ -64,11 +64,13 @@ export function generateAnswersPdf(
 ): Promise<Buffer> {
   // An answer chosen in Spanish before Module 1 prints as the choice it was,
   // rather than as a word the reader of this file will not recognise.
-  const answers = canonicalAnswers(rawAnswers)
-  // Both modules, with this client's repeating branches expanded, so a
-  // wage-and-hour answer prints under its own heading rather than as an
-  // unrecognised leftover.
-  const sections = options.sections ?? sectionsForReading(rawAnswers)
+  // What the client stands behind, and what they took back — kept apart. Both
+  // modules, with this client's repeating branches expanded, so a wage-and-hour
+  // answer prints under its own heading rather than as an unrecognised leftover.
+  const reading = answersForReading(rawAnswers)
+  const answers = reading.filed
+  const retracted = reading.retracted
+  const sections = options.sections ?? reading.sections
   const title = options.title ?? 'CLIENT INTAKE QUESTIONNAIRE'
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ margin: 50, size: 'LETTER', bufferPages: true })
@@ -122,6 +124,34 @@ export function generateAnswersPdf(
         if (shown === UNRENDERABLE_NOTE) untranslated = true
 
         doc.fillColor(GRAY).font('Helvetica-Bold').fontSize(9).text(safeHeading(q.label) || q.id)
+        doc.fillColor('#000000').font('Helvetica').fontSize(10.5).text(shown)
+        doc.moveDown(0.5)
+      }
+      doc.moveDown(0.5)
+    }
+
+    // Answers the client gave and then withdrew by changing the question above
+    // them. Printed apart from the file rather than in it, and never left out —
+    // a reader deciding a case should know they were said and taken back.
+    const retractedEntries = sections.flatMap(section =>
+      section.questions
+        .filter(q => q.id in retracted)
+        .map(q => ({ label: q.label, value: formatAnswer(retracted[q.id], q) }))
+    )
+    if (retractedEntries.length > 0) {
+      anySections = true
+      ensureSpace(40)
+      doc.fillColor(GOLD).font('Helvetica-Bold').fontSize(11)
+        .text('ANSWERS THE CLIENT LATER TOOK BACK', { characterSpacing: 0.5 })
+      doc.fillColor(GRAY).font('Helvetica').fontSize(9)
+        .text('Given, then withdrawn by changing an earlier answer. Not part of what they submitted.')
+      doc.moveDown(0.4)
+
+      for (const entry of retractedEntries) {
+        ensureSpace(30)
+        const shown = RENDERABLE.test(entry.value) ? entry.value : UNRENDERABLE_NOTE
+        if (shown === UNRENDERABLE_NOTE) untranslated = true
+        doc.fillColor(GRAY).font('Helvetica-Bold').fontSize(9).text(safeHeading(entry.label))
         doc.fillColor('#000000').font('Helvetica').fontSize(10.5).text(shown)
         doc.moveDown(0.5)
       }

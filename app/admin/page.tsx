@@ -37,7 +37,7 @@ interface AdminClient {
 }
 import { QUESTIONNAIRE_SECTIONS } from '@/lib/questionnaireData'
 import { legacyAnswerGroups, liveQuestionIds } from '@/lib/questionnaireLegacy'
-import { sectionsForReading } from '@/lib/modules'
+import { answersForReading } from '@/lib/modules'
 import { FLAG_LABEL, staffFlags } from '@/lib/staffFlags'
 import { AssignmentRollup, STATUS_LABEL, clientProgressPercent, clientStatus } from '@/lib/clientProgress'
 import { canonicalAnswers } from '@/lib/answerCompat'
@@ -146,13 +146,17 @@ function ClientDetailModal({
    * in Spanish before Module 1 has "Español" on file where the office expects
    * "Spanish"; this reads it as the choice it was, and leaves the row alone.
    */
-  const shownAnswers = canonicalAnswers(qState.answers)
   /**
    * Module 1 and Module 2 together, with this client's repeating wage-and-hour
-   * branches expanded. Reading Module 1 alone would push every Module 2 answer
-   * into the "earlier version" list at the bottom.
+   * branches expanded — and the answers split into what they stand behind and
+   * what they took back by changing an earlier answer. Reading Module 1 alone
+   * would push every Module 2 answer into the "earlier version" list at the
+   * bottom; reading the raw record would file a retracted answer as a fact.
    */
-  const readingSections = sectionsForReading(qState.answers)
+  const reading = answersForReading(qState.answers)
+  const readingSections = reading.sections
+  const shownAnswers = reading.filed
+  const retractedAnswers = reading.retracted
   const liveIds = liveQuestionIds(readingSections)
   const flags = staffFlags(shownAnswers)
   const totalSections = readingSections.length
@@ -436,6 +440,38 @@ function ClientDetailModal({
                         </div>
                       )
                     })}
+
+                    {Object.keys(retractedAnswers).length > 0 && (
+                      <div className="border border-amber-200 rounded-xl overflow-hidden">
+                        <div className="px-4 py-3 bg-amber-50/70 border-b border-amber-100">
+                          <p className="text-sm font-semibold text-amber-900">Taken back by the client</p>
+                          <p className="text-xs text-amber-800/80 mt-0.5">
+                            Answered, then withdrawn by changing an earlier answer. Not part of what
+                            they submitted.
+                          </p>
+                        </div>
+                        <div className="divide-y divide-amber-50">
+                          {readingSections.flatMap(section =>
+                            section.questions
+                              .filter(q => q.id in retractedAnswers)
+                              .map(q => {
+                                const val = retractedAnswers[q.id]
+                                const shown = Array.isArray(val)
+                                  ? val.map(v => `• ${v}`).join('\n')
+                                  : val === 'yes' ? '✓ Yes' : val === 'no' ? '✗ No' : String(val)
+                                return (
+                                  <div key={q.id} className="px-4 py-3">
+                                    <p className="text-xs text-gray-400 mb-1">{q.label}</p>
+                                    <p className="text-sm text-gray-500 whitespace-pre-line line-through decoration-gray-300">
+                                      {shown}
+                                    </p>
+                                  </div>
+                                )
+                              })
+                          )}
+                        </div>
+                      </div>
+                    )}
 
                     {/* Answers to questions the questionnaire no longer asks.
                         Module 1 narrowed it; without this the office would open

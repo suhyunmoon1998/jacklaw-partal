@@ -1,7 +1,7 @@
 import { generateIntakeEmailHtml, generateClientThankYouEmailHtml } from '@/lib/emailTemplate'
 import { questionnaireSections } from '@/lib/questionnaireSections'
 import { module2Sections } from '@/lib/module2Sections'
-import { liveAnswersFor } from '@/lib/modules'
+import { answersForReading } from '@/lib/modules'
 import { prepareSections } from '@/lib/repeatSections'
 import { AnswerValue, QuestionnaireSection } from '@/types'
 
@@ -52,13 +52,14 @@ export async function sendIntakeNotificationEmails(
     hour: '2-digit', minute: '2-digit',
   })
 
-  // The sections this submission is actually about. Module 2's repeating
-  // branches are expanded for this client, or the email would print nothing for
-  // the questions that matter most in it.
-  const live = liveAnswersFor('en', answers)
+  // The sections this submission is actually about, and the answers the client
+  // actually stands behind. An answer whose gate they later closed — the whole
+  // wrongful-termination section, after they corrected themselves to say they
+  // still work there — must not arrive as a fact in the case file.
+  const { filed } = answersForReading(answers)
   const sections: QuestionnaireSection[] =
     moduleId === 'module2'
-      ? prepareSections(module2Sections('en'), live)
+      ? prepareSections(module2Sections('en'), filed)
       : questionnaireSections('en')
 
   const copy = MODULE_EMAIL[moduleId]
@@ -68,7 +69,7 @@ export async function sendIntakeNotificationEmails(
       from: `JACKLAW Portal <${fromEmail}>`,
       to: [firmEmail],
       subject: copy.subject(clientName, caseType),
-      html: generateIntakeEmailHtml(clientName, caseType, submittedAt, answers, sections),
+      html: generateIntakeEmailHtml(clientName, caseType, submittedAt, filed, sections),
     })
     if (error) console.error('Resend error (firm notification):', error)
   } catch (err) {

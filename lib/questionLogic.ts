@@ -8,7 +8,7 @@
  */
 
 import { Lang, TranslatedLang } from '@/lib/langs'
-import { AnswerValue, Question, QuestionnaireSection } from '@/types'
+import { AnswerValue, Question, QuestionnaireSection, ShowIfCondition } from '@/types'
 
 /**
  * Does one answer satisfy one condition?
@@ -102,6 +102,87 @@ export function effectiveAnswers(
     }
   }
   return inEffect
+}
+
+/**
+ * Why an answer is not in effect: the client withdrew it, or the questionnaire
+ * grew a gate above it after they had answered.
+ *
+ * The difference decides what the office is told, and getting it wrong is worse
+ * than not splitting them at all. A client who said they were fired, answered
+ * the wrongful-termination section and then corrected themselves to say they
+ * still work there has WITHDRAWN those answers, and filing them as facts would
+ * put something in the case that the client denies. A client who answered
+ * "when did you start?" months ago, before Module 1 put "do you know the exact
+ * date?" in front of it, has withdrawn nothing — the question above theirs is
+ * simply unanswered, because nobody has ever been asked it.
+ *
+ * So the chain is walked upwards to the first gate the client can actually see.
+ * If that gate has an answer and the answer closes the branch, they took it
+ * back. If it has no answer, nothing was taken back: the answer is orphaned by a
+ * change to the questionnaire, and it is still the client's own word.
+ */
+export type WithheldReason = 'retracted' | 'orphaned'
+
+export function withheldAnswers(
+  sections: QuestionnaireSection[],
+  answers: Record<string, AnswerValue>
+): Record<string, WithheldReason> {
+  const live = effectiveAnswers(sections, answers)
+
+  const questionById = new Map<string, Question>()
+  const sectionOfQuestion = new Map<string, QuestionnaireSection>()
+  for (const section of sections) {
+    for (const q of section.questions) {
+      questionById.set(q.id, q)
+      sectionOfQuestion.set(q.id, section)
+    }
+  }
+
+  /**
+   * Why this question is not on screen, followed up its chain of gates.
+   *
+   * The chain stops at the first gate the client can actually SEE. A visible
+   * gate with an answer is a decision they made; a visible gate with no answer
+   * is a question nobody has put to them yet, which is what happens when the
+   * questionnaire grows a step above an answer someone gave months ago.
+   */
+  const causeFor = (questionId: string, seen = new Set<string>()): WithheldReason => {
+    if (seen.has(questionId)) return 'orphaned'
+    seen.add(questionId)
+
+    const section = sectionOfQuestion.get(questionId)
+    const question = questionById.get(questionId)
+
+    // A hidden section hides everything in it, so it is asked about first.
+    const gate =
+      section && !isVisible(section, live) ? section.showIf : question?.showIf
+    if (!gate) return 'orphaned'
+
+    const gateQuestion = questionById.get(gate.questionId)
+    if (!gateQuestion) return 'orphaned'
+
+    const gateSection = sectionOfQuestion.get(gate.questionId)
+    const gateIsVisible =
+      (!gateSection || isVisible(gateSection, live)) && isVisible(gateQuestion, live)
+
+    if (gateIsVisible) {
+      // They could see it. Answering it is what closed this branch; leaving it
+      // blank means the branch was never opened to them in the first place.
+      return hasAnswer(live[gate.questionId]) ? 'retracted' : 'orphaned'
+    }
+
+    return causeFor(gate.questionId, seen)
+  }
+
+  const out: Record<string, WithheldReason> = {}
+  for (const section of sections) {
+    for (const q of section.questions) {
+      if (!(q.id in answers) || q.id in live || !hasAnswer(answers[q.id])) continue
+      out[q.id] = causeFor(q.id)
+    }
+  }
+  return out
 }
 
 /**

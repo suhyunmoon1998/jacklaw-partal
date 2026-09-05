@@ -8,7 +8,7 @@ import SectionIcon from '@/components/SectionIcon'
 import { getSession, addSubmissionNotification } from '@/lib/auth'
 import { ModuleId, liveAnswersFor, preparedSections } from '@/lib/modules'
 import { CHAPTER_LABEL, ChapterId, sectionMeta } from '@/lib/questionnaireMeta'
-import { AnswerValue, QuestionnaireState, Session } from '@/types'
+import { AnswerValue, Question, QuestionnaireState, Session } from '@/types'
 import { QuestionInput } from '@/components/QuestionField'
 import { hasAnswer, isFieldControl, isVisible, missingRequired, resumeSectionIndex } from '@/lib/questionLogic'
 import { useLanguage } from '@/lib/i18n'
@@ -253,8 +253,36 @@ export default function ModuleQuestionnaire({
     router.push('/dashboard')
   }
 
+  /**
+   * Submit checks the whole questionnaire, not the section under the client's
+   * feet.
+   *
+   * The section rail jumps anywhere, and the last section happens to have no
+   * required question — so tapping to the end and pressing Submit filed an
+   * empty intake, flipped the client to completed, and sent the office a "New
+   * Client Intake" email with nothing in it. Anything missing now takes the
+   * client to the section it is in, rather than being reported where they
+   * cannot see it.
+   */
+  const findMissing = (): { sectionIndex: number; question: Question } | null => {
+    for (let i = 0; i < SECTIONS.length; i++) {
+      const [first] = missingRequired(SECTIONS[i], liveAnswers)
+      if (first) return { sectionIndex: i, question: first }
+    }
+    return null
+  }
+
   const handleSubmit = async () => {
-    if (!validateSection() || !session) return
+    if (!session) return
+    const missing = findMissing()
+    if (missing) {
+      setValidationError(t('q_required_error') + ` "${missing.question.label}"`)
+      if (missing.sectionIndex !== currentSection) {
+        setCurrentSection(missing.sectionIndex)
+        window.scrollTo({ top: 0, behavior: 'smooth' })
+      }
+      return
+    }
     setSaving(true)
     const updatedCompleted = Array.from(new Set([...qState.completedSections, currentSection]))
     const finalState: QuestionnaireState = {

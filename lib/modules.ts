@@ -19,7 +19,7 @@ import { QUESTIONNAIRE_SECTIONS } from '@/lib/questionnaireData'
 import { MODULE_2_SECTIONS } from '@/lib/module2Data'
 import { LocalizedSection, questionnaireSections } from '@/lib/questionnaireSections'
 import { module2Sections } from '@/lib/module2Sections'
-import { effectiveAnswers } from '@/lib/questionLogic'
+import { effectiveAnswers, withheldAnswers } from '@/lib/questionLogic'
 import { prepareSections } from '@/lib/repeatSections'
 import { canonicalAnswers } from '@/lib/answerCompat'
 
@@ -149,4 +149,35 @@ export function sectionsForReading(
 ): LocalizedSection[] {
   const live = liveAnswersFor(lang, rawAnswers)
   return [...questionnaireSections(lang), ...prepareSections(module2Sections(lang), live)]
+}
+
+/**
+ * What the office should file, and what the client took back.
+ *
+ * `filed` is everything the client stands behind — the answers in effect, plus
+ * the ones a later version of the questionnaire orphaned by putting a new
+ * question in front of them. Those are still the client's own word and belong
+ * in the file; dropping them would lose eight of Roberto Paco Garcia's answers
+ * for no better reason than that Module 1 added a gate above them.
+ *
+ * `retracted` is the narrow, real case: they answered, then changed the question
+ * above it so the branch closed. Filing that as a fact would put something in
+ * the case the client denies, so it is kept apart and labelled.
+ *
+ * Nothing is deleted either way; both come from the one stored record.
+ */
+export function answersForReading(rawAnswers: Record<string, AnswerValue>, lang: Lang = 'en') {
+  const sections = sectionsForReading(rawAnswers, lang)
+  const canonical = canonicalAnswers(rawAnswers)
+  const live = effectiveAnswers(sections, canonical)
+  const withheld = withheldAnswers(sections, canonical)
+
+  const filed: Record<string, AnswerValue> = { ...live }
+  const retracted: Record<string, AnswerValue> = {}
+  for (const [id, reason] of Object.entries(withheld)) {
+    if (reason === 'retracted') retracted[id] = canonical[id]
+    else filed[id] = canonical[id]
+  }
+
+  return { sections, live, filed, retracted }
 }
