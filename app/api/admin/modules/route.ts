@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
 
   const { data, error } = await getSupabase()
     .from('client_module_sends')
-    .select('module_id, sent_at, sent_to, sent_lang')
+    .select('module_id, sent_at, sent_to, sent_lang, opened_at')
     .eq('client_id', clientId)
 
   if (error) {
@@ -25,6 +25,9 @@ export async function GET(req: NextRequest) {
       sentAt: s.sent_at,
       sentTo: s.sent_to ?? '',
       sentLang: s.sent_lang ?? '',
+      // Null means the client has not opened it once. "Sent Tuesday, never
+      // opened" is the whole reason the office looks at this row.
+      openedAt: s.opened_at ?? null,
     })),
   })
 }

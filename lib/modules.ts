@@ -14,6 +14,7 @@
  */
 
 import { Lang } from '@/lib/langs'
+import { DICTIONARIES, en, fill } from '@/lib/translations'
 import { AnswerValue } from '@/types'
 import { QUESTIONNAIRE_SECTIONS } from '@/lib/questionnaireData'
 import { MODULE_2_SECTIONS } from '@/lib/module2Data'
@@ -34,6 +35,15 @@ export type ModuleId = 'module1' | 'module2' | 'module3'
  */
 export interface ModuleDefinition {
   id: ModuleId
+  /**
+   * Where this module sits in the order the client works through them.
+   *
+   * The office says "Module 2". The client is shown "Step 2 of 3", because a
+   * module is a thing we built and a step is a thing you do. Both names are
+   * kept because both are true, and the number is what makes the second one
+   * mean anything.
+   */
+  step: number
   /** What the office calls it. */
   name: string
   /**
@@ -43,16 +53,31 @@ export interface ModuleDefinition {
    * whether to open an email from a law firm.
    */
   clientName: Partial<Record<Lang, string>> & { en: string }
+  /**
+   * The dictionary keys the portal draws this step with. The name above is for
+   * the email, which is composed on the server in the client's language; these
+   * are for the screen, which is already inside the translation layer and
+   * should not be handed a second, parallel set of strings to drift from.
+   */
+  titleKey: keyof typeof en
+  subKey: keyof typeof en
   /** What it covers, in one line, for the admin list. */
   summary: string
   /** Where the client opens it. */
   href: string
+  /**
+   * Roughly how long it takes, low and high, for the card that asks someone to
+   * start. A range rather than a number, because the honest answer depends on
+   * how much of it applies to them.
+   */
+  minutes: [number, number]
   built: boolean
 }
 
 export const MODULES: ModuleDefinition[] = [
   {
     id: 'module1',
+    step: 1,
     name: 'Module 1 · Intake',
     clientName: {
       en: 'Your intake questions',
@@ -60,12 +85,16 @@ export const MODULES: ModuleDefinition[] = [
       zh: '您的初步问题',
       ko: '초기 문진표',
     },
+    titleKey: 'm1_title',
+    subKey: 'm1_sub',
     summary: 'Who they are, the employer, the dates, the job, the pay, the schedule and the time records',
     href: '/questionnaire',
+    minutes: [15, 25],
     built: true,
   },
   {
     id: 'module2',
+    step: 2,
     name: 'Module 2 · Wage & Hour',
     clientName: {
       en: 'Questions about your pay and breaks',
@@ -73,21 +102,48 @@ export const MODULES: ModuleDefinition[] = [
       zh: '关于您的工资和休息时间的问题',
       ko: '급여와 휴게시간에 대한 질문',
     },
+    titleKey: 'm2_title',
+    subKey: 'm2_sub',
     summary: 'Meal and rest breaks, unpaid time, overtime, and retaliation for asking about any of it',
     href: '/questionnaire/module2',
+    minutes: [20, 30],
     built: true,
   },
   {
     id: 'module3',
+    step: 3,
     name: 'Module 3 · Who’s Who',
-    clientName: { en: 'Questions about the people at work' },
+    clientName: {
+      en: 'Questions about the people at work',
+      es: 'Preguntas sobre las personas en su trabajo',
+      zh: '关于您工作场所人员的问题',
+      ko: '직장 내 사람들에 대한 질문',
+    },
+    titleKey: 'm3_title',
+    subKey: 'm3_sub',
     summary: 'The people in the workplace and possible witnesses',
     href: '',
+    minutes: [0, 0],
     built: false,
   },
 ]
 
 export const moduleById = (id: ModuleId) => MODULES.find(m => m.id === id)
+
+/**
+ * What the client's email calls this: "Step 2 · Questions about your pay and
+ * breaks", in their own language.
+ *
+ * The step number is what makes an emailed link make sense on its own. A worker
+ * who gets two of these a month apart needs to see which one arrived, and the
+ * office's name for it — "Module 2 · Wage & Hour" — is not something anyone
+ * should have to decode before opening mail from a law firm.
+ */
+export function stepName(mod: ModuleDefinition, lang: Lang): string {
+  const dict = DICTIONARIES[lang] ?? en
+  const step = fill(dict.step_short || en.step_short, { n: mod.step })
+  return `${step} · ${mod.clientName[lang] ?? mod.clientName.en}`
+}
 
 /**
  * The modules a client is given the moment they are added.
@@ -101,6 +157,13 @@ export const moduleById = (id: ModuleId) => MODULES.find(m => m.id === id)
  * newly added client opened the portal to nothing at all.
  */
 export const MODULES_GIVEN_ON_CREATE: ModuleId[] = ['module1']
+
+/** How many sections a built module has. Module 3 has none yet. */
+export function moduleSectionCount(id: ModuleId): number {
+  if (id === 'module1') return QUESTIONNAIRE_SECTIONS.length
+  if (id === 'module2') return MODULE_2_SECTIONS.length
+  return 0
+}
 
 /** How many questions a built module asks. Module 3 has none yet. */
 export function moduleQuestionCount(id: ModuleId): number {

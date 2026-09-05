@@ -24,6 +24,7 @@ export default function SendAssignmentDialog({
   setName,
   clientName,
   link,
+  warning,
   initialEmail,
   initialLang,
   onClose,
@@ -40,6 +41,14 @@ export default function SendAssignmentDialog({
   setName: string
   clientName: string
   link: string
+  /**
+   * What the office should know before they press Send. Today that is one
+   * thing: this module will land locked, because a step the client was already
+   * given is unfinished. Sending anyway is a legitimate choice — the office
+   * queues work ahead — but it should be a choice, not a surprise the client
+   * discovers by tapping a link that refuses her.
+   */
+  warning?: string
   /** Whatever address is on file — blank for a client who has answered nothing yet. */
   initialEmail: string
   initialLang: Lang
@@ -111,6 +120,15 @@ export default function SendAssignmentDialog({
         <div className="bg-white rounded-2xl w-full max-w-md p-5 shadow-2xl animate-modal-in" onClick={e => e.stopPropagation()}>
           <h3 className="font-bold text-black">Send “{setName}”</h3>
           <p className="text-xs text-gray-400 mt-0.5 mb-4">To {clientName}. This link opens only this question set.</p>
+
+          {warning && (
+            <div className="mb-4 bg-purple-50 border border-purple-200 rounded-xl px-3.5 py-2.5 flex gap-2.5">
+              <svg className="w-4 h-4 text-purple-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M5 19h14a2 2 0 001.84-2.75L13.74 4a2 2 0 00-3.48 0l-7.1 12.25A2 2 0 004.99 19z" />
+              </svg>
+              <p className="text-xs text-purple-800 leading-relaxed">{warning}</p>
+            </div>
+          )}
 
           <label className="block text-xs font-semibold text-gray-500 mb-1.5">Client email</label>
           <input

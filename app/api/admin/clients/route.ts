@@ -105,19 +105,37 @@ export async function POST(req: NextRequest) {
   // The intake questionnaire is theirs from the moment they exist — that is what
   // "every client receives this" means, and what the person adding them expects.
   // Without this row the portal opens to nothing at all.
-  const { error: moduleError } = await getSupabase()
-    .from('client_module_sends')
-    .insert(
-      MODULES_GIVEN_ON_CREATE.map(moduleId => ({
-        client_id: id,
-        module_id: moduleId,
-        created_by: 'on-create',
-      }))
-    )
+  const grantIntake = () =>
+    getSupabase()
+      .from('client_module_sends')
+      .upsert(
+        MODULES_GIVEN_ON_CREATE.map(moduleId => ({
+          client_id: id,
+          module_id: moduleId,
+          created_by: 'on-create',
+        })),
+        { onConflict: 'client_id,module_id' }
+      )
 
-  // The client exists either way; say so rather than failing the whole add, and
-  // leave a trail, because the office can still send the module by hand.
-  if (moduleError) console.error('could not open the intake questionnaire to', id, moduleError)
+  // Retried once, because this row is now the only thing that puts the intake
+  // questionnaire on the client's screen. Before the steps existed a failure
+  // here cost nothing — the card was drawn for everyone regardless. Now a
+  // client whose row did not get written opens the portal to an empty list and
+  // has no way to tell anyone, so a transient failure is worth one more try.
+  let { error: moduleError } = await grantIntake()
+  if (moduleError) ({ error: moduleError } = await grantIntake())
+
+  // The client exists either way, so the add is not failed over this. But the
+  // office is told, in the response, because the remedy is theirs: press Send
+  // on Step 1 from this client's row and the questionnaire opens.
+  if (moduleError) {
+    console.error('could not open the intake questionnaire to', id, moduleError)
+    return NextResponse.json({
+      client: data,
+      warning:
+        'The client was added, but their intake questionnaire could not be opened automatically. Press Send on Step 1 for this client so they can see it.',
+    })
+  }
 
   return NextResponse.json({ client: data })
 }

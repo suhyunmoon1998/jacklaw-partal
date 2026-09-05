@@ -18,6 +18,9 @@ import SendAssignmentDialog from '@/components/admin/SendAssignmentDialog'
 import ModalPortal from '@/components/ModalPortal'
 import type { RecommendedBank } from '@/lib/recommendedQuestions'
 import { MODULES, ModuleId, moduleQuestionCount } from '@/lib/modules'
+import { QUESTIONNAIRE_SECTIONS } from '@/lib/questionnaireData'
+import { MODULE_2_SECTIONS } from '@/lib/module2Data'
+import { ModuleSend, stepViews } from '@/lib/moduleSteps'
 
 const STATUS_BADGE: Record<Assignment['status'], { label: string; cls: string }> = {
   draft: { label: 'Draft', cls: 'bg-gray-100 text-gray-500' },
@@ -71,10 +74,16 @@ export default function ClientAssignments({
   const [sending, setSending] = useState<{ assignment: Assignment; email: string; link: string; lang: Lang } | null>(null)
   const [notice, setNotice] = useState('')
   const [banks, setBanks] = useState<RecommendedBank[]>([])
-  /** Which modules the office has handed this client, and when. */
-  const [moduleSends, setModuleSends] = useState<Record<string, string>>({})
+  /**
+   * Which modules the office has handed this client, when, and whether the
+   * client has ever opened them. The opened date is the one the office actually
+   * acts on: "sent four days ago, never opened" is a phone call, and until this
+   * field existed the panel could not tell that client from one who is simply
+   * working through it slowly.
+   */
+  const [moduleSends, setModuleSends] = useState<Record<string, ModuleSend>>({})
   const [sendingModule, setSendingModule] = useState<
-    { moduleId: ModuleId; name: string; email: string; link: string; lang: Lang } | null
+    { moduleId: ModuleId; name: string; email: string; link: string; lang: Lang; warning: string } | null
   >(null)
 
   const load = useCallback(async () => {
@@ -88,7 +97,12 @@ export default function ClientAssignments({
     if (mRes.ok) {
       const { sends } = await mRes.json()
       setModuleSends(
-        Object.fromEntries((sends ?? []).map((x: { moduleId: string; sentAt: string }) => [x.moduleId, x.sentAt]))
+        Object.fromEntries(
+          (sends ?? []).map((x: { moduleId: string; sentAt: string; openedAt: string | null }) => [
+            x.moduleId,
+            { sentAt: x.sentAt, openedAt: x.openedAt ?? null },
+          ])
+        )
       )
     }
     setLoading(false)
@@ -181,7 +195,25 @@ export default function ClientAssignments({
       email: body.email ?? '',
       link: body.link ?? `${window.location.origin}/dashboard`,
       lang: toLang(body.lang),
+      // Said before the email goes out, not after the client rings up asking
+      // why the link her attorney sent does nothing.
+      warning:
+        typeof body.blockedBy === 'number'
+          ? `${clientName} has not submitted Step ${body.blockedBy} yet, so this will stay locked until they do. The email will point them at Step ${body.blockedBy} instead.`
+          : '',
     })
+  }
+
+  const unsendModule = async (moduleId: ModuleId, name: string) => {
+    if (!confirm(`Take ${name} back from ${clientName}? Their answers are kept — this only removes the invitation.`)) return
+    setBusy(moduleId)
+    const res = await fetch(
+      `/api/admin/modules/send?clientId=${encodeURIComponent(clientId)}&moduleId=${moduleId}`,
+      { method: 'DELETE', headers: adminHeaders }
+    ).catch(() => null)
+    setBusy(null)
+    setNotice(res?.ok ? `${name} taken back. ${clientName} can no longer open it.` : 'Could not take that step back.')
+    load()
   }
 
   const openSend = async (assignment: Assignment) => {
@@ -266,7 +298,19 @@ export default function ClientAssignments({
       : { label: 'Not Started', cls: 'bg-gray-100 text-gray-500' }
 
   const defaultStatus = builtInStatus(defaultState)
-  const module2Status = builtInStatus(module2State)
+
+  const steps = stepViews(moduleSends, {
+    module1: {
+      submitted: defaultState.submitted,
+      completedSections: defaultState.completedSections,
+      totalSections: QUESTIONNAIRE_SECTIONS.length,
+    },
+    module2: {
+      submitted: module2State.submitted,
+      completedSections: module2State.completedSections,
+      totalSections: MODULE_2_SECTIONS.length,
+    },
+  })
 
   return (
     <div className="p-5 space-y-3">
@@ -279,18 +323,48 @@ export default function ClientAssignments({
 
       {/* One row per module the office can hand out. Module 3 is listed because
           it is planned and people ask about it; it has no questions yet, so it
-          cannot be sent, and saying that is better than an empty gap. */}
+          cannot be sent, and saying that is better than an empty gap.
+
+          Every state on these rows comes from lib/moduleSteps — the same
+          function the client's own dashboard runs. Two screens deriving this
+          separately is how the office ends up telling someone to get on with a
+          questionnaire their portal is holding shut. */}
       {MODULES.map(mod => {
-        const sentAt = moduleSends[mod.id]
-        const state =
-          mod.id === 'module1' ? defaultState : mod.id === 'module2' ? module2State : null
-        const status = state ? builtInStatus(state) : null
+        const view = steps.find(v => v.id === mod.id)!
+        const send = moduleSends[mod.id]
+
+        const status = !mod.built
+          ? null
+          : view.state === 'done'
+          ? { label: 'Completed', cls: 'bg-green-100 text-green-700' }
+          : view.state === 'waiting'
+          ? { label: `Waiting on Step ${view.blockedBy}`, cls: 'bg-purple-100 text-purple-700' }
+          : view.state === 'unsent'
+          ? { label: 'Not sent', cls: 'bg-gray-100 text-gray-500' }
+          : view.finishedNotSubmitted
+          ? { label: 'Not submitted', cls: 'bg-red-100 text-red-700' }
+          : view.percent > 0
+          ? { label: 'In Progress', cls: 'bg-amber-100 text-amber-700' }
+          : { label: 'Not Started', cls: 'bg-gray-100 text-gray-500' }
+
+        // The line the office reads before deciding whether to pick up the
+        // phone. Never opened and correctly blocked are different problems.
+        const trail = !mod.built
+          ? 'Nothing to send yet.'
+          : !send
+          ? 'Not sent — the client cannot open this yet.'
+          : view.state === 'waiting'
+          ? `Sent ${shortDate(send.sentAt)} · locked until Step ${view.blockedBy} is submitted`
+          : view.isUnread
+          ? `Sent ${shortDate(send.sentAt)} · not opened yet`
+          : `Sent ${shortDate(send.sentAt)} · opened ${shortDate(send.openedAt)}`
 
         return (
           <div key={mod.id} className="border border-gray-200 rounded-xl p-4 bg-gray-50/60">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs font-bold text-gray-400 tabular-nums">STEP {mod.step}</span>
                   <p className="font-semibold text-gray-900 text-sm">{mod.name}</p>
                   {!mod.built && (
                     <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">
@@ -302,12 +376,12 @@ export default function ClientAssignments({
                   {mod.built ? `${moduleQuestionCount(mod.id)} questions · ` : ''}
                   {mod.summary}
                 </p>
-                <p className="text-xs text-gray-400 mt-1">
-                  {!mod.built
-                    ? 'Nothing to send yet.'
-                    : sentAt
-                    ? `Sent ${shortDate(sentAt)}`
-                    : 'Not sent — the client cannot open this yet.'}
+                <p className={`text-xs mt-1 ${
+                  mod.built && send && view.isUnread && view.state !== 'waiting'
+                    ? 'text-amber-600 font-medium'
+                    : 'text-gray-400'
+                }`}>
+                  {trail}
                 </p>
               </div>
               <div className="flex flex-col items-end gap-2 shrink-0">
@@ -317,13 +391,25 @@ export default function ClientAssignments({
                   </span>
                 )}
                 {mod.built && (
-                  <button
-                    onClick={() => openModuleSend(mod.id, mod.name)}
-                    disabled={busy === mod.id}
-                    className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-gold/40 text-gold hover:bg-gold hover:text-white hover:border-gold transition-colors disabled:opacity-40"
-                  >
-                    {busy === mod.id ? 'Opening…' : sentAt ? 'Send again' : 'Send'}
-                  </button>
+                  <div className="flex items-center gap-1.5">
+                    {send && (
+                      <button
+                        onClick={() => unsendModule(mod.id, mod.name)}
+                        disabled={busy === mod.id}
+                        className="text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-gray-300 text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors disabled:opacity-40"
+                        title="Removes the invitation. Their answers are kept."
+                      >
+                        Unsend
+                      </button>
+                    )}
+                    <button
+                      onClick={() => openModuleSend(mod.id, mod.name)}
+                      disabled={busy === mod.id}
+                      className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-gold/40 text-gold hover:bg-gold hover:text-white hover:border-gold transition-colors disabled:opacity-40"
+                    >
+                      {busy === mod.id ? 'Opening…' : send ? 'Send again' : 'Send'}
+                    </button>
+                  </div>
                 )}
               </div>
             </div>
@@ -524,6 +610,7 @@ export default function ClientAssignments({
         <SendAssignmentDialog
           assignmentId=""
           setName={sendingModule.name}
+          warning={sendingModule.warning}
           clientName={clientName}
           link={sendingModule.link}
           initialEmail={sendingModule.email}

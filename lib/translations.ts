@@ -67,6 +67,43 @@ export const en = {
   m2_start: 'Start',
   m2_resume: 'Continue',
   m2_done: 'Completed',
+  // Steps — the client's word for the modules the office sends. "Step 2" is one
+  // string with the number marked, not a word and a number glued together:
+  // Korean writes it 2단계 and Chinese 第2步, with the digit inside.
+  //
+  // No total is ever stated. "Step 2 of 3" would promise a Step 3 that has no
+  // questions and no date, and the firm should not put a number on that.
+  steps_title: 'Your steps',
+  steps_sub: 'Our office sends these one at a time. Finish one and the next one opens.',
+  step_short: 'Step {n}',
+  step_new: 'New',
+  step_banner: 'Our office sent you a new step.',
+  step_banner_open: 'Open it',
+  step_unsent: 'Not sent yet',
+  step_unsent_sub: 'Our office will send this when it is time. You will get an email.',
+  step_soon: 'Coming soon',
+  step_soon_sub: 'We are still preparing these questions.',
+  step_time: '{n} sections · about {min}–{max} minutes',
+  step_start: 'Start',
+  step_continue: 'Continue',
+  step_view: 'View answers',
+  step_done: 'Completed',
+  step_submit_now: 'All answered — open it and press Submit',
+  step_all_done: "You're all caught up.",
+  step_all_done_sub: 'We have everything we asked you for. If we need more, we will email you and a new step will appear here.',
+  status_all_caught_up: '✓ All caught up',
+  your_progress: 'Your progress',
+  m1_title: 'Your information',
+  m1_sub: 'You, your employer, your job, your pay and your hours',
+  m3_title: 'People at work',
+  m3_sub: 'The people in your workplace and possible witnesses',
+  // Says what the software does, not what the client failed to do. "Finish
+  // Step 1 first" reads as a scolding to someone who is already worried about
+  // her case; this says the same thing about the questionnaire instead.
+  m_locked: 'Opens when you finish Step {n}',
+  m_locked_sub: 'These questions build on your answers in Step {n}, so we ask them after. Nothing is waiting on you here.',
+  m_go_to_step: 'Continue Step {n}',
+  m_back_to_steps: 'Back to my steps',
   q_not_sure: 'Not Sure',
   q_select: 'Select…',
   q_unanswered_heading: 'Unanswered questions',
@@ -285,11 +322,40 @@ export const es: typeof en = {
   nr_best: 'Mejor estimación',
   nr_low: 'Mínimo',
   nr_high: 'Máximo',
-  m2_title: 'Pago y Descansos',
+  m2_title: 'Pago y descansos',
   m2_sub: 'Comidas, descansos, tiempo no pagado y horas extra',
   m2_start: 'Comenzar',
   m2_resume: 'Continuar',
   m2_done: 'Completado',
+  // Pasos
+  steps_title: 'Sus pasos',
+  steps_sub: 'Nuestra oficina se los envía uno por uno. Cuando termine uno, se abre el siguiente.',
+  step_short: 'Paso {n}',
+  step_new: 'Nuevo',
+  step_banner: 'Nuestra oficina le envió un nuevo paso.',
+  step_banner_open: 'Ábralo',
+  step_unsent: 'Aún no enviado',
+  step_unsent_sub: 'Nuestra oficina se lo enviará cuando sea el momento. Recibirá un correo.',
+  step_soon: 'Próximamente',
+  step_soon_sub: 'Todavía estamos preparando estas preguntas.',
+  step_time: '{n} secciones · unos {min}–{max} minutos',
+  step_start: 'Comenzar',
+  step_continue: 'Continuar',
+  step_view: 'Ver respuestas',
+  step_done: 'Completado',
+  step_submit_now: 'Ya contestó todo — ábralo y presione Enviar',
+  step_all_done: 'Está al día.',
+  step_all_done_sub: 'Tenemos todo lo que le pedimos. Si necesitamos algo más, le enviaremos un correo y aquí aparecerá un paso nuevo.',
+  status_all_caught_up: '✓ Está al día',
+  your_progress: 'Su progreso',
+  m1_title: 'Su información',
+  m1_sub: 'Usted, su empleador, su trabajo, su pago y sus horas',
+  m3_title: 'Gente de su trabajo',
+  m3_sub: 'Las personas en su trabajo y posibles testigos',
+  m_locked: 'Se abre cuando termine el Paso {n}',
+  m_locked_sub: 'Estas preguntas se basan en sus respuestas del Paso {n}, por eso vienen después. Aquí no hay nada pendiente de su parte.',
+  m_go_to_step: 'Continuar el Paso {n}',
+  m_back_to_steps: 'Volver a mis pasos',
   q_not_sure: 'No Estoy Seguro',
   q_select: 'Seleccionar…',
   q_unanswered_heading: 'Preguntas sin responder',
@@ -513,6 +579,35 @@ export const zh: typeof en = {
   m2_start: '开始',
   m2_resume: '继续',
   m2_done: '已完成',
+  // 步骤
+  steps_title: '您的步骤',
+  steps_sub: '本所会一步一步发给您。完成一步，下一步就会开放。',
+  step_short: '第{n}步',
+  step_new: '新',
+  step_banner: '本所给您发来了新的步骤。',
+  step_banner_open: '去查看',
+  step_unsent: '尚未发送',
+  step_unsent_sub: '到时候本所会发给您。您会收到一封电子邮件。',
+  step_soon: '即将开放',
+  step_soon_sub: '这些问题我们还在准备中。',
+  step_time: '{n} 个部分 · 大约 {min}–{max} 分钟',
+  step_start: '开始',
+  step_continue: '继续',
+  step_view: '查看答案',
+  step_done: '已完成',
+  step_submit_now: '都答完了 — 请打开并点击提交',
+  step_all_done: '您已全部完成。',
+  step_all_done_sub: '我们要的资料都齐了。如果还需要别的，我们会给您发邮件，这里也会出现新的步骤。',
+  status_all_caught_up: '✓ 全部完成',
+  your_progress: '您的进度',
+  m1_title: '您的信息',
+  m1_sub: '您本人、您的雇主、您的工作、工资与工时',
+  m3_title: '一起工作的人',
+  m3_sub: '您工作场所里的人，以及可能的证人',
+  m_locked: '完成第{n}步后开放',
+  m_locked_sub: '这些问题会用到您在第{n}步的回答，所以放在后面。这里不需要您做任何事。',
+  m_go_to_step: '继续第{n}步',
+  m_back_to_steps: '返回我的步骤',
   q_not_sure: '不确定',
   q_select: '请选择…',
   q_unanswered_heading: '未回答的问题',
@@ -736,6 +831,35 @@ export const ko: typeof en = {
   m2_start: '시작하기',
   m2_resume: '이어하기',
   m2_done: '완료',
+  // 단계
+  steps_title: '고객님의 단계',
+  steps_sub: '저희 사무실에서 한 번에 하나씩 보내드립니다. 하나를 마치시면 다음 단계가 열립니다.',
+  step_short: '{n}단계',
+  step_new: '새 단계',
+  step_banner: '저희 사무실에서 새 단계를 보내드렸습니다.',
+  step_banner_open: '열어보기',
+  step_unsent: '아직 보내드리지 않았습니다',
+  step_unsent_sub: '저희 사무실에서 때가 되면 보내드립니다. 이메일로 알려드리겠습니다.',
+  step_soon: '곧 열립니다',
+  step_soon_sub: '아직 질문을 준비하고 있습니다.',
+  step_time: '{n}개 항목 · 약 {min}–{max}분',
+  step_start: '시작하기',
+  step_continue: '이어하기',
+  step_view: '답변 보기',
+  step_done: '완료',
+  step_submit_now: '답변은 다 하셨습니다 — 들어가셔서 제출을 눌러 주세요',
+  step_all_done: '모두 마치셨습니다.',
+  step_all_done_sub: '저희가 요청드린 자료는 모두 받았습니다. 더 필요한 것이 있으면 이메일로 알려드리고, 여기에 새 단계가 나타납니다.',
+  status_all_caught_up: '✓ 모두 완료',
+  your_progress: '진행 상황',
+  m1_title: '고객님 정보',
+  m1_sub: '고객님, 회사, 하시는 일, 급여와 근무시간',
+  m3_title: '직장 내 사람들',
+  m3_sub: '고객님의 직장 사람들과 증인이 될 수 있는 분들',
+  m_locked: '{n}단계를 마치시면 열립니다',
+  m_locked_sub: '이 질문들은 {n}단계 답변을 바탕으로 하기 때문에 나중에 드립니다. 여기서 하실 일은 없습니다.',
+  m_go_to_step: '{n}단계 이어하기',
+  m_back_to_steps: '내 단계로 돌아가기',
   q_not_sure: '잘 모르겠음',
   q_select: '선택하세요…',
   q_unanswered_heading: '답하지 않은 질문',
@@ -892,3 +1016,18 @@ export const ko: typeof en = {
 
 /** Every dictionary, keyed by the language it is written in. */
 export const DICTIONARIES = { en, es, zh, ko }
+
+/**
+ * Fills {name} holes in a translated string.
+ *
+ * Needed because "Step 2" cannot be built by putting a number between two
+ * translated words. Korean writes it 2단계 and Chinese 第2步 — the number goes
+ * inside, in a place English has no slot for. The whole phrase has to be one
+ * translatable string with the hole marked, or three of the four languages come
+ * out wrong.
+ *
+ * Lives here rather than in the i18n provider because the emailed step name is
+ * composed on the server, in the client's own language, with no React around.
+ */
+export const fill = (template: string, vars: Record<string, string | number>): string =>
+  template.replace(/\{(\w+)\}/g, (whole, name) => (name in vars ? String(vars[name]) : whole))

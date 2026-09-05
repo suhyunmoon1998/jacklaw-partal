@@ -7,6 +7,9 @@ import MascotWatermark from '@/components/MascotWatermark'
 import SectionIcon from '@/components/SectionIcon'
 import { getSession, addSubmissionNotification } from '@/lib/auth'
 import { ModuleId, liveAnswersFor, preparedSections } from '@/lib/modules'
+import { QUESTIONNAIRE_SECTIONS } from '@/lib/questionnaireData'
+import { MODULE_2_SECTIONS } from '@/lib/module2Data'
+import { ModuleProgress, ModuleSend, ORDERED_MODULES, StepView, stepViews } from '@/lib/moduleSteps'
 import { CHAPTER_LABEL, ChapterId, sectionMeta } from '@/lib/questionnaireMeta'
 import { AnswerValue, Question, QuestionnaireState, Session } from '@/types'
 import { QuestionInput } from '@/components/QuestionField'
@@ -96,13 +99,14 @@ export default function ModuleQuestionnaire({
   const [autoSaved, setAutoSaved] = useState(false)
   const [mapOpen, setMapOpen] = useState(false)
   /**
-   * Whether the office has handed this module to this client. Null while we are
-   * still finding out — the questionnaire is not drawn on a guess either way.
+   * Where this step stands for this client. Null while we are still finding
+   * out — the questionnaire is not drawn on a guess either way, and neither is
+   * the locked screen.
    */
-  const [wasSent, setWasSent] = useState<boolean | null>(null)
+  const [step, setStep] = useState<StepView | null>(null)
   const [toast, setToast] = useState<{ title: string; sub: string; celebrate: boolean } | null>(null)
   const router = useRouter()
-  const { lang, t } = useLanguage()
+  const { lang, t, tf } = useLanguage()
 
   const ALL_SECTIONS = preparedSections(moduleId, lang, qState.answers)
   /**
@@ -124,14 +128,16 @@ export default function ModuleQuestionnaire({
       return
     }
     setSession(s)
-    fetch(`/api/modules?clientId=${encodeURIComponent(s.clientId)}`)
-      .then(r => r.json())
-      .then(({ sent }) => setWasSent(Array.isArray(sent) && sent.includes(moduleId)))
-      .catch(() => setWasSent(false))
 
-    fetch(`/api/questionnaire?clientId=${s.clientId}`)
-      .then(r => r.json())
-      .then(({ state }) => {
+    // Both halves at once. A step's state is half send record and half
+    // progress, and reading them separately paints a frame that was never
+    // true — the locked screen flashing at a client who can open this, or the
+    // questions flashing at one who cannot.
+    Promise.all([
+      fetch(`/api/modules?clientId=${encodeURIComponent(s.clientId)}`).then(r => r.json()),
+      fetch(`/api/questionnaire?clientId=${encodeURIComponent(s.clientId)}`).then(r => r.json()),
+    ])
+      .then(([modules, { state }]) => {
         if (state) {
           const mine = moduleId === 'module2' && state.module2 ? state.module2 : state
           setQState({
@@ -147,7 +153,46 @@ export default function ModuleQuestionnaire({
             resumeSectionIndex(preparedSections(moduleId, lang, state.answers ?? {}), resumed)
           )
         }
+
+        const sends: Partial<Record<ModuleId, ModuleSend>> = {}
+        // ok:false means the read failed, not that nothing was sent. Treated as
+        // an empty list it would show the "not sent yet" screen to a client who
+        // is simply having a bad minute of network.
+        if (modules?.ok === true) {
+          for (const row of modules.sends ?? []) {
+            sends[row.moduleId as ModuleId] = { sentAt: row.sentAt, openedAt: row.openedAt ?? null }
+          }
+        }
+
+        const progress: Partial<Record<ModuleId, ModuleProgress>> = {
+          module1: {
+            submitted: Boolean(state?.submitted),
+            completedSections: state?.completedSections ?? [],
+            totalSections: QUESTIONNAIRE_SECTIONS.length,
+          },
+          module2: {
+            submitted: Boolean(state?.module2?.submitted),
+            completedSections: state?.module2?.completedSections ?? [],
+            totalSections: MODULE_2_SECTIONS.length,
+          },
+        }
+
+        const mine = stepViews(sends, progress).find(v => v.id === moduleId) ?? null
+        setStep(modules?.ok === true ? mine : null)
+
+        // The read receipt, written only for a step they can genuinely open.
+        // Stamping it on the locked screen would burn the "New" badge for the
+        // day this actually unlocks, and tell the office someone has been in
+        // when all they met was a closed door.
+        if (mine && (mine.state === 'open' || mine.state === 'done')) {
+          fetch('/api/modules/opened', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ clientId: s.clientId, moduleId }),
+          }).catch(() => {})
+        }
       })
+      .catch(() => setStep(null))
   }, [router]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const section = SECTIONS[currentSection]
@@ -179,6 +224,9 @@ export default function ModuleQuestionnaire({
   // Auto-save answers 1 second after any change
   useEffect(() => {
     if (!session) return
+    // A client looking at the locked screen has answered nothing; writing the
+    // record back would stamp last_saved for a questionnaire they never opened.
+    if (!step || (step.state !== 'open' && step.state !== 'done')) return
     const timer = setTimeout(() => {
       fetch('/api/questionnaire', {
         method: 'POST',
@@ -196,7 +244,7 @@ export default function ModuleQuestionnaire({
       })
     }, 1000)
     return () => clearTimeout(timer)
-  }, [qState.answers]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [qState.answers, step]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Milestone toast dismisses itself
   useEffect(() => {
@@ -314,11 +362,19 @@ export default function ModuleQuestionnaire({
     router.push(submitHref)
   }
 
-  if (!session || wasSent === null) return null
+  if (!session || step === null) return null
 
-  // A module the office has not sent is not theirs to open yet, however they
-  // arrived at the address.
-  if (!wasSent) {
+  // A step the office has not sent, or one waiting behind an earlier step, is
+  // not theirs to open yet — however they arrived at the address.
+  if (step.state !== 'open' && step.state !== 'done') {
+    const blocked = step.state === 'waiting'
+    // The step they have to finish first, resolved by its number rather than
+    // assumed to be Step 1 — the order is data, and a fourth module would make
+    // an assumption here quietly wrong.
+    const blocker = blocked
+      ? ORDERED_MODULES.find(m => m.step === step.blockedBy) ?? null
+      : null
+
     return (
       <div className="relative min-h-screen bg-gray-50 flex flex-col">
         <MascotWatermark />
@@ -327,14 +383,33 @@ export default function ModuleQuestionnaire({
         </div>
         <main className="relative z-10 flex-1 px-4 pt-10 max-w-md mx-auto w-full">
           <div className="card text-center">
-            <p className="font-semibold text-black">{t('m_not_sent')}</p>
-            <p className="text-sm text-gray-500 mt-1.5">{t('m_not_sent_sub')}</p>
-            <button
-              onClick={() => router.push('/dashboard')}
-              className="btn-primary mt-5"
-            >
-              {t('back')}
-            </button>
+            <p className="font-semibold text-black">
+              {blocked ? tf('m_locked', { n: step.blockedBy ?? 1 }) : t('m_not_sent')}
+            </p>
+            <p className="text-sm text-gray-500 mt-1.5 leading-relaxed">
+              {blocked ? tf('m_locked_sub', { n: step.blockedBy ?? 1 }) : t('m_not_sent_sub')}
+            </p>
+
+            {/* Never a dead end. The client got here from an email their own
+                attorney sent; being shown a wall and a Back button is the worst
+                ten seconds in the product. */}
+            {blocked && blocker?.href ? (
+              <>
+                <button onClick={() => router.push(blocker.href)} className="btn-primary mt-5 w-full">
+                  {tf('m_go_to_step', { n: step.blockedBy ?? 1 })}
+                </button>
+                <button
+                  onClick={() => router.push('/dashboard')}
+                  className="mt-3 text-sm font-semibold text-gray-500 hover:text-black py-2"
+                >
+                  {t('m_back_to_steps')}
+                </button>
+              </>
+            ) : (
+              <button onClick={() => router.push('/dashboard')} className="btn-primary mt-5">
+                {t('m_back_to_steps')}
+              </button>
+            )}
           </div>
         </main>
       </div>

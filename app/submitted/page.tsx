@@ -17,7 +17,10 @@ export default function SubmittedPage() {
     fetch(`/api/questionnaire?clientId=${s.clientId}`)
       .then(r => r.json())
       .then(({ state }) => {
-        if (!state?.submitted) router.replace('/questionnaire')
+        // Either step lands here now. Guarding on Module 1 alone would bounce a
+        // client who has just submitted Module 2 straight back into Module 1 —
+        // and if Module 1 were locked to them, into the locked screen.
+        if (!state?.submitted && !state?.module2?.submitted) router.replace('/dashboard')
       })
       .catch(() => {
         // Transient network issue right after submitting — don't bounce the client away.

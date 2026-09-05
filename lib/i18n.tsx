@@ -1,11 +1,12 @@
 'use client'
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
-import { DICTIONARIES, en } from './translations'
+import { DICTIONARIES, en, fill } from './translations'
 import { Lang, isLang } from './langs'
 
 export type { Lang, TranslatedLang } from './langs'
 export { LANGUAGES, TRANSLATED_LANGS, isLang } from './langs'
+export { fill } from './translations'
 
 type Dict = typeof en
 
@@ -13,9 +14,16 @@ interface I18nCtx {
   lang: Lang
   setLang: (l: Lang) => void
   t: (key: keyof Dict) => string
+  tf: (key: keyof Dict, vars: Record<string, string | number>) => string
 }
 
-const I18n = createContext<I18nCtx>({ lang: 'en', setLang: () => {}, t: k => String(k) })
+const I18n = createContext<I18nCtx>({
+  lang: 'en',
+  setLang: () => {},
+  t: k => String(k),
+  tf: k => String(k),
+})
+
 
 export function LanguageProvider({ children }: { children: ReactNode }) {
   const [lang, setLangState] = useState<Lang>('en')
@@ -45,7 +53,9 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
     return (dict[key] as string) || (en[key] as string)
   }
 
-  return <I18n.Provider value={{ lang, setLang, t }}>{children}</I18n.Provider>
+  const tf = (key: keyof Dict, vars: Record<string, string | number>) => fill(t(key), vars)
+
+  return <I18n.Provider value={{ lang, setLang, t, tf }}>{children}</I18n.Provider>
 }
 
 export function useLanguage() {
