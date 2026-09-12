@@ -7,7 +7,7 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { MODULE_2_SECTIONS } from '@/lib/module2Data'
+import { MODULE_2_ADDED, MODULE_2_CROSSWALK, MODULE_2_SECTIONS } from '@/lib/module2Data'
 import { QUESTIONNAIRE_SECTIONS } from '@/lib/questionnaireData'
 import {
   MODULES,
@@ -66,6 +66,45 @@ describe('the packet', () => {
       expect(MODULE_1_IDS.has(id)).toBe(false)
     }
     expect(new Set(BASE.map(q => q.id)).size).toBe(104)
+  })
+
+  /**
+   * The packet's acceptance check: every M2Q number still has a question that
+   * answers it, and every question is accounted for. Without this the file can
+   * drift away from the packet — a question renamed, a number quietly dropped —
+   * and nobody finds out until the firm compares them by hand.
+   */
+  describe('the crosswalk back to the packet', () => {
+    const live = new Set(BASE.map(q => q.id))
+    const numbers = Object.keys(MODULE_2_CROSSWALK)
+
+    it('covers M2Q001 to M2Q086 with no gaps and nothing extra', () => {
+      expect(numbers).toHaveLength(86)
+      expect(numbers).toEqual(
+        Array.from({ length: 86 }, (_, i) => `M2Q${String(i + 1).padStart(3, '0')}`)
+      )
+    })
+
+    it('points every packet number at questions that still exist', () => {
+      for (const [number, target] of Object.entries(MODULE_2_CROSSWALK)) {
+        for (const id of Array.isArray(target) ? target : [target]) {
+          expect(live.has(id), `${number} points at missing ${id}`).toBe(true)
+        }
+      }
+    })
+
+    it('answers the split packet question with all five of its parts', () => {
+      expect(MODULE_2_CROSSWALK.M2Q008).toEqual(MEAL_DAY_IDS)
+    })
+
+    it('accounts for every question exactly once, as packet or as addition', () => {
+      const mapped = Object.values(MODULE_2_CROSSWALK).flat()
+      const added = MODULE_2_ADDED
+      expect(added.every(id => live.has(id))).toBe(true)
+      expect(mapped.filter(id => added.includes(id))).toEqual([])
+      expect(new Set([...mapped, ...added]).size).toBe(BASE.length)
+      expect(mapped.length + added.length).toBe(BASE.length)
+    })
   })
 
   it('leaves final wages and wrongful termination to Module 1', () => {

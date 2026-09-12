@@ -34,8 +34,9 @@ import { QuestionnaireSection } from '@/types'
  * that were carrying more than one fact each — one meal-break day count became
  * five, and a compound "why" became its own question — and added the free-text
  * follow-ups the office was having to phone clients for. No packet question was
- * dropped; MODULE_2_CROSSWALK has never been written, so the mapping back to
- * M2Q001–M2Q086 is still owed.
+ * dropped. MODULE_2_CROSSWALK at the foot of this file maps every packet number
+ * to what now answers it, and MODULE_2_ADDED lists the questions the packet
+ * never had.
  */
 
 /** Escapes that appear on nearly every date question in this module. */
@@ -1324,4 +1325,146 @@ export const MODULE_2_SECTIONS: QuestionnaireSection[] = [
       },
     ],
   },
+]
+
+/**
+ * Packet number to stored id, in packet order.
+ *
+ * This is the "documented stable equivalent with a complete crosswalk" the
+ * packet allows in place of M2Q001-M2Q086, and it follows Module 1's convention
+ * exactly: the file above was authored in packet order, so packet number N is
+ * its Nth question. A test asserts every number resolves to a live question and
+ * that none is missing, which is what stops the file drifting from the packet
+ * unnoticed.
+ *
+ * Two things the firm's review did to the packet show up here.
+ *
+ * M2Q008 maps to FIVE ids rather than one. The packet asked on how many days a
+ * week the worker "missed a meal, started it late, got less than 30 minutes,
+ * worked during it, or had to stay ready" - one number covering five different
+ * problems. Each has its own count now, and the packet question is only
+ * answered by all five together, so the crosswalk records all five.
+ *
+ * MODULE_2_ADDED is the other direction: questions the portal asks that the
+ * packet never had. They carry no packet number because there is none to give
+ * them, and inventing one would make the crosswalk lie about what the packet
+ * contains.
+ */
+export const MODULE_2_CROSSWALK: Record<string, string | string[]> = {
+  M2Q001: 'm2_meal_given',
+  M2Q002: 'm2_meal_start_time',
+  M2Q003: 'm2_meal_minutes_free',
+  M2Q004: 'm2_meal_where',
+  M2Q005: 'm2_meal_what_happened',
+  M2Q006: 'm2_meal_could_leave',
+  M2Q007: 'm2_meal_redone',
+  M2Q008: [
+    'm2_meal_days_missed',
+    'm2_meal_days_late',
+    'm2_meal_days_short',
+    'm2_meal_days_worked_during',
+    'm2_meal_days_stay_ready',
+  ],
+  M2Q009: 'm2_meal_problem_start',
+  M2Q010: 'm2_meal_problem_end',
+  M2Q011: 'm2_second_meal_given',
+  M2Q012: 'm2_second_meal_time',
+  M2Q013: 'm2_meal_waiver',
+  M2Q014: 'm2_rest_count',
+  M2Q015: 'm2_rest_full_ten',
+  M2Q016: 'm2_rest_what_happened',
+  M2Q017: 'm2_rest_phone',
+  M2Q018: 'm2_rest_leave_site',
+  M2Q019: 'm2_rest_eat_drink',
+  M2Q020: 'm2_rest_days_per_week',
+  M2Q021: 'm2_rest_problem_start',
+  M2Q022: 'm2_rest_problem_end',
+  M2Q023: 'm2_worked_off_clock',
+  M2Q024: 'm2_before_clock_in',
+  M2Q025: 'm2_after_clock_out',
+  M2Q026: 'm2_away_from_job',
+  M2Q027: 'm2_unclocked_meetings',
+  M2Q028: 'm2_wait_and_travel',
+  M2Q029: 'm2_most_frequent_pattern',
+  M2Q030: 'm2_another_pattern',
+  M2Q031: 'm2_other_frequent_patterns',
+  M2Q032: 'm2_p_what',
+  M2Q033: 'm2_p_who_asked',
+  M2Q034: 'm2_p_why_did_it',
+  M2Q035: 'm2_p_if_not_done',
+  M2Q036: 'm2_p_could_wait',
+  M2Q037: 'm2_p_free_during_wait',
+  M2Q038: 'm2_p_who_knew',
+  M2Q039: 'm2_p_how_they_knew',
+  M2Q040: 'm2_p_records',
+  M2Q041: 'm2_p_could_clock_in_first',
+  M2Q042: 'm2_p_why_not_clock_in',
+  M2Q043: 'm2_p_could_stay_clocked_in',
+  M2Q044: 'm2_p_why_clocked_out_early',
+  M2Q045: 'm2_p_rule_against',
+  M2Q046: 'm2_p_boss_allowed_anyway',
+  M2Q047: 'm2_p_told_anyone',
+  M2Q048: 'm2_p_told_who',
+  M2Q049: 'm2_p_told_when',
+  M2Q050: 'm2_p_told_how',
+  M2Q051: 'm2_p_told_what_said',
+  M2Q052: 'm2_p_told_result',
+  M2Q053: 'm2_p_started',
+  M2Q054: 'm2_p_stopped',
+  M2Q055: 'm2_p_days_per_week',
+  M2Q056: 'm2_p_minutes_per_day',
+  M2Q057: 'm2_p_how_sure',
+  M2Q058: 'm2_p_pattern_changed',
+  M2Q059: 'm2_p_what_changed',
+  M2Q060: 'm2_over_8_hours',
+  M2Q061: 'm2_over_12_hours',
+  M2Q062: 'm2_over_40_hours',
+  M2Q063: 'm2_seven_days_running',
+  M2Q064: 'm2_all_hours_on_stub',
+  M2Q065: 'm2_overtime_on_stub',
+  M2Q066: 'm2_ever_paid_overtime',
+  M2Q067: 'm2_double_time_on_stub',
+  M2Q068: 'm2_union_or_alt_schedule',
+  M2Q069: 'm2_spoke_up',
+  M2Q070: 'm2_spoke_up_what',
+  M2Q071: 'm2_spoke_up_who_heard',
+  M2Q072: 'm2_spoke_up_when',
+  M2Q073: 'm2_spoke_up_how',
+  M2Q074: 'm2_company_immediate_response',
+  M2Q075: 'm2_what_changed_after',
+  M2Q076: 'm2_what_got_worse',
+  M2Q077: 'm2_first_bad_thing',
+  M2Q078: 'm2_first_bad_when',
+  M2Q079: 'm2_who_decided',
+  M2Q080: 'm2_decider_knew',
+  M2Q081: 'm2_how_you_know_they_knew',
+  M2Q082: 'm2_company_reason',
+  M2Q083: 'm2_reason_given_before',
+  M2Q084: 'm2_anyone_linked_it',
+  M2Q085: 'm2_what_was_said',
+  M2Q086: 'm2_retaliation_records',
+}
+
+/**
+ * Questions the firm added in review, which no packet number covers.
+ *
+ * Together with the ids in MODULE_2_CROSSWALK these account for every question
+ * in the module - a test holds that, so a question cannot be added without
+ * landing in one list or the other.
+ */
+export const MODULE_2_ADDED: string[] = [
+  'm2_meal_start_time_changed',
+  'm2_meal_hours_after_start',
+  'm2_meal_minutes_free_explain',
+  'm2_meal_why_not',
+  'm2_meal_why_not_explain',
+  'm2_rest_given',
+  'm2_rest_why_not',
+  'm2_rest_why_not_explain',
+  'm2_after_clock_out_explain',
+  'm2_away_from_job_explain',
+  'm2_unclocked_meetings_explain',
+  'm2_wait_and_travel_explain',
+  'm2_another_pattern_explain',
+  'm2_p_could_wait_explain',
 ]
