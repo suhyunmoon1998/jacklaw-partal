@@ -251,6 +251,76 @@ describe('the wage-and-hour module as a worker would meet it', () => {
     expect(drawnQuestions).toHaveLength(englishQuestions.length)
     expect(screen.getByText('식사 시간(밀 브레이크)')).toBeDefined()
   })
+
+  /**
+   * The questions the firm added when it reviewed the printed packet.
+   *
+   * Every one of them sits behind a gate, so the "draws every section from an
+   * empty start" test above never reaches them — that one renders exactly what
+   * a worker sees before answering anything. These open each gate and draw what
+   * is behind it, because a question nobody has seen drawn is a question that
+   * can reach a client broken.
+   */
+  describe('the questions added in the firm review', () => {
+    /** For each new question, answers that open its gate. */
+    const OPENS: [string, Record<string, AnswerValue>][] = [
+      ['m2_meal_start_time_changed', { m2_meal_given: 'Some days' }],
+      ['m2_meal_hours_after_start', { m2_meal_given: 'Some days' }],
+      ['m2_meal_minutes_free_explain', { m2_meal_given: 'Some days', m2_meal_minutes_free: 'It changed' }],
+      ['m2_meal_why_not', { m2_meal_given: 'No' }],
+      ['m2_meal_why_not_explain', { m2_meal_given: 'No', m2_meal_why_not: ['Something else happened'] }],
+      ['m2_meal_days_missed', { m2_meal_given: 'Some days' }],
+      ['m2_meal_days_late', { m2_meal_given: 'Some days' }],
+      ['m2_meal_days_short', { m2_meal_given: 'Some days' }],
+      ['m2_meal_days_worked_during', { m2_meal_given: 'Some days' }],
+      ['m2_meal_days_stay_ready', { m2_meal_given: 'Some days' }],
+      ['m2_meal_problem_start', { m2_meal_given: 'Some days', m2_meal_days_stay_ready: '4' }],
+      ['m2_rest_given', {}],
+      ['m2_rest_why_not', { m2_rest_given: 'Sometimes' }],
+      ['m2_rest_why_not_explain', { m2_rest_given: 'No', m2_rest_why_not: ['Something else happened'] }],
+      ['m2_after_clock_out_explain', { m2_after_clock_out: ['Something else after clocking out'] }],
+      ['m2_away_from_job_explain', { m2_away_from_job: ['Something else away from work'] }],
+      ['m2_unclocked_meetings_explain', { m2_unclocked_meetings: ['Something else I attended'] }],
+      ['m2_wait_and_travel_explain', { m2_wait_and_travel: ['Something else while waiting or travelling'] }],
+      ['m2_another_pattern_explain', { m2_most_frequent_pattern: OPENED, m2_another_pattern: 'Not sure' }],
+    ]
+
+    for (const [id, opening] of OPENS) {
+      it(`draws ${id} once its gate is open`, () => {
+        const answers = { m2_before_clock_in: [OPENED], ...opening }
+        const question = find(MODULE_2_SECTIONS, id)
+        const { sections } = drawModule(answers)
+        const live = liveAnswersFor('en', answers)
+        const onScreen = sections.flatMap(s => s.questions).filter(q => isVisible(q, live))
+        expect(onScreen.map(q => q.id), `${id} should be visible`).toContain(id)
+
+        // The label is drawn, and so is a control the worker can actually use.
+        expect(screen.getAllByText(question.label).length).toBeGreaterThan(0)
+        if (question.options) {
+          for (const option of question.options) {
+            expect(screen.getAllByText(option).length, `${id} choice "${option}"`).toBeGreaterThan(0)
+          }
+        } else {
+          expect(document.querySelector(`#q-${id}`), `${id} needs an input`).not.toBeNull()
+        }
+      })
+    }
+
+    it('carries the new explain box into every branch of the repeating section', () => {
+      const answers: Record<string, AnswerValue> = {
+        m2_before_clock_in: [OPENED],
+        m2_most_frequent_pattern: OPENED,
+        [`m2_p_could_wait::${OPENED}`]: 'Sometimes',
+      }
+      const live = liveAnswersFor('en', answers)
+      const { sections } = drawModule(answers)
+      const ids = sections.flatMap(s => s.questions).filter(q => isVisible(q, live)).map(q => q.id)
+      expect(ids).toContain(`m2_p_could_wait_explain::${OPENED}`)
+      expect(
+        screen.getAllByText('What stopped you from waiting until you were on the clock?').length
+      ).toBeGreaterThan(0)
+    })
+  })
 })
 
 describe('the intake module', () => {

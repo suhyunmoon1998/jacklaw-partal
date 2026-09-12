@@ -9,7 +9,7 @@
  * question here be skipped because of an answer given there.
  *
  * Submitting lands on the same thank-you page Module 1 uses. It used to drop
- * the client back on the dashboard with no acknowledgement at all — eighty-six
+ * the client back on the dashboard with no acknowledgement at all — a hundred
  * questions answered and nothing on screen to say they had arrived.
  */
 
