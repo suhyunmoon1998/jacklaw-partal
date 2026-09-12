@@ -57,6 +57,15 @@ const REST_NOT_FREE = [
   'A bathroom trip was counted as my rest break',
 ]
 
+/** The five meal-problem day counts, and what each one is a count of. */
+const MEAL_DAY_COUNTS: [string, string][] = [
+  ['m2_meal_days_missed', 'the meal was missed altogether'],
+  ['m2_meal_days_late', 'the meal started late'],
+  ['m2_meal_days_short', 'the meal ran under 30 minutes'],
+  ['m2_meal_days_worked_during', 'work continued through the meal'],
+  ['m2_meal_days_stay_ready', 'the worker had to stay ready'],
+]
+
 export function staffFlags(answers: Record<string, AnswerValue>): RaisedFlag[] {
   const raised: RaisedFlag[] = []
   const add = (flag: StaffFlag, because: string[]) => {
@@ -77,8 +86,13 @@ export function staffFlags(answers: Record<string, AnswerValue>): RaisedFlag[] {
   if (isOneOf(answers.m2_meal_could_leave, 'No', 'Only with permission')) {
     mealBecause.push(`Could leave the site during the meal: ${str(answers.m2_meal_could_leave)}`)
   }
-  if (HAPPENED.includes(str(answers.m2_meal_days_per_week))) {
-    mealBecause.push(`Days a week affected: ${str(answers.m2_meal_days_per_week)}`)
+  // One count per meal problem since Module 2 split them apart, so each one
+  // that was actually reported names itself rather than arriving as a bare
+  // number the reader cannot attribute.
+  for (const [id, what] of MEAL_DAY_COUNTS) {
+    if (HAPPENED.includes(str(answers[id]))) {
+      mealBecause.push(`Days a week ${what}: ${str(answers[id])}`)
+    }
   }
   if (isOneOf(answers.m2_second_meal_given, 'No', 'Some days')) {
     mealBecause.push(`Second meal past ten hours: ${str(answers.m2_second_meal_given)}`)

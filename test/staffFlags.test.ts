@@ -16,7 +16,7 @@ type Answers = Record<string, AnswerValue>
 const FILLED: Answers = {
   m2_meal_given: 'Some days',
   m2_meal_what_happened: ['I kept working while I ate'],
-  m2_meal_days_per_week: '3',
+  m2_meal_days_worked_during: '3',
   m2_rest_count: '0',
   m2_rest_days_per_week: '5',
   m2_most_frequent_pattern: 'Opened a door or gate',
@@ -62,7 +62,7 @@ describe('what gets flagged', () => {
       m2_meal_minutes_free: '30 minutes or more',
       m2_meal_what_happened: ['I did no work and did not have to stay ready'],
       m2_meal_could_leave: 'Yes',
-      m2_meal_days_per_week: '0',
+      m2_meal_days_worked_during: '0',
       m2_rest_count: '2',
       m2_rest_full_ten: 'Every break',
       m2_rest_what_happened: ['I did no work and used the time for myself'],

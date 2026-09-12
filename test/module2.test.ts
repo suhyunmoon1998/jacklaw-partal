@@ -27,6 +27,15 @@ import { LANGUAGES } from '@/lib/langs'
 type Answers = Record<string, AnswerValue>
 
 const BASE = MODULE_2_SECTIONS.flatMap(s => s.questions)
+
+/** The five meal problems that used to be one question with five things in it. */
+const MEAL_DAY_IDS = [
+  'm2_meal_days_missed',
+  'm2_meal_days_late',
+  'm2_meal_days_short',
+  'm2_meal_days_worked_during',
+  'm2_meal_days_stay_ready',
+]
 const find = (sections: { questions: Question[] }[], id: string) =>
   sections.flatMap(s => s.questions).find(q => q.id === id)
 
@@ -46,8 +55,8 @@ const shown = (answers: Answers) => {
 }
 
 describe('the packet', () => {
-  it('asks 86 questions in six sections', () => {
-    expect(BASE).toHaveLength(86)
+  it('asks 104 questions in six sections', () => {
+    expect(BASE).toHaveLength(104)
     expect(MODULE_2_SECTIONS).toHaveLength(6)
   })
 
@@ -56,7 +65,7 @@ describe('the packet', () => {
       expect(id.startsWith('m2_'), `${id} must be namespaced`).toBe(true)
       expect(MODULE_1_IDS.has(id)).toBe(false)
     }
-    expect(new Set(BASE.map(q => q.id)).size).toBe(86)
+    expect(new Set(BASE.map(q => q.id)).size).toBe(104)
   })
 
   it('leaves final wages and wrongful termination to Module 1', () => {
@@ -71,7 +80,7 @@ describe('the packet', () => {
     // Module 1 answers all count as already given.
     const module1 = new Set(QUESTIONNAIRE_SECTIONS.flatMap(s => s.questions.map(q => q.id)))
     BASE.forEach((q, index) => {
-      for (const cond of [q.showIf, q.showIf?.and, q.showIf?.or]) {
+      for (const cond of [q.showIf, q.showIf?.and, q.showIf?.or, ...(q.showIf?.anyOf ?? [])]) {
         if (!cond) continue
         if (module1.has(cond.questionId)) continue
         const gate = at.get(cond.questionId)
@@ -84,7 +93,7 @@ describe('the packet', () => {
   it('only waits for values its gating question can take', () => {
     const byId = new Map(BASE.map(q => [q.id, q]))
     for (const q of BASE) {
-      for (const cond of [q.showIf, q.showIf?.and, q.showIf?.or]) {
+      for (const cond of [q.showIf, q.showIf?.and, q.showIf?.or, ...(q.showIf?.anyOf ?? [])]) {
         if (!cond?.value) continue
         const gate = byId.get(cond.questionId)
         if (!gate?.options) continue
@@ -98,11 +107,11 @@ describe('the packet', () => {
 
 describe('short shifts', () => {
   it('skips the meal details when the days were never over five hours', () => {
-    const short = shown({ m2_meal_given: 'My workdays were not over five hours' })
+    const short = shown({ m2_meal_given: 'My workdays were under five hours' })
     for (const id of ['m2_meal_start_time', 'm2_meal_minutes_free', 'm2_meal_where', 'm2_meal_what_happened']) {
       expect(short.sees(id)).toBe(false)
     }
-    expect(short.sees('m2_meal_days_per_week')).toBe(false)
+    for (const id of MEAL_DAY_IDS) expect(short.sees(id)).toBe(false)
     expect(short.sees('m2_meal_waiver')).toBe(false)
     // And the second meal cannot arise either.
     expect(short.sees('m2_second_meal_given')).toBe(false)
@@ -112,8 +121,9 @@ describe('short shifts', () => {
     for (const answer of ['Every day', 'Some days', 'Not sure']) {
       expect(shown({ m2_meal_given: answer }).sees('m2_meal_start_time')).toBe(true)
     }
-    // Someone who got no meal at all is still asked how often it happened.
-    expect(shown({ m2_meal_given: 'No' }).sees('m2_meal_days_per_week')).toBe(true)
+    // Someone who got no meal at all is still asked how often each problem happened.
+    const none = shown({ m2_meal_given: 'No' })
+    for (const id of MEAL_DAY_IDS) expect(none.sees(id)).toBe(true)
   })
 })
 
@@ -127,9 +137,20 @@ describe('the meal branch', () => {
   })
 
   it('asks when the problem started once there is a problem', () => {
-    expect(shown({ m2_meal_given: 'Some days', m2_meal_days_per_week: '0' }).sees('m2_meal_problem_start')).toBe(false)
-    expect(shown({ m2_meal_given: 'Some days', m2_meal_days_per_week: '3' }).sees('m2_meal_problem_start')).toBe(true)
-    expect(shown({ m2_meal_given: 'Some days', m2_meal_days_per_week: 'Not sure' }).sees('m2_meal_problem_end')).toBe(true)
+    const zeroes = Object.fromEntries(MEAL_DAY_IDS.map(id => [id, '0']))
+    expect(shown({ m2_meal_given: 'Some days', ...zeroes }).sees('m2_meal_problem_start')).toBe(false)
+
+    // Any one of the five problems is a meal-break problem with a start and an
+    // end — including the last of them, which `or` alone could not have reached.
+    for (const id of MEAL_DAY_IDS) {
+      const one = shown({ m2_meal_given: 'Some days', ...zeroes, [id]: '3' })
+      expect(one.sees('m2_meal_problem_start'), `${id} = 3 opens the start`).toBe(true)
+      expect(one.sees('m2_meal_problem_end'), `${id} = 3 opens the end`).toBe(true)
+    }
+    expect(
+      shown({ m2_meal_given: 'Some days', ...zeroes, m2_meal_days_stay_ready: 'Not sure' })
+        .sees('m2_meal_problem_end')
+    ).toBe(true)
   })
 
   it('asks about a second meal for anyone whose days could have run long', () => {
@@ -231,8 +252,8 @@ describe('one branch per kind of unpaid work', () => {
     expect(many.live[`m2_p_what::${OPENED}`]).toBe('Unlocked the gate for the crew')
     expect(many.live[`m2_p_what::${COUNTED}`]).toBe('Counted the till after clocking out')
     expect(many.live[`m2_p_what::${WAITED}`]).toBeUndefined()
-    // 28 questions, three times over.
-    expect(branches.flatMap(s => s.questions)).toHaveLength(84)
+    // 29 questions, three times over.
+    expect(branches.flatMap(s => s.questions)).toHaveLength(87)
   })
 
   it('keeps each branch\'s own skip logic inside that branch', () => {
@@ -423,7 +444,7 @@ describe('hidden questions', () => {
   })
 
   it('do not hold up a section the worker can finish', () => {
-    const answers: Answers = { m2_meal_given: 'My workdays were not over five hours' }
+    const answers: Answers = { m2_meal_given: 'My workdays were under five hours' }
     const live = liveAnswersFor('en', answers)
     for (const section of preparedSections('module2', 'en', answers)) {
       expect(missingRequired(section, live)).toEqual([])
@@ -479,7 +500,7 @@ describe('the four languages stay in step', () => {
       expect(sections.map(s => s.id)).toEqual(MODULE_2_SECTIONS.map(s => s.id))
 
       const localized = sections.flatMap(s => s.questions)
-      expect(localized).toHaveLength(86)
+      expect(localized).toHaveLength(104)
       localized.forEach((q, i) => {
         const english = BASE[i]
         expect(q.id).toBe(english.id)

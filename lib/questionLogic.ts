@@ -42,7 +42,8 @@ export function isVisible(
 
   const head = conditionHolds(answers[gate.questionId], gate)
   const either = gate.or ? conditionHolds(answers[gate.or.questionId], gate.or) : false
-  if (!head && !either) return false
+  const anyOf = gate.anyOf?.some(c => conditionHolds(answers[c.questionId], c)) ?? false
+  if (!head && !either && !anyOf) return false
 
   if (gate.and && !conditionHolds(answers[gate.and.questionId], gate.and)) return false
   return true

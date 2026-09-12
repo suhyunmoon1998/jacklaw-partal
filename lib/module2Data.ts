@@ -1,7 +1,7 @@
 import { QuestionnaireSection } from '@/types'
 
 /**
- * Module 2 of the intake questionnaire — wage and hour, 86 questions.
+ * Module 2 of the intake questionnaire — wage and hour, 104 questions.
  *
  * Follows Module 1 and never repeats it. Everything Module 1 already
  * established — the employer, the dates, whether they still work there, the
@@ -27,9 +27,15 @@ import { QuestionnaireSection } from '@/types'
  * ── Identifiers ───────────────────────────────────────────────────────────────
  * The packet allows M2Q001–M2Q086 "or a documented stable equivalent with a
  * complete crosswalk". As in Module 1 the portal's own readable-id convention is
- * used, and MODULE_2_CROSSWALK at the foot of this file is the mapping. The
- * `m2_` prefix is what keeps these ids from ever colliding with Module 1's in
- * the shared answers record.
+ * used. The `m2_` prefix is what keeps these ids from ever colliding with
+ * Module 1's in the shared answers record.
+ *
+ * The count runs past the packet's 86 because the firm's review split questions
+ * that were carrying more than one fact each — one meal-break day count became
+ * five, and a compound "why" became its own question — and added the free-text
+ * follow-ups the office was having to phone clients for. No packet question was
+ * dropped; MODULE_2_CROSSWALK has never been written, so the mapping back to
+ * M2Q001–M2Q086 is still owed.
  */
 
 /** Escapes that appear on nearly every date question in this module. */
@@ -60,6 +66,74 @@ const MEAL_INTERRUPTED = [
 
 const REST_TAKEN = { value: '1', orValues: ['2', '3 or more', 'It changed', 'Not sure'] }
 
+/** Everyone whose days could have reached five hours, however they answered. */
+const MEAL_SECTION = {
+  questionId: 'm2_meal_given',
+  value: 'Every day',
+  orValues: ['Some days', 'No', 'Not sure'],
+}
+
+/** Whoever did not reliably get one, which is who the why-not question is for. */
+const MEAL_MISSED = { questionId: 'm2_meal_given', value: 'No', orValues: ['Some days', 'Not sure'] }
+
+/**
+ * Why the meal break did not happen.
+ *
+ * These are MEAL_INTERRUPTED's two compound choices taken apart — "a boss told
+ * me to wait, skip the meal, or finish work first" is two different things a
+ * boss did, and "work was too busy, or no one could cover for me" is two
+ * different reasons nobody came. A worker picking one of them was telling the
+ * office less than they meant to.
+ */
+const MEAL_WHY_NOT = [
+  'Work was too busy',
+  'No one could cover for me',
+  'A boss told me to finish work first',
+  'A boss told me to wait or skip the meal',
+  'Something else happened',
+  'Not sure',
+]
+
+/**
+ * Why the rest break did not happen — the three reasons the checklist below
+ * already names, asked of whoever said they did not reliably get one.
+ */
+const REST_WHY_NOT = [
+  'Work was too busy, or no one could cover',
+  'The break was added to lunch or put at the start or end of the shift',
+  'A bathroom trip was counted as my rest break',
+  'Something else happened',
+  'Not sure',
+]
+
+/** One question per meal problem, where there used to be one for all five. */
+const MEAL_DAY_IDS = [
+  'm2_meal_days_missed',
+  'm2_meal_days_late',
+  'm2_meal_days_short',
+  'm2_meal_days_worked_during',
+  'm2_meal_days_stay_ready',
+]
+
+/** Any day count that reports a problem at all. */
+const A_DAY_OR_MORE = {
+  value: '1',
+  orValues: ['2', '3', '4', '5', '6', '7', 'It changed', 'Not sure'],
+}
+
+/**
+ * When ANY of the five meal problems was reported.
+ *
+ * Splitting the old single question left this gate with five questions to watch
+ * and `or` carries one, which is what `anyOf` is for. A worker who only ever had
+ * to stay ready still has a meal-break problem with a start and an end.
+ */
+const MEAL_PROBLEM_REPORTED = {
+  questionId: MEAL_DAY_IDS[0],
+  ...A_DAY_OR_MORE,
+  anyOf: MEAL_DAY_IDS.slice(1).map(questionId => ({ questionId, ...A_DAY_OR_MORE })),
+}
+
 /** The five checklists that between them find unpaid work. */
 const OFF_CLOCK_SOURCES = [
   'm2_before_clock_in',
@@ -80,16 +154,36 @@ export const MODULE_2_SECTIONS: QuestionnaireSection[] = [
     questions: [
       {
         id: 'm2_meal_given',
-        label: 'On days you worked more than five hours, did you get a meal break?',
+        label: 'On days you worked five hours or more, did you get a meal break?',
         type: 'select',
-        options: ['Every day', 'Some days', 'No', 'My workdays were not over five hours', 'Not sure'],
+        options: ['Every day', 'Some days', 'No', 'My workdays were under five hours', 'Not sure'],
       },
       {
         id: 'm2_meal_start_time',
         label: 'About what time did your first meal break usually start?',
         type: 'text',
-        helpText: 'A time, or "it changed", or "I did not get a meal". "Not sure" is fine.',
+        // Asks for a clock time first and on purpose. "It changed" was being
+        // used as the easy way out of a question the office needs a number for,
+        // so the times come first here and the next question takes the changing.
+        helpText:
+          'Your best guess at the time is enough — "about 12:30" is a real answer. If the time moved around, give the one it started at most often and say so in the next question.',
         placeholder: 'around 12:30pm',
+        showIf: { questionId: 'm2_meal_given', ...MEAL_ASKED },
+      },
+      {
+        id: 'm2_meal_start_time_changed',
+        label: 'If the time your meal break started changed, how did it change?',
+        type: 'textarea',
+        helpText: 'Leave this blank if it started at about the same time every day.',
+        showIf: { questionId: 'm2_meal_given', ...MEAL_ASKED },
+      },
+      {
+        id: 'm2_meal_hours_after_start',
+        label: 'About how many hours after the start of work did you get a meal break?',
+        type: 'text',
+        helpText:
+          'Your best guess is enough — "about 4 hours" or "right before the end of the shift" are real answers. "Not sure" is fine.',
+        placeholder: 'about 5 hours',
         showIf: { questionId: 'm2_meal_given', ...MEAL_ASKED },
       },
       {
@@ -108,11 +202,33 @@ export const MODULE_2_SECTIONS: QuestionnaireSection[] = [
         showIf: { questionId: 'm2_meal_given', ...MEAL_ASKED },
       },
       {
+        id: 'm2_meal_minutes_free_explain',
+        label: 'What changed about how long you had?',
+        type: 'textarea',
+        helpText: 'For example: "half an hour on slow days, ten minutes when we were busy."',
+        showIf: { questionId: 'm2_meal_minutes_free', value: 'It changed' },
+      },
+      {
         id: 'm2_meal_where',
         label: 'Where did you usually eat your meal?',
         type: 'text',
         placeholder: 'For example: lunch room, desk, register, vehicle, or outside',
         showIf: { questionId: 'm2_meal_given', ...MEAL_ASKED },
+      },
+      {
+        id: 'm2_meal_why_not',
+        label: 'Why did you not get a meal break?',
+        type: 'multiselect',
+        options: MEAL_WHY_NOT,
+        exclusiveOptions: NOT_SURE_ONLY,
+        helpText: 'Choose every reason that applies.',
+        showIf: MEAL_MISSED,
+      },
+      {
+        id: 'm2_meal_why_not_explain',
+        label: 'What else happened that kept you from the meal break?',
+        type: 'textarea',
+        showIf: { questionId: 'm2_meal_why_not', value: 'Something else happened' },
       },
       {
         id: 'm2_meal_what_happened',
@@ -146,39 +262,61 @@ export const MODULE_2_SECTIONS: QuestionnaireSection[] = [
           orValues: MEAL_INTERRUPTED.slice(1),
         },
       },
+      // Five questions where there was one. A worker asked how many days they
+      // "missed a meal, started it late, got less than 30 minutes, worked
+      // during it, or had to stay ready" answered with a single number that the
+      // office then could not take apart — three days of what? Each problem now
+      // carries its own count, and they are asked of everyone the old question
+      // was asked of.
       {
-        id: 'm2_meal_days_per_week',
-        label:
-          'In a normal week, on how many workdays did you miss a meal, start it late, get less than 30 minutes, work during it, or have to stay ready?',
+        id: 'm2_meal_days_missed',
+        label: 'In a normal week, on how many workdays did you miss a meal break altogether?',
         type: 'select',
         options: DAYS_0_7,
-        showIf: {
-          questionId: 'm2_meal_given',
-          value: 'Every day',
-          orValues: ['Some days', 'No', 'Not sure'],
-        },
+        showIf: MEAL_SECTION,
+      },
+      {
+        id: 'm2_meal_days_late',
+        label: 'In a normal week, on how many workdays did your meal break start late?',
+        type: 'select',
+        options: DAYS_0_7,
+        showIf: MEAL_SECTION,
+      },
+      {
+        id: 'm2_meal_days_short',
+        label: 'In a normal week, on how many workdays did you get less than 30 minutes?',
+        type: 'select',
+        options: DAYS_0_7,
+        showIf: MEAL_SECTION,
+      },
+      {
+        id: 'm2_meal_days_worked_during',
+        label: 'In a normal week, on how many workdays did you work during your meal break?',
+        type: 'select',
+        options: DAYS_0_7,
+        showIf: MEAL_SECTION,
+      },
+      {
+        id: 'm2_meal_days_stay_ready',
+        label:
+          'In a normal week, on how many workdays did you have to stay ready during your meal break?',
+        type: 'select',
+        options: DAYS_0_7,
+        showIf: MEAL_SECTION,
       },
       {
         id: 'm2_meal_problem_start',
         label: 'About when did the meal-break problem start?',
         type: 'text',
         helpText: APPROX_DATE_HELP,
-        showIf: {
-          questionId: 'm2_meal_days_per_week',
-          value: '1',
-          orValues: ['2', '3', '4', '5', '6', '7', 'It changed', 'Not sure'],
-        },
+        showIf: MEAL_PROBLEM_REPORTED,
       },
       {
         id: 'm2_meal_problem_end',
         label: 'About when did the meal-break problem stop, if it stopped?',
         type: 'text',
         helpText: APPROX_END_HELP,
-        showIf: {
-          questionId: 'm2_meal_days_per_week',
-          value: '1',
-          orValues: ['2', '3', '4', '5', '6', '7', 'It changed', 'Not sure'],
-        },
+        showIf: MEAL_PROBLEM_REPORTED,
       },
       {
         id: 'm2_second_meal_given',
@@ -238,6 +376,15 @@ export const MODULE_2_SECTIONS: QuestionnaireSection[] = [
     id: 'm2_rest_breaks',
     title: 'Paid Rest Breaks',
     questions: [
+      // Asked before the count, because "how many did you get" is a question
+      // that assumes an answer above zero, and a worker who never got one was
+      // reading past it to the numbers.
+      {
+        id: 'm2_rest_given',
+        label: 'On a normal workday, did you get a rest break?',
+        type: 'select',
+        options: ['Yes', 'No', 'Sometimes', 'Not sure'],
+      },
       {
         id: 'm2_rest_count',
         label: 'On a normal workday, how many paid 10-minute rest breaks did you get?',
@@ -274,6 +421,21 @@ export const MODULE_2_SECTIONS: QuestionnaireSection[] = [
         exclusiveOptions: NOT_SURE_ONLY,
         helpText: 'Choose everything that happened.',
         showIf: { questionId: 'm2_rest_count', ...REST_TAKEN },
+      },
+      {
+        id: 'm2_rest_why_not',
+        label: 'Why did you not get a rest break?',
+        type: 'multiselect',
+        options: REST_WHY_NOT,
+        exclusiveOptions: NOT_SURE_ONLY,
+        helpText: 'Choose every reason that applies.',
+        showIf: { questionId: 'm2_rest_given', value: 'No', orValues: ['Sometimes'] },
+      },
+      {
+        id: 'm2_rest_why_not_explain',
+        label: 'What else happened that kept you from the rest break?',
+        type: 'textarea',
+        showIf: { questionId: 'm2_rest_why_not', value: 'Something else happened' },
       },
       {
         id: 'm2_rest_phone',
@@ -390,6 +552,12 @@ export const MODULE_2_SECTIONS: QuestionnaireSection[] = [
         helpText: 'Choose everything you did.',
       },
       {
+        id: 'm2_after_clock_out_explain',
+        label: 'What else did you do after clocking out?',
+        type: 'textarea',
+        showIf: { questionId: 'm2_after_clock_out', value: 'Something else after clocking out' },
+      },
+      {
         id: 'm2_away_from_job',
         label:
           'Away from the job, did you ever do any of these things without adding the time to your work record?',
@@ -412,6 +580,12 @@ export const MODULE_2_SECTIONS: QuestionnaireSection[] = [
         helpText: 'Choose everything you did.',
       },
       {
+        id: 'm2_away_from_job_explain',
+        label: 'What else did you do away from the job?',
+        type: 'textarea',
+        showIf: { questionId: 'm2_away_from_job', value: 'Something else away from work' },
+      },
+      {
         id: 'm2_unclocked_meetings',
         label: 'Did you ever attend any of these while you were not clocked in?',
         type: 'multiselect',
@@ -429,6 +603,12 @@ export const MODULE_2_SECTIONS: QuestionnaireSection[] = [
         ],
         exclusiveOptions: NONE_OR_NOT_SURE,
         helpText: 'Choose everything you attended.',
+      },
+      {
+        id: 'm2_unclocked_meetings_explain',
+        label: 'What else did you attend while you were not clocked in?',
+        type: 'textarea',
+        showIf: { questionId: 'm2_unclocked_meetings', value: 'Something else I attended' },
       },
       {
         id: 'm2_wait_and_travel',
@@ -451,6 +631,12 @@ export const MODULE_2_SECTIONS: QuestionnaireSection[] = [
           'Do not count the normal trip from home to the first place the company told you to report.',
       },
       {
+        id: 'm2_wait_and_travel_explain',
+        label: 'What else happened while you were waiting or travelling?',
+        type: 'textarea',
+        showIf: { questionId: 'm2_wait_and_travel', value: 'Something else while waiting or travelling' },
+      },
+      {
         id: 'm2_most_frequent_pattern',
         label: 'Which kind of unpaid work happened most often?',
         type: 'select',
@@ -471,6 +657,13 @@ export const MODULE_2_SECTIONS: QuestionnaireSection[] = [
         optionsFrom: OFF_CLOCK_SOURCES,
         helpText: 'Choose every other one that happened often.',
         showIf: { questionId: 'm2_another_pattern', value: 'Yes' },
+      },
+      {
+        id: 'm2_another_pattern_explain',
+        label: 'What other unpaid work happened, and how often?',
+        type: 'textarea',
+        helpText: 'In your own words, even if you already picked it from the list above.',
+        showIf: { questionId: 'm2_another_pattern', value: 'Yes', orValues: ['Not sure'] },
       },
     ],
   },
@@ -551,6 +744,12 @@ export const MODULE_2_SECTIONS: QuestionnaireSection[] = [
         label: 'Could you wait and do the task after you clocked in or before you clocked out?',
         type: 'select',
         options: ['Yes', 'No', 'Sometimes', 'Not sure'],
+      },
+      {
+        id: 'm2_p_could_wait_explain',
+        label: 'What stopped you from waiting until you were on the clock?',
+        type: 'textarea',
+        showIf: { questionId: 'm2_p_could_wait', value: 'No', orValues: ['Sometimes'] },
       },
       {
         id: 'm2_p_free_during_wait',

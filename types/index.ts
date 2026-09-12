@@ -65,6 +65,16 @@ export interface ShowIfCondition {
    */
   or?: { questionId: string; value: string; orValues?: string[] }
   /**
+   * Several further conditions where ANY ONE is enough, for a gate that cannot
+   * be written as `or` alone. Module 2 splits "on how many days did you miss a
+   * meal, start it late, get less than 30 minutes, work during it, or have to
+   * stay ready" into one question per problem, and "when did the meal-break
+   * problem start" belongs to whoever reported ANY of them — five conditions,
+   * where `or` carries one. Additive and optional, so every gate written before
+   * this existed still means exactly what it meant.
+   */
+  anyOf?: { questionId: string; value: string; orValues?: string[] }[]
+  /**
    * True when the gating question has any answer at all, whatever it is. Used
    * where the packet says "ask when M2Q070 is shown" — the follow-ups belong to
    * the fact that the worker said something, not to what they said.
