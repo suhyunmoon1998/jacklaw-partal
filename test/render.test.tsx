@@ -291,6 +291,48 @@ describe('the wage-and-hour module as a worker would meet it', () => {
   })
 
   /**
+   * The other two languages, held to the same bar as Korean.
+   *
+   * A translated file that falls a question short, or leaves one in English,
+   * reaches a client as a questionnaire with a hole in it — and the merge is
+   * silent about it, because an untranslated label falls back to the English
+   * rather than failing.
+   */
+  for (const lang of ['es', 'zh', 'ko'] as const) {
+    it(`draws every Module 2 question in ${lang}, none of it left in English`, () => {
+      const answers = { m2_before_clock_in: [OPENED], m2_most_frequent_pattern: OPENED }
+      const live = liveAnswersFor(lang, answers)
+      const translated = preparedSections('module2', lang, answers).filter(s => isVisible(s, live))
+      const english = preparedSections('module2', 'en', answers).filter(s => isVisible(s, live))
+
+      const drawn = translated.flatMap(s => s.questions.filter(q => isVisible(q, live)))
+      const source = english.flatMap(s => s.questions.filter(q => isVisible(q, live)))
+      expect(drawn).toHaveLength(source.length)
+
+      const byId = new Map(source.map(q => [q.id, q]))
+      for (const q of drawn) {
+        const e = byId.get(q.id)!
+        expect(q.label.trim().length, `${q.id} has no label`).toBeGreaterThan(0)
+        expect(q.label, `${q.id} is still English`).not.toBe(e.label)
+        // The stored answer stays English whatever the client is reading, or
+        // the office gets a case file in four languages.
+        expect(q.options, `${q.id} stores translated values`).toEqual(e.options)
+      }
+
+      // And it actually reaches the screen.
+      render(
+        <div>{translated.map(s => (
+          <section key={s.id}>
+            <h2>{s.title}</h2>
+            {s.questions.filter(q => isVisible(q, live)).map(q => <p key={q.id}>{q.label}</p>)}
+          </section>
+        ))}</div>
+      )
+      for (const q of drawn.slice(0, 5)) expect(screen.getAllByText(q.label).length).toBeGreaterThan(0)
+    })
+  }
+
+  /**
    * The questions the firm added when it reviewed the printed packet.
    *
    * Every one of them sits behind a gate, so the "draws every section from an
