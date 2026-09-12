@@ -187,6 +187,25 @@ export const MODULE_2_SECTIONS: QuestionnaireSection[] = [
         type: 'select',
         options: ['Every day', 'Some days', 'No', 'My workdays were under five hours', 'Not sure'],
       },
+      // Asked here, before everything that assumes a meal happened. Sat lower
+      // down it broke the thread for anyone who answered "Some days": five
+      // questions about the meal they ate, then why they never got one, then
+      // back to the meal they ate.
+      {
+        id: 'm2_meal_why_not',
+        label: 'Why did you not get a meal break?',
+        type: 'multiselect',
+        options: MEAL_WHY_NOT,
+        exclusiveOptions: NOT_SURE_ONLY,
+        helpText: 'Choose every reason that applies.',
+        showIf: MEAL_MISSED,
+      },
+      {
+        id: 'm2_meal_why_not_explain',
+        label: 'What else happened that kept you from the meal break?',
+        type: 'textarea',
+        showIf: { questionId: 'm2_meal_why_not', value: 'Something else happened' },
+      },
       {
         id: 'm2_meal_start_time',
         label: 'About what time did your first meal break usually start?',
@@ -243,21 +262,6 @@ export const MODULE_2_SECTIONS: QuestionnaireSection[] = [
         type: 'text',
         placeholder: 'For example: lunch room, desk, register, vehicle, or outside',
         showIf: { questionId: 'm2_meal_given', ...MEAL_ASKED },
-      },
-      {
-        id: 'm2_meal_why_not',
-        label: 'Why did you not get a meal break?',
-        type: 'multiselect',
-        options: MEAL_WHY_NOT,
-        exclusiveOptions: NOT_SURE_ONLY,
-        helpText: 'Choose every reason that applies.',
-        showIf: MEAL_MISSED,
-      },
-      {
-        id: 'm2_meal_why_not_explain',
-        label: 'What else happened that kept you from the meal break?',
-        type: 'textarea',
-        showIf: { questionId: 'm2_meal_why_not', value: 'Something else happened' },
       },
       {
         id: 'm2_meal_what_happened',
