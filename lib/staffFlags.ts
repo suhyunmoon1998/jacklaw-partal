@@ -54,7 +54,8 @@ const REST_NOT_FREE = [
   'I had to stay ready in case work came up',
   'I had to ask before taking the break',
   'I was told to wait or was told no',
-  'Work was too busy, or no one could cover',
+  'Work was too busy',
+  'No one could cover for me',
   'The break was added to lunch or put at the start or end of the shift',
   'A bathroom trip was counted as my rest break',
 ]

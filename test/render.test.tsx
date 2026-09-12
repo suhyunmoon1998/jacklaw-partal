@@ -95,6 +95,23 @@ describe('a question on screen', () => {
     expect(q.options).not.toContain('Work was too busy, or no one could cover for me')
   })
 
+  it('splits the rest checklist the same way, in the same words', () => {
+    const q = find(MODULE_2_SECTIONS, 'm2_rest_what_happened')
+    draw(q, [])
+    for (const choice of ['Work was too busy', 'No one could cover for me']) {
+      expect(screen.getByText(choice), `${choice} must be its own box`).toBeDefined()
+    }
+    expect(q.options).toHaveLength(14)
+    expect(q.options).not.toContain('Work was too busy, or no one could cover')
+
+    // A rush is a rush whichever break it cost, so both checklists and both
+    // why-not questions have to offer the worker the same sentence.
+    for (const other of ['m2_meal_what_happened', 'm2_meal_why_not', 'm2_rest_why_not']) {
+      expect(find(MODULE_2_SECTIONS, other).options).toContain('Work was too busy')
+      expect(find(MODULE_2_SECTIONS, other).options).toContain('No one could cover for me')
+    }
+  })
+
   it('draws a choice list with every choice, and stores the English one', async () => {
     const user = userEvent.setup()
     const q = find(MODULE_2_SECTIONS, 'm2_meal_given')

@@ -100,11 +100,15 @@ const MEAL_WHY_NOT = [
 ]
 
 /**
- * Why the rest break did not happen — the three reasons the checklist below
- * already names, asked of whoever said they did not reliably get one.
+ * Why the rest break did not happen — the reasons the checklist below already
+ * names, worded identically to it, asked of whoever said they did not reliably
+ * get one. "Work was too busy, or no one could cover" was split for the same
+ * reason the meal list's compounds were: a rush and an absent coworker are two
+ * different facts, and the office could not tell which one a tick meant.
  */
 const REST_WHY_NOT = [
-  'Work was too busy, or no one could cover',
+  'Work was too busy',
+  'No one could cover for me',
   'The break was added to lunch or put at the start or end of the shift',
   'A bathroom trip was counted as my rest break',
   'Something else happened',
@@ -417,7 +421,8 @@ export const MODULE_2_SECTIONS: QuestionnaireSection[] = [
           'I had to stay ready in case work came up',
           'I had to ask before taking the break',
           'I was told to wait or was told no',
-          'Work was too busy, or no one could cover',
+          'Work was too busy',
+          'No one could cover for me',
           'The break was added to lunch or put at the start or end of the shift',
           'A bathroom trip was counted as my rest break',
           'Something else happened',
