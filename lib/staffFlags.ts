@@ -40,8 +40,10 @@ const MEAL_WORKED_THROUGH = [
   'I signed for a delivery or did a quick task',
   'I had to stay ready in case work came up',
   'I kept working while I ate',
-  'A boss told me to wait, skip the meal, or finish work first',
-  'Work was too busy, or no one could cover for me',
+  'A boss told me to wait or skip the meal',
+  'A boss told me to finish work first',
+  'Work was too busy',
+  'No one could cover for me',
 ]
 
 const REST_NOT_FREE = [

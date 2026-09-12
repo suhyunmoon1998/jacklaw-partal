@@ -74,6 +74,27 @@ describe('a question on screen', () => {
     expect(screen.getByRole('button', { name: /No/ })).toBeDefined()
   })
 
+  it('draws each meal interruption as its own choice, none of them compound', () => {
+    const q = find(MODULE_2_SECTIONS, 'm2_meal_what_happened')
+    draw(q, [])
+    // The firm split "a boss told me to wait, skip the meal, or finish work
+    // first" and "work was too busy, or no one could cover for me" into one
+    // fact each. A worker ticking one box now tells the office one thing.
+    for (const choice of [
+      'A boss told me to wait or skip the meal',
+      'A boss told me to finish work first',
+      'Work was too busy',
+      'No one could cover for me',
+    ]) {
+      expect(screen.getByText(choice), `${choice} must be its own box`).toBeDefined()
+    }
+    expect(q.options).toHaveLength(15)
+    // The compounds themselves are gone, so nothing can still be stored as
+    // "a boss did one of these three things".
+    expect(q.options).not.toContain('A boss told me to wait, skip the meal, or finish work first')
+    expect(q.options).not.toContain('Work was too busy, or no one could cover for me')
+  })
+
   it('draws a choice list with every choice, and stores the English one', async () => {
     const user = userEvent.setup()
     const q = find(MODULE_2_SECTIONS, 'm2_meal_given')

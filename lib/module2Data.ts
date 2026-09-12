@@ -59,8 +59,10 @@ const MEAL_INTERRUPTED = [
   'I signed for a delivery or did a quick task',
   'I had to stay ready in case work came up',
   'I kept working while I ate',
-  'A boss told me to wait, skip the meal, or finish work first',
-  'Work was too busy, or no one could cover for me',
+  'A boss told me to wait or skip the meal',
+  'A boss told me to finish work first',
+  'Work was too busy',
+  'No one could cover for me',
   'Something else happened',
   'Not sure',
 ]
@@ -80,11 +82,13 @@ const MEAL_MISSED = { questionId: 'm2_meal_given', value: 'No', orValues: ['Some
 /**
  * Why the meal break did not happen.
  *
- * These are MEAL_INTERRUPTED's two compound choices taken apart — "a boss told
- * me to wait, skip the meal, or finish work first" is two different things a
- * boss did, and "work was too busy, or no one could cover for me" is two
- * different reasons nobody came. A worker picking one of them was telling the
- * office less than they meant to.
+ * The same four choices MEAL_INTERRUPTED now offers, because they answer the
+ * same question from the other side: what happened during the meal, and why
+ * there was no meal. They are one string each so a worker's answer means one
+ * thing — "a boss told me to wait, skip the meal, or finish work first" used to
+ * be two different things a boss did, and "work was too busy, or no one could
+ * cover for me" two different reasons nobody came, and either way the office
+ * could not tell which.
  */
 const MEAL_WHY_NOT = [
   'Work was too busy',
