@@ -202,16 +202,48 @@ describe('the meal branch', () => {
 })
 
 describe('rest breaks', () => {
+  const DETAILS = [
+    'm2_rest_full_ten', 'm2_rest_what_happened',
+    'm2_rest_phone', 'm2_rest_leave_site', 'm2_rest_eat_drink',
+  ]
+
   it('asks the details only of someone who got a break', () => {
-    const none = shown({ m2_rest_count: '0' })
-    for (const id of ['m2_rest_full_ten', 'm2_rest_what_happened', 'm2_rest_phone', 'm2_rest_leave_site', 'm2_rest_eat_drink']) {
-      expect(none.sees(id)).toBe(false)
-    }
+    const none = shown({ m2_rest_given: 'Yes', m2_rest_count: '0' })
+    for (const id of DETAILS) expect(none.sees(id)).toBe(false)
     // The weekly count is still asked — missing every break is the answer.
     expect(none.sees('m2_rest_days_per_week')).toBe(true)
 
-    const some = shown({ m2_rest_count: '2' })
+    const some = shown({ m2_rest_given: 'Yes', m2_rest_count: '2' })
     expect(some.sees('m2_rest_full_ten')).toBe(true)
+  })
+
+  /**
+   * Asking "how many did you get" of someone who has just said they got none
+   * is the thing the question above the count was added to stop. It only works
+   * if the count actually hangs off it.
+   */
+  it('stops asking how many once the worker says there were none', () => {
+    const never = shown({ m2_rest_given: 'No' })
+    expect(never.sees('m2_rest_count')).toBe(false)
+    for (const id of DETAILS) expect(never.sees(id)).toBe(false)
+
+    // What they lose none of: why it happened, how often, and when.
+    expect(never.sees('m2_rest_why_not')).toBe(true)
+    expect(never.sees('m2_rest_days_per_week')).toBe(true)
+
+    for (const answer of ['Yes', 'Sometimes', 'Not sure']) {
+      expect(shown({ m2_rest_given: answer }).sees('m2_rest_count'), answer).toBe(true)
+    }
+  })
+
+  it('asks why the break was missed on the same terms the meal section does', () => {
+    const mealGate = find(MODULE_2_SECTIONS, 'm2_meal_why_not')?.showIf
+    const restGate = find(MODULE_2_SECTIONS, 'm2_rest_why_not')?.showIf
+    // Both open on "no", on "sometimes/some days", and on "not sure".
+    expect(restGate?.orValues).toContain('Not sure')
+    expect(mealGate?.orValues).toContain('Not sure')
+    expect(shown({ m2_rest_given: 'Not sure' }).sees('m2_rest_why_not')).toBe(true)
+    expect(shown({ m2_rest_given: 'Yes' }).sees('m2_rest_why_not')).toBe(false)
   })
 
   it('offers the usual day from Module 1 as the frame for the question', () => {

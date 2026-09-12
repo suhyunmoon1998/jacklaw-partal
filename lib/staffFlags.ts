@@ -104,6 +104,12 @@ export function staffFlags(answers: Record<string, AnswerValue>): RaisedFlag[] {
 
   // ── Rest breaks ──────────────────────────────────────────────────────────
   const restBecause: string[] = []
+  // Read first, because someone who says outright that there was no rest break
+  // is never asked the count — the flag would otherwise miss the plainest way
+  // of reporting the problem.
+  if (isOneOf(answers.m2_rest_given, 'No', 'Sometimes')) {
+    restBecause.push(`Rest break on a normal workday: ${str(answers.m2_rest_given)}`)
+  }
   if (isOneOf(answers.m2_rest_count, '0', '1')) {
     restBecause.push(`Paid rest breaks in a normal day: ${str(answers.m2_rest_count)}`)
   }

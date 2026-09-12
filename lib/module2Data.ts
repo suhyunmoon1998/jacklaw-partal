@@ -69,6 +69,26 @@ const MEAL_INTERRUPTED = [
 
 const REST_TAKEN = { value: '1', orValues: ['2', '3 or more', 'It changed', 'Not sure'] }
 
+/** Anyone who did not say outright that there was never a rest break. */
+const REST_HAPPENED = {
+  questionId: 'm2_rest_given',
+  value: 'Yes',
+  orValues: ['Sometimes', 'Not sure'],
+}
+
+/**
+ * Whoever did not reliably get one.
+ *
+ * "Not sure" belongs here for the same reason it belongs in the meal version:
+ * someone who cannot say whether they got their breaks has a reason worth
+ * hearing, and the two sections should not split on it differently.
+ */
+const REST_MISSED = {
+  questionId: 'm2_rest_given',
+  value: 'No',
+  orValues: ['Sometimes', 'Not sure'],
+}
+
 /** Everyone whose days could have reached five hours, however they answered. */
 const MEAL_SECTION = {
   questionId: 'm2_meal_given',
@@ -400,6 +420,9 @@ export const MODULE_2_SECTIONS: QuestionnaireSection[] = [
         type: 'select',
         options: ['0', '1', '2', '3 or more', 'It changed', 'Not sure'],
         helpText: 'Module 1 has your usual hours per day — answer for a day of that length.',
+        // Not asked of someone who has just said they got none. The five
+        // questions below hang off this one, so they close with it.
+        showIf: REST_HAPPENED,
       },
       {
         id: 'm2_rest_full_ten',
@@ -439,7 +462,7 @@ export const MODULE_2_SECTIONS: QuestionnaireSection[] = [
         options: REST_WHY_NOT,
         exclusiveOptions: NOT_SURE_ONLY,
         helpText: 'Choose every reason that applies.',
-        showIf: { questionId: 'm2_rest_given', value: 'No', orValues: ['Sometimes'] },
+        showIf: REST_MISSED,
       },
       {
         id: 'm2_rest_why_not_explain',
