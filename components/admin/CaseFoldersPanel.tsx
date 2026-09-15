@@ -110,6 +110,31 @@ export default function CaseFoldersPanel({
     refresh()
   }
 
+  /**
+   * Fold this case into another. The same employer arrived spelled several ways
+   * because the case names it grew from were free text, and putting that right
+   * by hand is move-every-client-then-delete.
+   */
+  const merge = async (from: CaseFolder, intoId: string) => {
+    const into = folders.find(f => f.id === intoId)
+    if (!into) return
+    const n = countOf(from.id)
+    if (!confirm(
+      `Merge "${from.name}" into "${into.name}"?\n\n` +
+      `${n === 1 ? '1 client moves' : `${n} clients move`} across and "${from.name}" is deleted. Nobody is removed.`
+    )) return
+
+    setError('')
+    const res = await fetch('/api/admin/case-folders/merge', {
+      method: 'POST', headers: JSON_KEY, body: JSON.stringify({ fromId: from.id, intoId }),
+    })
+    const body = await res.json()
+    if (!res.ok) { setError(body.error ?? 'Merge failed.'); return }
+    if (body.warning) setError(body.warning)
+    setOpenId(intoId)
+    refresh()
+  }
+
   const move = async (clientId: string, caseFolderId: string | null) => {
     setError('')
     const res = await fetch('/api/admin/clients', {
@@ -143,6 +168,7 @@ export default function CaseFoldersPanel({
         onBack={() => { setOpenId(null); setError('') }}
         onRename={rename}
         onMove={move}
+        onMerge={merge}
         folders={folders}
       />
     )
@@ -343,7 +369,7 @@ function NameInput({
 
 // ─── Inside one folder ────────────────────────────────────────────────────────
 function FolderDetail({
-  folder, isUnassigned, clients, folders, error, onBack, onRename, onMove,
+  folder, isUnassigned, clients, folders, error, onBack, onRename, onMove, onMerge,
 }: {
   folder: CaseFolder
   isUnassigned: boolean
@@ -353,6 +379,7 @@ function FolderDetail({
   onBack: () => void
   onRename: (id: string, name: string) => void
   onMove: (clientId: string, folderId: string | null) => void
+  onMerge: (from: CaseFolder, intoId: string) => void
 }) {
   const [editing, setEditing] = useState(false)
   const [adding, setAdding] = useState(false)
@@ -363,6 +390,8 @@ function FolderDetail({
   const outside = clients.filter(c =>
     isUnassigned ? Boolean(c.caseFolderId) : c.caseFolderId !== folder.id
   )
+  /** Every case this one could be folded into — itself excluded. */
+  const others = folders.filter(f => f.id !== folder.id)
 
   return (
     <div>
@@ -402,12 +431,26 @@ function FolderDetail({
         </div>
 
         {!isUnassigned && (
-          <button
-            onClick={() => setAdding(a => !a)}
-            className="bg-gold text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-gold-dark transition-colors whitespace-nowrap"
-          >
-            {adding ? 'Done' : 'Add client'}
-          </button>
+          <div className="flex items-center gap-2">
+            {others.length > 0 && (
+              <select
+                value=""
+                onChange={e => { const id = e.target.value; e.target.value = ''; if (id) onMerge(folder, id) }}
+                aria-label="Merge this case into another"
+                title="Fold this case into another one"
+                className="text-xs border border-gray-200 rounded-xl px-2 py-2 text-gray-600 focus:outline-none focus:border-gold focus:ring-1 focus:ring-gold/30"
+              >
+                <option value="">Merge into…</option>
+                {others.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+              </select>
+            )}
+            <button
+              onClick={() => setAdding(a => !a)}
+              className="bg-gold text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-gold-dark transition-colors whitespace-nowrap"
+            >
+              {adding ? 'Done' : 'Add client'}
+            </button>
+          </div>
         )}
       </div>
 
