@@ -28,6 +28,8 @@ interface AdminClient {
   phone: string
   caseType: string
   caseName: string
+  /** The case folder this client sits in, or null while nobody has filed them. */
+  caseFolderId: string | null
   onboardingStatus: string
   createdAt: string
   questionnaire: { completedSections: number[]; submitted: boolean; lastSaved: string }
@@ -42,6 +44,7 @@ import { FLAG_LABEL, staffFlags } from '@/lib/staffFlags'
 import { AssignmentRollup, STATUS_LABEL, clientProgressPercent, clientStatus } from '@/lib/clientProgress'
 import { canonicalAnswers } from '@/lib/answerCompat'
 import { AnswerValue, QuestionnaireState, UploadedDocument } from '@/types'
+import CaseFoldersPanel from '@/components/admin/CaseFoldersPanel'
 import QuestionSetsPanel from '@/components/admin/QuestionSetsPanel'
 import ClientAssignments from '@/components/admin/ClientAssignments'
 import PasteQuestionsDialog from '@/components/admin/PasteQuestionsDialog'
@@ -941,7 +944,7 @@ export default function AdminPage() {
   const [showNotifications, setShowNotifications] = useState(false)
   const [showAddClient, setShowAddClient] = useState(false)
   const [allClients, setAllClients] = useState<AdminClient[]>([])
-  const [activeTab, setActiveTab] = useState<'clients' | 'intake' | 'question-sets'>('clients')
+  const [activeTab, setActiveTab] = useState<'clients' | 'cases' | 'intake' | 'question-sets'>('clients')
   const [intakeSubmissions, setIntakeSubmissions] = useState<IntakeSubmission[]>([])
   const [viewingGFROGDraft, setViewingGFROGDraft] = useState<GeneratedGFROGDraft | null>(null)
   const [selectedSubmission, setSelectedSubmission] = useState<IntakeSubmission | null>(null)
@@ -1269,6 +1272,16 @@ export default function AdminPage() {
               Clients ({allClients.length})
             </button>
             <button
+              onClick={() => setActiveTab('cases')}
+              className={`pb-3 font-semibold transition-colors ${
+                activeTab === 'cases'
+                  ? 'border-b-2 border-gold text-black'
+                  : 'text-gray-500 hover:text-black'
+              }`}
+            >
+              Cases
+            </button>
+            <button
               onClick={() => setActiveTab('intake')}
               className={`pb-3 font-semibold transition-colors ${
                 activeTab === 'intake'
@@ -1294,11 +1307,16 @@ export default function AdminPage() {
         {/* Page title */}
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-black">
-            {activeTab === 'clients' ? 'Client Overview' : activeTab === 'intake' ? 'Intake Submissions' : 'Question Sets'}
+            {activeTab === 'clients' ? 'Client Overview'
+              : activeTab === 'cases' ? 'Cases'
+              : activeTab === 'intake' ? 'Intake Submissions'
+              : 'Question Sets'}
           </h1>
           <p className="text-gray-500 text-sm mt-1">
             {activeTab === 'clients'
               ? `${allClients.length} registered clients`
+              : activeTab === 'cases'
+              ? 'Folders you can file clients into, and rename whenever the case does'
               : activeTab === 'intake'
               ? `${intakeSubmissions.length} total submissions · ${intakeSubmissions.filter(s => !s.reviewed).length} unreviewed`
               : 'Reusable questionnaires you can send to individual clients'}
@@ -1537,6 +1555,10 @@ export default function AdminPage() {
         )}
 
         {/* Question Sets View */}
+        {activeTab === 'cases' && (
+          <CaseFoldersPanel clients={allClients} onChanged={fetchClients} />
+        )}
+
         {activeTab === 'question-sets' && <QuestionSetsPanel />}
 
         {/* Intake Submissions View */}

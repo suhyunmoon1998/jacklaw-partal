@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
 
   const { data: clients, error } = await getSupabase()
     .from('clients')
-    .select('id, name, phone, case_type, case_name, onboarding_status, created_at')
+    .select('id, name, phone, case_type, case_name, case_folder_id, onboarding_status, created_at')
     .order('created_at', { ascending: false })
 
   if (error) return NextResponse.json({ error: 'Fetch failed' }, { status: 500 })
@@ -54,6 +54,7 @@ export async function GET(req: NextRequest) {
     phone: c.phone,
     caseType: c.case_type,
     caseName: c.case_name ?? '',
+    caseFolderId: c.case_folder_id ?? null,
     onboardingStatus: c.onboarding_status,
     createdAt: c.created_at,
     questionnaire: qMap[c.id]
@@ -140,19 +141,41 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ client: data })
 }
 
-// PATCH /api/admin/clients — update a client's case name
+/**
+ * PATCH /api/admin/clients — the client's case name, the folder they are in,
+ * or both.
+ *
+ * Each field is applied only when it is actually sent, because they are edited
+ * from different places: the case name from the client row, the folder from the
+ * Cases tab. A patch that always wrote both would have the Cases tab blanking
+ * a case name nobody touched.
+ *
+ * `caseFolderId: null` is a real instruction — take them out of the folder —
+ * which is why presence is tested rather than truthiness.
+ */
 export async function PATCH(req: NextRequest) {
   if (!isAdmin(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { id, caseName } = await req.json()
+  const body = await req.json()
+  const { id } = body
   if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
 
-  const { error } = await getSupabase()
-    .from('clients')
-    .update({ case_name: (caseName ?? '').trim() || null })
-    .eq('id', id)
+  const patch: Record<string, unknown> = {}
+  if ('caseName' in body) patch.case_name = String(body.caseName ?? '').trim() || null
+  if ('caseFolderId' in body) patch.case_folder_id = body.caseFolderId || null
 
-  if (error) return NextResponse.json({ error: 'Update failed' }, { status: 500 })
+  if (!Object.keys(patch).length) {
+    return NextResponse.json({ error: 'Nothing to update' }, { status: 400 })
+  }
+
+  const { error } = await getSupabase().from('clients').update(patch).eq('id', id)
+
+  if (error) {
+    // A folder deleted in another tab is the ordinary way this fails, and it is
+    // worth saying so rather than reporting a generic failure.
+    const msg = error.code === '23503' ? 'That case no longer exists.' : 'Update failed'
+    return NextResponse.json({ error: msg }, { status: error.code === '23503' ? 400 : 500 })
+  }
 
   return NextResponse.json({ success: true })
 }
