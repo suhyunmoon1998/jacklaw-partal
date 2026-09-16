@@ -20,6 +20,7 @@ import {
   dueFor,
   isSendingTime,
   planReminders,
+  resolveLang,
 } from '@/lib/reminderSchedule'
 import { CALL_VOICE, IMAGE_FOR, firstName, reminderBody } from '@/lib/reminderMessages'
 import { toE164 } from '@/lib/twilio'
@@ -271,6 +272,30 @@ describe('what it says', () => {
     expect(firstName('Maria Lopez')).toBe('Maria')
     expect(firstName('  ')).toBe('there')
     expect(reminderBody('day2', 'en', { name: 'Maria Lopez', link: 'l' })).toContain('Hi Maria,')
+  })
+})
+
+describe('what language to write in', () => {
+  it('uses what the client picked in the portal, above everything', () => {
+    expect(resolveLang('ko', 'es')).toBe('ko')
+    expect(resolveLang('zh', null)).toBe('zh')
+  })
+
+  it('falls back to the language they filled the questionnaire in', () => {
+    // Somebody who answered in Korean should not be chased in English.
+    expect(resolveLang(null, 'ko')).toBe('ko')
+    expect(resolveLang('', 'es')).toBe('es')
+  })
+
+  it('falls back to English when neither is known', () => {
+    for (const picked of [null, undefined, '', 'klingon', 42]) {
+      expect(resolveLang(picked, null), String(picked)).toBe('en')
+    }
+  })
+
+  it('ignores a stored language that is not one we write', () => {
+    expect(resolveLang('fr', null)).toBe('en')
+    expect(resolveLang('fr', 'ko')).toBe('ko')
   })
 })
 

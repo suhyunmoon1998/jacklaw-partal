@@ -32,6 +32,8 @@ interface AdminClient {
   caseFolderId: string | null
   /** This client's own name tags, on top of whatever the case carries. */
   tags: string[]
+  /** The language the portal writes to them in; empty until one is known. */
+  portalLang: string
   onboardingStatus: string
   createdAt: string
   questionnaire: { completedSections: number[]; submitted: boolean; lastSaved: string }
@@ -1179,6 +1181,17 @@ export default function AdminPage() {
     fetchClients()
   }
 
+  /** The language their reminders go out in. Empty means "guess from answers". */
+  const handleSetLang = async (clientId: string, portalLang: string) => {
+    setAllClients(prev => prev.map(c => (c.id === clientId ? { ...c, portalLang } : c)))
+    await fetch('/api/admin/clients', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'x-admin-key': MOCK_ADMIN_PASSWORD },
+      body: JSON.stringify({ id: clientId, portalLang }),
+    }).catch(() => null)
+    fetchClients()
+  }
+
   const handleUpdateCaseName = async (clientId: string, caseName: string) => {
     setAllClients(prev => prev.map(c => (c.id === clientId ? { ...c, caseName } : c)))
     const res = await fetch('/api/admin/clients', {
@@ -1492,6 +1505,7 @@ export default function AdminPage() {
               onDelete={handleDeleteClient}
               onAddClient={folderId => setAddingClient({ folderId })}
               onRetagClient={handleRetagClient}
+              onSetLang={handleSetLang}
             />
           </>
         )}

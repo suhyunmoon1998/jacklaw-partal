@@ -19,6 +19,7 @@ import { MOCK_ADMIN_PASSWORD } from '@/lib/mockData'
 import { ClientWork, STATUS_LABEL, clientProgressPercent, clientStatus } from '@/lib/clientProgress'
 import { formatPhone } from '@/lib/auth'
 import { ModuleId, moduleById } from '@/lib/modules'
+import { LANGUAGES, LANG_ENGLISH_NAME } from '@/lib/langs'
 import { ModuleProgress, ModuleSend, stepViews } from '@/lib/moduleSteps'
 
 export interface CaseFolder {
@@ -41,6 +42,8 @@ export interface PanelClient extends ClientWork {
   caseFolderId: string | null
   /** This client's own name tags, on top of whatever the case carries. */
   tags: string[]
+  /** The language the portal writes to them in; empty until one is known. */
+  portalLang: string
   documentCount: number
   createdAt: string
   questionnaire: { submitted: boolean; completedSections: number[]; lastSaved: string }
@@ -65,6 +68,7 @@ export interface ClientActions<C extends PanelClient = PanelClient> {
   /** Opens the add-client dialog, already filed into this case. */
   onAddClient: (folderId: string | null) => void
   onRetagClient: (clientId: string, tags: string[]) => void
+  onSetLang: (clientId: string, lang: string) => void
 }
 
 const KEY = { 'x-admin-key': MOCK_ADMIN_PASSWORD }
@@ -596,6 +600,24 @@ function FolderDetail<C extends PanelClient>({
                     onChange={tags => actions.onRetagClient(c.id, tags)}
                     placeholder="Retaliation"
                   />
+                  {/* Reminders go out in this. Unset means the portal guesses
+                      from their own answers, and falls back to English. */}
+                  <select
+                    value={c.portalLang}
+                    onChange={e => actions.onSetLang(c.id, e.target.value)}
+                    aria-label={`Language for ${c.name}`}
+                    title="The language texts and calls go out in"
+                    className={`mt-1.5 text-[10px] rounded-md px-1.5 py-0.5 border focus:outline-none focus:border-gold ${
+                      c.portalLang
+                        ? 'border-gray-200 text-gray-600'
+                        : 'border-dashed border-amber-300 text-amber-700 bg-amber-50'
+                    }`}
+                  >
+                    <option value="">Language: not set</option>
+                    {LANGUAGES.map(l => (
+                      <option key={l.code} value={l.code}>{LANG_ENGLISH_NAME[l.code]}</option>
+                    ))}
+                  </select>
                 </div>
 
                 <span className="hidden lg:block text-xs text-gray-400 whitespace-nowrap w-20 text-right">

@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
 
   const { data: clients, error } = await getSupabase()
     .from('clients')
-    .select('id, name, phone, case_type, case_name, case_folder_id, tags, onboarding_status, created_at')
+    .select('id, name, phone, case_type, case_name, case_folder_id, tags, portal_lang, onboarding_status, created_at')
     .order('created_at', { ascending: false })
 
   if (error) return NextResponse.json({ error: 'Fetch failed' }, { status: 500 })
@@ -95,6 +95,7 @@ export async function GET(req: NextRequest) {
     caseName: c.case_name ?? '',
     caseFolderId: c.case_folder_id ?? null,
     tags: c.tags ?? [],
+    portalLang: c.portal_lang ?? '',
     onboardingStatus: c.onboarding_status,
     createdAt: c.created_at,
     questionnaire: qMap[c.id]
@@ -251,6 +252,8 @@ export async function PATCH(req: NextRequest) {
   if ('caseName' in body) patch.case_name = String(body.caseName ?? '').trim() || null
   if ('caseFolderId' in body) patch.case_folder_id = body.caseFolderId || null
   if ('tags' in body) patch.tags = tagged(body.tags)
+  // '' clears it, which puts the client back to being guessed from their answers.
+  if ('portalLang' in body) patch.portal_lang = isLang(body.portalLang) ? body.portalLang : null
 
   if (!Object.keys(patch).length) {
     return NextResponse.json({ error: 'Nothing to update' }, { status: 400 })

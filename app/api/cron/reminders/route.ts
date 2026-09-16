@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
-import { toLang } from '@/lib/langs'
+import { Lang } from '@/lib/langs'
+import { submissionLanguage } from '@/lib/machineTranslate'
 import { ModuleId } from '@/lib/modules'
 import {
   DueReminder,
@@ -10,6 +11,7 @@ import {
   SentStep,
   isSendingTime,
   planReminders,
+  resolveLang,
 } from '@/lib/reminderSchedule'
 import { CALL_VOICE, IMAGE_FOR, reminderBody } from '@/lib/reminderMessages'
 import { isConfigured, placeCall, sendSms, xmlEscape } from '@/lib/twilio'
@@ -80,6 +82,31 @@ export async function GET(req: NextRequest) {
         : Boolean(submitted.get(s.client_id)?.module1),
   }))
 
+  /**
+   * The language to write to this client in.
+   *
+   * portal_lang is set the moment they pick a language in the portal, and
+   * seeded when the office adds them — but a client who was added without one
+   * and has never opened the portal has none, and defaulting those to English
+   * means texting somebody in a language they may not read.
+   *
+   * So where it is missing, it is read off their own answers: somebody who
+   * filled the questionnaire in Korean gets chased in Korean. Only fetched for
+   * the clients who actually need it, because an answers blob is not small.
+   */
+  const needLang = (clients ?? []).filter(c => !c.portal_lang).map(c => c.id)
+  const inferred = new Map<string, Lang>()
+  if (needLang.length) {
+    const { data: rows } = await db
+      .from('questionnaire_states')
+      .select('client_id, answers')
+      .in('client_id', needLang)
+    for (const row of rows ?? []) {
+      const guess = submissionLanguage(row.answers ?? {})
+      if (guess) inferred.set(row.client_id, guess)
+    }
+  }
+
   const targets = new Map<string, ReminderTarget>(
     (clients ?? []).map(c => [
       c.id,
@@ -87,7 +114,7 @@ export async function GET(req: NextRequest) {
         clientId: c.id,
         name: c.name ?? '',
         phone: c.phone ?? '',
-        lang: toLang(c.portal_lang),
+        lang: resolveLang(c.portal_lang, inferred.get(c.id)),
         optedOut: Boolean(c.sms_opt_out),
       },
     ])
@@ -253,6 +280,8 @@ const ref = (d: DueReminder) => ({
   moduleId: d.moduleId,
   kind: d.kind,
   channel: d.channel,
+  // So the dry run answers "and what language will they get this in?"
+  lang: d.lang,
   daysWaiting: d.daysWaiting,
 })
 

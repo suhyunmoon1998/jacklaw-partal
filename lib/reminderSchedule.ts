@@ -11,7 +11,7 @@
  * schedule be tested without a Twilio account, a database, or waiting a week.
  */
 
-import { Lang } from '@/lib/langs'
+import { Lang, isLang } from '@/lib/langs'
 import { ModuleId } from '@/lib/modules'
 
 export type ReminderKind = 'day2' | 'day5' | 'call'
@@ -98,6 +98,21 @@ export function isSendingTime(now: Date, timeZone = 'America/Los_Angeles'): bool
 
   if (weekday === 'Sat' || weekday === 'Sun') return false
   return hour >= 9 && hour < 12
+}
+
+/**
+ * The language to write to one client in.
+ *
+ * What they picked in the portal wins, because it is the only thing they said
+ * themselves. Failing that, the language they filled the questionnaire in —
+ * somebody who answered in Korean should not be chased in English. Failing
+ * both, English: a client who has picked nothing and answered nothing gives us
+ * nothing to go on, and guessing from a name would be worse than the default.
+ */
+export function resolveLang(picked: unknown, inferred: Lang | null | undefined): Lang {
+  if (isLang(picked)) return picked
+  if (inferred && isLang(inferred)) return inferred
+  return 'en'
 }
 
 /** Whole days between two instants, counted on the calendar. */
