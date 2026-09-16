@@ -39,6 +39,8 @@ export interface PanelClient extends ClientWork {
   caseType: string
   caseName: string
   caseFolderId: string | null
+  /** This client's own name tags, on top of whatever the case carries. */
+  tags: string[]
   documentCount: number
   createdAt: string
   questionnaire: { submitted: boolean; completedSections: number[]; lastSaved: string }
@@ -62,6 +64,7 @@ export interface ClientActions<C extends PanelClient = PanelClient> {
   onDelete: (clientId: string) => void
   /** Opens the add-client dialog, already filed into this case. */
   onAddClient: (folderId: string | null) => void
+  onRetagClient: (clientId: string, tags: string[]) => void
 }
 
 const KEY = { 'x-admin-key': MOCK_ADMIN_PASSWORD }
@@ -582,6 +585,19 @@ function FolderDetail<C extends PanelClient>({
                   <ModuleBars client={c} />
                 </button>
 
+                {/* Their own, not the case's: two people on one matter do not
+                    always have the same claim. */}
+                <div
+                  className="hidden xl:block w-48 shrink-0"
+                  onClick={e => e.stopPropagation()}
+                >
+                  <TagEditor
+                    tags={c.tags}
+                    onChange={tags => actions.onRetagClient(c.id, tags)}
+                    placeholder="Retaliation"
+                  />
+                </div>
+
                 <span className="hidden lg:block text-xs text-gray-400 whitespace-nowrap w-20 text-right">
                   {c.documentCount} doc{c.documentCount === 1 ? '' : 's'}
                 </span>
@@ -699,7 +715,15 @@ function ModuleBars({ client }: { client: PanelClient }) {
  * matter does not fit it. The tags already in use are offered as suggestions so
  * the same idea does not end up spelled three ways.
  */
-function TagEditor({ tags, onChange }: { tags: string[]; onChange: (tags: string[]) => void }) {
+function TagEditor({
+  tags,
+  onChange,
+  placeholder = 'Wage & Hour',
+}: {
+  tags: string[]
+  onChange: (tags: string[]) => void
+  placeholder?: string
+}) {
   const [draft, setDraft] = useState('')
   const [adding, setAdding] = useState(false)
 
@@ -740,7 +764,7 @@ function TagEditor({ tags, onChange }: { tags: string[]; onChange: (tags: string
             if (e.key === 'Enter') add()
             if (e.key === 'Escape') { setDraft(''); setAdding(false) }
           }}
-          placeholder="Wage & Hour"
+          placeholder={placeholder}
           className="text-[11px] w-32 px-2 py-0.5 rounded-md border border-gold focus:outline-none focus:ring-1 focus:ring-gold/30"
         />
       ) : (

@@ -30,6 +30,8 @@ interface AdminClient {
   caseName: string
   /** The case folder this client sits in, or null while nobody has filed them. */
   caseFolderId: string | null
+  /** This client's own name tags, on top of whatever the case carries. */
+  tags: string[]
   onboardingStatus: string
   createdAt: string
   questionnaire: { completedSections: number[]; submitted: boolean; lastSaved: string }
@@ -1161,6 +1163,22 @@ export default function AdminPage() {
     URL.revokeObjectURL(url)
   }
 
+  /**
+   * This client's own tags.
+   *
+   * Written straight through rather than waiting for the refetch: typing a tag
+   * and watching it sit still reads as the click not having worked.
+   */
+  const handleRetagClient = async (clientId: string, tags: string[]) => {
+    setAllClients(prev => prev.map(c => (c.id === clientId ? { ...c, tags } : c)))
+    await fetch('/api/admin/clients', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'x-admin-key': MOCK_ADMIN_PASSWORD },
+      body: JSON.stringify({ id: clientId, tags }),
+    }).catch(() => null)
+    fetchClients()
+  }
+
   const handleUpdateCaseName = async (clientId: string, caseName: string) => {
     setAllClients(prev => prev.map(c => (c.id === clientId ? { ...c, caseName } : c)))
     const res = await fetch('/api/admin/clients', {
@@ -1473,6 +1491,7 @@ export default function AdminPage() {
               onPrint={handlePrintClient}
               onDelete={handleDeleteClient}
               onAddClient={folderId => setAddingClient({ folderId })}
+              onRetagClient={handleRetagClient}
             />
           </>
         )}

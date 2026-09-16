@@ -7,13 +7,36 @@ function isAdmin(req: NextRequest) {
   return req.headers.get('x-admin-key') === process.env.ADMIN_PASSWORD
 }
 
+/**
+ * Name tags on a client, cleaned up.
+ *
+ * The same rules the case tags follow — trimmed, capped, de-duplicated without
+ * regard to case — so the two lists cannot end up with different ideas of what
+ * a tag is.
+ */
+function tagged(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return []
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const item of raw) {
+    const tag = String(item ?? '').trim().replace(/\s+/g, ' ').slice(0, 40)
+    if (!tag) continue
+    const key = tag.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(tag)
+    if (out.length === 8) break
+  }
+  return out
+}
+
 // GET /api/admin/clients — all clients + questionnaire/doc stats
 export async function GET(req: NextRequest) {
   if (!isAdmin(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { data: clients, error } = await getSupabase()
     .from('clients')
-    .select('id, name, phone, case_type, case_name, case_folder_id, onboarding_status, created_at')
+    .select('id, name, phone, case_type, case_name, case_folder_id, tags, onboarding_status, created_at')
     .order('created_at', { ascending: false })
 
   if (error) return NextResponse.json({ error: 'Fetch failed' }, { status: 500 })
@@ -71,6 +94,7 @@ export async function GET(req: NextRequest) {
     caseType: c.case_type,
     caseName: c.case_name ?? '',
     caseFolderId: c.case_folder_id ?? null,
+    tags: c.tags ?? [],
     onboardingStatus: c.onboarding_status,
     createdAt: c.created_at,
     questionnaire: qMap[c.id]
@@ -210,8 +234,8 @@ export async function POST(req: NextRequest) {
  *
  * Each field is applied only when it is actually sent, because they are edited
  * from different places: the case name from the client row, the folder from the
- * Cases tab. A patch that always wrote both would have the Cases tab blanking
- * a case name nobody touched.
+ * Cases tab, the tags from the chips under their name. A patch that always wrote
+ * all of them would have one control blanking what another had set.
  *
  * `caseFolderId: null` is a real instruction — take them out of the folder —
  * which is why presence is tested rather than truthiness.
@@ -226,6 +250,7 @@ export async function PATCH(req: NextRequest) {
   const patch: Record<string, unknown> = {}
   if ('caseName' in body) patch.case_name = String(body.caseName ?? '').trim() || null
   if ('caseFolderId' in body) patch.case_folder_id = body.caseFolderId || null
+  if ('tags' in body) patch.tags = tagged(body.tags)
 
   if (!Object.keys(patch).length) {
     return NextResponse.json({ error: 'Nothing to update' }, { status: 400 })
