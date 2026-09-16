@@ -178,6 +178,15 @@ export interface UploadedDocument {
   name: string
   category: string
   uploadedAt: string
+  /**
+   * When the office last downloaded this file, and how often.
+   *
+   * Only downloads are recorded — the copy that actually leaves the portal.
+   * Viewing a file to see what it is happens constantly, and counting that
+   * would make "already pulled" mean nothing.
+   */
+  downloadedAt?: string | null
+  downloadCount?: number
 }
 
 export interface AdminSession {

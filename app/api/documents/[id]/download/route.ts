@@ -26,5 +26,23 @@ export async function GET(
     return NextResponse.json({ error: 'Could not generate URL' }, { status: 500 })
   }
 
+  /**
+   * Mark it taken.
+   *
+   * Written only once the signed URL exists, so a failure to produce one is not
+   * recorded as a download. Not awaited and never allowed to throw: the office
+   * asked for a file, and a bookkeeping write that goes wrong must not stand
+   * between them and it — the worst case is a file that was fetched and does
+   * not show the badge, which is better than a file that will not open.
+   *
+   * Viewing is deliberately not stamped. Opening a file to see what it is
+   * happens constantly, and marking that would make the badge meaningless.
+   */
+  getSupabase()
+    .rpc('mark_document_downloaded', { doc_id: Number(params.id) })
+    .then(({ error: stampError }) => {
+      if (stampError) console.error('could not stamp download for', params.id, stampError)
+    })
+
   return NextResponse.redirect(data.signedUrl)
 }

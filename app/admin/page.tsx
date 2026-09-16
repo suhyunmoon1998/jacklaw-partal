@@ -134,11 +134,14 @@ function ClientDetailModal({
   qState,
   documents,
   onClose,
+  onRefresh,
 }: {
   client: AdminClient
   qState: QuestionnaireState
   documents: UploadedDocument[]
   onClose: () => void
+  /** Re-read the documents, so a file just taken shows as taken. */
+  onRefresh: () => void
 }) {
   const [tab, setTab] = useState<'progress' | 'answers' | 'documents' | 'questionnaires'>('progress')
   const [expandedSection, setExpandedSection] = useState<number | null>(null)
@@ -535,18 +538,52 @@ function ClientDetailModal({
                 <div className="space-y-2">
                   {documents.map((doc, i) => {
                     const d = doc as UploadedDocument & { id?: number; hasFile?: boolean }
+                    // A file the office has already taken a copy of. Five files
+                    // in a case look identical on this list, so without this the
+                    // only way to know was to download it again and look in the
+                    // downloads folder.
+                    const taken = Boolean(d.downloadedAt)
                     return (
-                    <div key={i} className="flex items-center gap-3 bg-gray-50 rounded-xl p-3 border border-gray-100">
-                      <div className="w-9 h-9 bg-gold/10 rounded-lg flex items-center justify-center shrink-0">
-                        <svg className="w-4 h-4 text-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div
+                      key={i}
+                      className={`flex items-center gap-3 rounded-xl p-3 border transition-colors ${
+                        taken
+                          ? 'bg-green-50/70 border-green-200'
+                          : 'bg-gray-50 border-gray-100'
+                      }`}
+                    >
+                      <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${taken ? 'bg-green-100' : 'bg-gold/10'}`}>
+                        <svg className={`w-4 h-4 ${taken ? 'text-green-600' : 'text-gold'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                         </svg>
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-gray-800 truncate">{doc.name}</p>
-                        <p className="text-xs text-gray-400">{doc.category}</p>
+                        <p className="text-xs text-gray-400">
+                          {doc.category}
+                          {taken && (
+                            <span className="text-green-700 font-semibold">
+                              {' · '}Downloaded{' '}
+                              {new Date(d.downloadedAt as string).toLocaleDateString('en-US', {
+                                month: 'short', day: 'numeric',
+                              })}
+                              {(d.downloadCount ?? 0) > 1 && ` (${d.downloadCount}×)`}
+                            </span>
+                          )}
+                        </p>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
+                        {taken && (
+                          <span
+                            title={`Last downloaded ${new Date(d.downloadedAt as string).toLocaleString()}`}
+                            className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-green-700 bg-green-100 border border-green-200 rounded px-1.5 py-0.5"
+                          >
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                            Saved
+                          </span>
+                        )}
                         <p className="text-xs text-gray-400">
                           {new Date(doc.uploadedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                         </p>
@@ -566,12 +603,17 @@ function ClientDetailModal({
                             </a>
                             <a
                               href={`/api/documents/${d.id}/download`}
-                              className="flex items-center gap-1 bg-gray-100 text-gray-600 text-xs font-semibold px-2.5 py-1.5 rounded-lg hover:bg-gray-700 hover:text-white transition-colors"
+                              onClick={() => { setTimeout(onRefresh, 1500) }}
+                              className={`flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg transition-colors ${
+                                taken
+                                  ? 'bg-white text-gray-500 border border-gray-200 hover:bg-gray-700 hover:text-white'
+                                  : 'bg-gray-100 text-gray-600 hover:bg-gray-700 hover:text-white'
+                              }`}
                             >
                               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1M7 10l5 5 5-5M12 15V3" />
                               </svg>
-                              Download
+                              {taken ? 'Download again' : 'Download'}
                             </a>
                           </>
                         )}
@@ -1128,6 +1170,23 @@ export default function AdminPage() {
         alert('Failed to add client. Please try again.')
       }
     })
+  }
+
+  /**
+   * Re-read one client's documents.
+   *
+   * The download is a plain link — the browser handles it, so nothing comes
+   * back to say it happened. This is called just after the click to pick up the
+   * stamp the download route writes, which is what turns the row green.
+   */
+  const refreshClientDocuments = async (clientId: string) => {
+    const res = await fetch(`/api/admin/documents?clientId=${clientId}`, {
+      headers: { 'x-admin-key': MOCK_ADMIN_PASSWORD },
+    }).catch(() => null)
+    if (!res?.ok) return
+    const { documents } = await res.json()
+    setClientData(prev => (prev ? { ...prev, documents: documents ?? prev.documents } : prev))
+    fetchClients()
   }
 
   const handleViewClient = async (client: AdminClient) => {
@@ -1909,6 +1968,7 @@ export default function AdminPage() {
           qState={clientData.qState}
           documents={clientData.documents}
           onClose={() => { setSelectedClient(null); setClientData(null) }}
+          onRefresh={() => refreshClientDocuments(selectedClient.id)}
         />
       )}
 

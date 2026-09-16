@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
 
   const { data } = await getSupabase()
     .from('documents')
-    .select('id, name, category, uploaded_at, storage_path')
+    .select('id, name, category, uploaded_at, storage_path, downloaded_at, download_count')
     .eq('client_id', clientId)
     .order('uploaded_at', { ascending: false })
 
@@ -25,6 +25,10 @@ export async function GET(req: NextRequest) {
       category: d.category,
       uploadedAt: d.uploaded_at,
       hasFile: !!d.storage_path,
+      // When the office last took a copy, and how many times. Null means this
+      // file has never left the portal.
+      downloadedAt: d.downloaded_at ?? null,
+      downloadCount: d.download_count ?? 0,
     })),
   })
 }
