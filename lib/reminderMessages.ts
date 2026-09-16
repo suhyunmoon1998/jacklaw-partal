@@ -88,6 +88,22 @@ const COPY: Record<Lang, Copy> = {
   },
 }
 
+/**
+ * The picture that rides along with a reminder, by rung.
+ *
+ * Only the first one. A friendly mascot beside "your questionnaire is still
+ * waiting" reads as the firm being human about it; the same picture beside
+ * "this is our last text" undercuts the one message that needs to land as
+ * serious. It also doubles the cost of every message it is attached to, since
+ * a picture makes it an MMS.
+ *
+ * A path, not a URL: the caller joins it to whatever origin it is running on,
+ * so this cannot end up pointing at localhost in production.
+ */
+export const IMAGE_FOR: Partial<Record<ReminderKind, string>> = {
+  day2: '/mascot-dog.png',
+}
+
 /** Twilio's voice for each language, so the call is not read in an accent. */
 export const CALL_VOICE: Record<Lang, { language: string; voice: string }> = {
   en: { language: 'en-US', voice: 'Polly.Joanna' },

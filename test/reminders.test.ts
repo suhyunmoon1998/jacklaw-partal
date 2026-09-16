@@ -21,7 +21,7 @@ import {
   isSendingTime,
   planReminders,
 } from '@/lib/reminderSchedule'
-import { CALL_VOICE, firstName, reminderBody } from '@/lib/reminderMessages'
+import { CALL_VOICE, IMAGE_FOR, firstName, reminderBody } from '@/lib/reminderMessages'
 import { toE164 } from '@/lib/twilio'
 import { LANGUAGES } from '@/lib/langs'
 
@@ -246,6 +246,24 @@ describe('what it says', () => {
       const call = reminderBody('call', code, { name: 'Maria Lopez', link: 'https://x.test/client' })
       expect(call, `${code}/call`).not.toContain('https://')
       expect(CALL_VOICE[code].language.length).toBeGreaterThan(0)
+    }
+  })
+
+  /**
+   * The mascot rides on the first nudge only. Beside "this is our last text"
+   * it would undercut the one message that has to land as serious — and it
+   * turns every message it touches into a costlier MMS.
+   */
+  it('puts the picture on the first text and nowhere else', () => {
+    expect(IMAGE_FOR.day2).toBeTruthy()
+    expect(IMAGE_FOR.day5).toBeUndefined()
+    expect(IMAGE_FOR.call).toBeUndefined()
+  })
+
+  it('keeps the picture as a path, so it cannot point at localhost in production', () => {
+    for (const path of Object.values(IMAGE_FOR)) {
+      expect(path).toMatch(/^\//)
+      expect(path).not.toMatch(/^https?:/)
     }
   })
 

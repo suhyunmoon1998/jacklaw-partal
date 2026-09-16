@@ -4,13 +4,14 @@ import { toLang } from '@/lib/langs'
 import { ModuleId } from '@/lib/modules'
 import {
   DueReminder,
+  LADDER,
   ReminderKind,
   ReminderTarget,
   SentStep,
   isSendingTime,
   planReminders,
 } from '@/lib/reminderSchedule'
-import { CALL_VOICE, reminderBody } from '@/lib/reminderMessages'
+import { CALL_VOICE, IMAGE_FOR, reminderBody } from '@/lib/reminderMessages'
 import { isConfigured, placeCall, sendSms, xmlEscape } from '@/lib/twilio'
 
 /**
@@ -134,7 +135,7 @@ export async function GET(req: NextRequest) {
 
   const results: Record<string, unknown>[] = []
   for (const item of due) {
-    const { body, link } = preview(item, origin)
+  const { body, link, mediaUrl } = preview(item, origin)
 
     // Claim the rung first. If two runs overlap, the second insert violates the
     // unique index and this client is skipped rather than texted twice.
@@ -155,7 +156,7 @@ export async function GET(req: NextRequest) {
 
     const sent =
       item.channel === 'sms'
-        ? await sendSms(item.phone, body)
+        ? await sendSms(item.phone, body, mediaUrl)
         : await placeCall(item.phone, twimlFor(item, body))
 
     if (!sent.ok) {
@@ -180,6 +181,72 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ ran: true, configured: isConfigured(), sent: results, skipped })
 }
 
+/**
+ * POST /api/cron/reminders — start the ladder from today.
+ *
+ * Connecting the provider makes every waiting step due at once, and today that
+ * is four people who were sent something between fifteen and forty-eight days
+ * ago. The first morning would put a robocall on all four about a questionnaire
+ * they may well have forgotten the firm ever sent.
+ *
+ * This records every rung of every currently-unsubmitted step as deliberately
+ * skipped, so the chase begins with what the office sends next. It writes
+ * history rather than deleting any: the rows say "skipped", with the reason, so
+ * the log still answers why nobody was chased about these.
+ */
+export async function POST(req: NextRequest) {
+  if (!authorised(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const body = await req.json().catch(() => ({}))
+  if (body?.action !== 'skip-existing') {
+    return NextResponse.json(
+      { error: 'Send { "action": "skip-existing" } to start the ladder from today.' },
+      { status: 400 }
+    )
+  }
+
+  const db = getSupabase()
+  const [{ data: sends }, { data: states }] = await Promise.all([
+    db.from('client_module_sends').select('client_id, module_id'),
+    db.from('questionnaire_states').select('client_id, submitted, m2_submitted'),
+  ])
+
+  const submitted = new Map(
+    (states ?? []).map(s => [s.client_id, { module1: !!s.submitted, module2: !!s.m2_submitted }])
+  )
+
+  const rows = (sends ?? [])
+    .filter(s =>
+      s.module_id === 'module2'
+        ? !submitted.get(s.client_id)?.module2
+        : !submitted.get(s.client_id)?.module1
+    )
+    .flatMap(s =>
+      LADDER.map(rung => ({
+        client_id: s.client_id,
+        module_id: s.module_id,
+        kind: rung.kind,
+        channel: rung.channel,
+        status: 'skipped' as const,
+        error: 'Backlog cleared when reminders were switched on',
+      }))
+    )
+
+  if (!rows.length) return NextResponse.json({ marked: 0, note: 'Nothing was waiting.' })
+
+  // Anything already recorded keeps what it has; this only fills the gaps.
+  const { error } = await db
+    .from('client_reminders')
+    .upsert(rows, { onConflict: 'client_id,module_id,kind', ignoreDuplicates: true })
+
+  if (error) return NextResponse.json({ error: 'Could not mark the backlog.' }, { status: 500 })
+
+  return NextResponse.json({
+    marked: rows.length,
+    note: 'Existing unsubmitted steps will not be chased. Anything sent from now on will be.',
+  })
+}
+
 const ref = (d: DueReminder) => ({
   clientId: d.clientId,
   name: d.name,
@@ -193,10 +260,13 @@ function preview(d: DueReminder, origin: string) {
   // Sign-in is by phone, so the link is the front door rather than a per-client
   // URL — nothing in a text should be a key to somebody's case file.
   const link = `${origin}/client`
+  const image = IMAGE_FOR[d.kind]
   return {
     ...ref(d),
     link,
     body: reminderBody(d.kind, d.lang, { name: d.name, link }),
+    // Twilio fetches this itself, so it has to be the public origin.
+    mediaUrl: d.channel === 'sms' && image ? `${origin}${image}` : undefined,
   }
 }
 

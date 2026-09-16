@@ -69,13 +69,21 @@ async function post(path: string, form: Record<string, string>): Promise<SendRes
   }
 }
 
-export function sendSms(to: string, body: string): Promise<SendResult> {
+/**
+ * A text, with a picture on it when one is given.
+ *
+ * Passing a MediaUrl turns the message into an MMS, which costs more and which
+ * the carrier fetches itself — so the URL has to be publicly reachable, not a
+ * localhost path or anything behind the admin key.
+ */
+export function sendSms(to: string, body: string, mediaUrl?: string): Promise<SendResult> {
   const number = toE164(to)
   if (!number) return Promise.resolve({ ok: false, error: `Unusable phone number: ${to}` })
   return post('Messages.json', {
     To: number,
     From: process.env.TWILIO_FROM_NUMBER as string,
     Body: body,
+    ...(mediaUrl ? { MediaUrl: mediaUrl } : {}),
   })
 }
 
