@@ -653,7 +653,16 @@ const CASE_TYPES = [
  * The client row is saved first and on its own. Everything after it is optional:
  * abandoning the questions leaves a perfectly good client behind.
  */
-function AddClientModal({ onClose, onAdded }: { onClose: () => void; onAdded: () => void }) {
+function AddClientModal({
+  caseFolderId,
+  onClose,
+  onAdded,
+}: {
+  /** The case this was opened from; null means Unassigned. */
+  caseFolderId: string | null
+  onClose: () => void
+  onAdded: () => void
+}) {
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
   const [caseType, setCaseType] = useState(CASE_TYPES[0])
@@ -712,11 +721,22 @@ function AddClientModal({ onClose, onAdded }: { onClose: () => void; onAdded: ()
     if (!res) { setError('Could not reach the server. Check your connection and try again.'); return }
     if (!res.ok) { setError(data.error ?? 'Failed to add client.'); return }
 
+    const newId: string = data.client?.id ?? ''
+
+    // Filed on the way in. Adding somebody from inside a case and then finding
+    // them in Unassigned is the kind of small betrayal that makes people stop
+    // trusting the filing.
+    if (newId && caseFolderId) {
+      await fetch('/api/admin/clients', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'x-admin-key': MOCK_ADMIN_PASSWORD },
+        body: JSON.stringify({ id: newId, caseFolderId }),
+      }).catch(() => null)
+    }
+
     // The list is refreshed here rather than at the end: the client is added,
     // whatever the admin does with the questions next.
     onAdded()
-
-    const newId: string = data.client?.id ?? ''
     if (!special.trim()) { onClose(); return }
     if (!newId) {
       setError('The client was added, but the questions could not be attached. Open the client and paste them there.')
@@ -1004,9 +1024,25 @@ export default function AdminPage() {
   const [clientData, setClientData] = useState<{ qState: QuestionnaireState; documents: UploadedDocument[] } | null>(null)
   const [unreadCount, setUnreadCount] = useState(0)
   const [showNotifications, setShowNotifications] = useState(false)
-  const [showAddClient, setShowAddClient] = useState(false)
+  /**
+   * Which case the Add Client dialog was opened from.
+   *
+   * A client added inside a case is filed into it on the way in, so nobody has
+   * to remember to go and put them somewhere afterwards. `folderId: null` is
+   * Unassigned, which is a real place here rather than a mistake.
+   */
+  const [addingClient, setAddingClient] = useState<{ folderId: string | null } | null>(null)
   const [allClients, setAllClients] = useState<AdminClient[]>([])
-  const [activeTab, setActiveTab] = useState<'clients' | 'cases' | 'intake' | 'question-sets'>('clients')
+  /**
+   * Work starts from a case now, not from a list of people.
+   *
+   * The flat client list was where everything happened and the case was a label
+   * on it, which is backwards: a client matters because of the case they are on,
+   * and two clients on one case had no place that showed them together. Opening
+   * a case and working inside it is the way in — the people not yet filed are
+   * under Unassigned.
+   */
+  const [activeTab, setActiveTab] = useState<'cases' | 'intake' | 'question-sets'>('cases')
   const [intakeSubmissions, setIntakeSubmissions] = useState<IntakeSubmission[]>([])
   const [viewingGFROGDraft, setViewingGFROGDraft] = useState<GeneratedGFROGDraft | null>(null)
   const [selectedSubmission, setSelectedSubmission] = useState<IntakeSubmission | null>(null)
@@ -1358,16 +1394,6 @@ export default function AdminPage() {
         <div className="mb-6 border-b border-gray-200">
           <div className="flex gap-6">
             <button
-              onClick={() => setActiveTab('clients')}
-              className={`pb-3 font-semibold transition-colors ${
-                activeTab === 'clients'
-                  ? 'border-b-2 border-gold text-black'
-                  : 'text-gray-500 hover:text-black'
-              }`}
-            >
-              Clients ({allClients.length})
-            </button>
-            <button
               onClick={() => setActiveTab('cases')}
               className={`pb-3 font-semibold transition-colors ${
                 activeTab === 'cases'
@@ -1403,24 +1429,20 @@ export default function AdminPage() {
         {/* Page title */}
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-black">
-            {activeTab === 'clients' ? 'Client Overview'
-              : activeTab === 'cases' ? 'Cases'
+            {activeTab === 'cases' ? 'Cases'
               : activeTab === 'intake' ? 'Intake Submissions'
               : 'Question Sets'}
           </h1>
           <p className="text-gray-500 text-sm mt-1">
-            {activeTab === 'clients'
-              ? `${allClients.length} registered clients`
-              : activeTab === 'cases'
-              ? 'Folders you can file clients into, and rename whenever the case does'
+            {activeTab === 'cases'
+              ? `${allClients.length} clients across your cases — open a case to work in it`
               : activeTab === 'intake'
               ? `${intakeSubmissions.length} total submissions · ${intakeSubmissions.filter(s => !s.reviewed).length} unreviewed`
               : 'Reusable questionnaires you can send to individual clients'}
           </p>
         </div>
 
-        {/* Clients View */}
-        {activeTab === 'clients' && (
+        {activeTab === 'cases' && (
           <>
             {/* Stats */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
@@ -1437,242 +1459,19 @@ export default function AdminPage() {
               ))}
             </div>
 
-        {/* Client table */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-            <div>
-              <h2 className="font-semibold text-black">Clients</h2>
-              <p className="text-xs text-gray-400 mt-0.5">{allClients.length} registered</p>
-            </div>
-            <button
-              onClick={() => setShowAddClient(true)}
-              className="flex items-center gap-2 bg-gold text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-gold-dark transition-colors"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-              Add Client
-            </button>
-          </div>
 
-          {allClients.length === 0 && (
-            <div className="py-16 text-center">
-              <p className="text-4xl mb-3">👤</p>
-              <p className="text-gray-500 text-sm">No clients yet.</p>
-              <button onClick={() => setShowAddClient(true)} className="mt-3 text-gold text-sm font-semibold hover:underline">
-                Add your first client →
-              </button>
-            </div>
-          )}
-
-          {/* Mobile cards */}
-          <div className="divide-y divide-gray-50 sm:hidden">
-            {allClients.map(client => {
-              const status = getStatus(client)
-              const pct = clientProgressPercent(client)
-              return (
-                <div key={client.id} className="p-4 transition-colors duration-150 hover:bg-gray-50/80 active:bg-gray-100">
-                  <div className="flex items-start justify-between mb-3">
-                    <div>
-                      <p className="font-semibold text-gray-900">{client.name}</p>
-                      {sameName(client) && (
-                        <span
-                          title="This number is on more than one case — the same person, filed twice"
-                          className="inline-block mt-0.5 text-[10px] font-semibold uppercase tracking-wide text-gold bg-gold/10 border border-gold/20 rounded px-1.5 py-0.5"
-                        >
-                          1 of {casesOnNumber[client.phone.replace(/\D/g, '')]} cases
-                        </span>
-                      )}
-                      <CaseNameField
-                        clientId={client.id}
-                        caseName={client.caseName}
-                        onSave={handleUpdateCaseName}
-                        className="block w-40 mt-1 mb-0.5"
-                      />
-                      <p className="text-xs text-gray-400">{client.caseType}</p>
-                    </div>
-                    <span className={`text-xs font-semibold px-2 py-1 rounded-full ${status.cls}`}>
-                      {status.label}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2 mb-3">
-                    <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                      <div className={`h-full rounded-full ${pct === 100 ? 'bg-green-500' : 'bg-gold'}`} style={{ width: `${pct}%` }} />
-                    </div>
-                    <span className="text-xs text-gray-400">{pct}%</span>
-                    <span className="text-xs text-gray-400">· {client.documentCount} docs</span>
-                  </div>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => handleShareClientLink(client)}
-                      className="flex-1 text-center text-sm font-medium text-blue-600 py-2 border border-blue-200 rounded-xl transition-all duration-150 hover:bg-blue-600 hover:text-white hover:border-blue-600 active:scale-[0.97]"
-                    >
-                      Share Link
-                    </button>
-                    <button
-                      onClick={() => handlePrintClient(client)}
-                      className="px-3 py-2 border border-gray-200 text-gray-500 rounded-xl transition-all duration-150 hover:bg-gray-700 hover:text-white hover:border-gray-700 active:scale-[0.97]"
-                      aria-label="Print PDF"
-                      title="Print questionnaire as PDF"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2m-8 4h8v-6H6v6z" />
-                      </svg>
-                    </button>
-                    <button
-                      onClick={() => handleViewClient(client)}
-                      className="flex-1 text-center text-sm font-medium text-gold py-2 border border-gold/30 rounded-xl transition-all duration-150 hover:bg-gold hover:text-white hover:border-gold active:scale-[0.97]"
-                    >
-                      View Details →
-                    </button>
-                    <button
-                      onClick={() => handleDeleteClient(client.id)}
-                      className="px-3 py-2 border border-red-200 text-red-400 rounded-xl transition-all duration-150 hover:bg-red-500 hover:text-white hover:border-red-500 active:scale-[0.97]"
-                      aria-label="Delete client"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                      </svg>
-                    </button>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-
-          {/* Desktop table */}
-          <div className="hidden sm:block overflow-x-auto">
-            <table className="w-full min-w-[900px] table-fixed">
-              <thead>
-                <tr className="bg-gray-50/50 border-b border-gray-100">
-                  {[
-                    // The last column holds four controls and was the reason
-                    // this table scrolled sideways: 14% could not seat them, so
-                    // every screen got a scrollbar however wide it was.
-                    ['Client', 'w-[24%]'],
-                    ['Case Type', 'w-[11%]'],
-                    ['Status', 'w-[11%]'],
-                    ['Progress', 'w-[14%]'],
-                    ['Docs', 'w-[6%]'],
-                    ['Last Active', 'w-[9%]'],
-                    ['', 'w-[25%]'],
-                  ].map(([h, w]) => (
-                    <th key={h} className={`${w} text-left text-xs font-semibold text-gray-400 uppercase tracking-wider px-6 py-3`}>
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {allClients.map(client => {
-                  const status = getStatus(client)
-                  const pct = clientProgressPercent(client)
-
-                  return (
-                    <tr key={client.id} className="hover:bg-gray-50/50 transition-colors group">
-                      <td className="px-6 py-4">
-                        <p className="font-semibold text-gray-900 text-sm">{client.name}</p>
-                        {sameName(client) && (
-                          <span
-                            title="This number is on more than one case — the same person, filed twice"
-                            className="inline-block mt-0.5 text-[10px] font-semibold uppercase tracking-wide text-gold bg-gold/10 border border-gold/20 rounded px-1.5 py-0.5"
-                          >
-                            1 of {casesOnNumber[client.phone.replace(/\D/g, '')]} cases
-                          </span>
-                        )}
-                        <CaseNameField
-                          clientId={client.id}
-                          caseName={client.caseName}
-                          onSave={handleUpdateCaseName}
-                          className="block w-40 mt-1 mb-0.5"
-                        />
-                        <p className="text-xs text-gray-400 mt-0.5">
-                          {formatPhone(client.phone)}
-                        </p>
-                      </td>
-                      <td className="px-6 py-4">
-                        <p className="text-sm text-gray-700 truncate">{client.caseType}</p>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className={`text-xs font-semibold px-2.5 py-1 rounded-full whitespace-nowrap ${status.cls}`}>
-                          {status.label}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-2">
-                          <div className="w-24 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                            <div className={`h-full rounded-full transition-all ${pct === 100 ? 'bg-green-500' : 'bg-gold'}`} style={{ width: `${pct}%` }} />
-                          </div>
-                          <span className="text-xs text-gray-400 w-8">{pct}%</span>
-                        </div>
-                        {client.assignments.total > 0 && (
-                          <p className="text-[11px] text-gray-400 mt-1">
-                            {client.assignments.completed}/{client.assignments.total} question{' '}
-                            {client.assignments.total === 1 ? 'set' : 'sets'} done
-                          </p>
-                        )}
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-1">
-                          <svg className="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                          </svg>
-                          <span className="text-sm text-gray-700">{client.documentCount}</span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <p className="text-xs text-gray-400">
-                          {client.questionnaire.lastSaved
-                            ? new Date(client.questionnaire.lastSaved).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-                            : new Date(client.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                        </p>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center justify-end gap-2 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-all duration-150">
-                          <button
-                            onClick={() => handleShareClientLink(client)}
-                            className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white transition-all duration-150 active:scale-[0.97] flex items-center gap-1"
-                            title="Share reminder link"
-                          >
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C9.589 12.438 11.236 12 13 12s3.411.438 4.316 1.342m0 0h5.364a2 2 0 012 2v3.5a2 2 0 01-2 2H3.364a2 2 0 01-2-2v-3.5a2 2 0 012-2h5.364zm7.324-12H9.652a2 2 0 00-2 2v12a2 2 0 002 2h6.348a2 2 0 002-2V3a2 2 0 00-2-2z" />
-                            </svg>
-                            Share
-                          </button>
-                          <button
-                            onClick={() => handlePrintClient(client)}
-                            className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-700 hover:text-white transition-all duration-150 active:scale-[0.97] flex items-center gap-1"
-                            title="Print questionnaire as PDF"
-                          >
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2m-8 4h8v-6H6v6z" />
-                            </svg>
-                            Print
-                          </button>
-                          <button onClick={() => handleViewClient(client)} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-gold/10 text-gold hover:bg-gold hover:text-white transition-all duration-150 active:scale-[0.97]">
-                            View →
-                          </button>
-                          <button onClick={() => handleDeleteClient(client.id)} className="p-1.5 rounded-lg text-gray-300 hover:bg-red-50 hover:text-red-400 transition-all duration-150 active:scale-[0.97]" aria-label="Delete">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
+            <CaseFoldersPanel
+              clients={allClients}
+              onChanged={fetchClients}
+              onView={handleViewClient}
+              onShare={handleShareClientLink}
+              onPrint={handlePrintClient}
+              onDelete={handleDeleteClient}
+              onAddClient={folderId => setAddingClient({ folderId })}
+            />
           </>
         )}
 
-        {/* Question Sets View */}
-        {activeTab === 'cases' && (
-          <CaseFoldersPanel clients={allClients} onChanged={fetchClients} />
-        )}
 
         {activeTab === 'question-sets' && <QuestionSetsPanel />}
 
@@ -1949,9 +1748,10 @@ export default function AdminPage() {
       )}
 
       {/* Add client modal */}
-      {showAddClient && (
+      {addingClient && (
         <AddClientModal
-          onClose={() => setShowAddClient(false)}
+          caseFolderId={addingClient.folderId}
+          onClose={() => setAddingClient(null)}
           onAdded={fetchClients}
         />
       )}

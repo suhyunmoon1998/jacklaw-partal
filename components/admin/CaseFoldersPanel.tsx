@@ -17,6 +17,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { MOCK_ADMIN_PASSWORD } from '@/lib/mockData'
 import { ClientWork, STATUS_LABEL, clientProgressPercent, clientStatus } from '@/lib/clientProgress'
+import { formatPhone } from '@/lib/auth'
 
 export interface CaseFolder {
   id: string
@@ -32,7 +33,28 @@ export interface PanelClient extends ClientWork {
   name: string
   phone: string
   caseType: string
+  caseName: string
   caseFolderId: string | null
+  documentCount: number
+  createdAt: string
+  questionnaire: { submitted: boolean; completedSections: number[]; lastSaved: string }
+}
+
+/**
+ * What can be done to one client from inside a case.
+ *
+ * These are the admin page's own handlers, passed down rather than
+ * reimplemented: opening a client is what leads to the questionnaires, the
+ * answers, the documents and sending Module 1, 2 and 3, and there should be
+ * exactly one of each of those in the codebase.
+ */
+export interface ClientActions<C extends PanelClient = PanelClient> {
+  onView: (client: C) => void
+  onShare: (client: C) => void
+  onPrint: (client: C) => void
+  onDelete: (clientId: string) => void
+  /** Opens the add-client dialog, already filed into this case. */
+  onAddClient: (folderId: string | null) => void
 }
 
 const KEY = { 'x-admin-key': MOCK_ADMIN_PASSWORD }
@@ -41,13 +63,14 @@ const JSON_KEY = { 'Content-Type': 'application/json', ...KEY }
 /** The id used for the folder that is not a folder. */
 const UNASSIGNED = '__unassigned__'
 
-export default function CaseFoldersPanel({
+export default function CaseFoldersPanel<C extends PanelClient>({
   clients,
   onChanged,
+  ...actions
 }: {
-  clients: PanelClient[]
+  clients: C[]
   onChanged: () => void
-}) {
+} & ClientActions<C>) {
   const [folders, setFolders] = useState<CaseFolder[]>([])
   const [loading, setLoading] = useState(true)
   const [openId, setOpenId] = useState<string | null>(null)
@@ -170,6 +193,7 @@ export default function CaseFoldersPanel({
         onMove={move}
         onMerge={merge}
         folders={folders}
+        actions={actions}
       />
     )
   }
@@ -368,18 +392,19 @@ function NameInput({
 }
 
 // ─── Inside one folder ────────────────────────────────────────────────────────
-function FolderDetail({
-  folder, isUnassigned, clients, folders, error, onBack, onRename, onMove, onMerge,
+function FolderDetail<C extends PanelClient>({
+  folder, isUnassigned, clients, folders, error, onBack, onRename, onMove, onMerge, actions,
 }: {
   folder: CaseFolder
   isUnassigned: boolean
-  clients: PanelClient[]
+  clients: C[]
   folders: CaseFolder[]
   error: string
   onBack: () => void
   onRename: (id: string, name: string) => void
   onMove: (clientId: string, folderId: string | null) => void
   onMerge: (from: CaseFolder, intoId: string) => void
+  actions: ClientActions<C>
 }) {
   const [editing, setEditing] = useState(false)
   const [adding, setAdding] = useState(false)
@@ -432,6 +457,12 @@ function FolderDetail({
 
         {!isUnassigned && (
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => actions.onAddClient(folder.id)}
+              className="border border-gray-200 text-gray-700 px-3 py-2 rounded-xl text-sm font-semibold hover:bg-gray-50 transition-colors whitespace-nowrap"
+            >
+              + New client
+            </button>
             {others.length > 0 && (
               <select
                 value=""
@@ -448,7 +479,7 @@ function FolderDetail({
               onClick={() => setAdding(a => !a)}
               className="bg-gold text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-gold-dark transition-colors whitespace-nowrap"
             >
-              {adding ? 'Done' : 'Add client'}
+              {adding ? 'Done' : 'Move someone here'}
             </button>
           </div>
         )}
@@ -496,17 +527,28 @@ function FolderDetail({
           <p className="text-gray-500 text-sm">
             {isUnassigned ? 'Everyone is on a case.' : 'No clients on this case yet.'}
           </p>
+          {!isUnassigned && (
+            <button
+              onClick={() => actions.onAddClient(folder.id)}
+              className="mt-3 text-gold text-sm font-semibold hover:underline"
+            >
+              Add the first client →
+            </button>
+          )}
         </div>
       ) : (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm divide-y divide-gray-50">
           {inside.map(c => {
             const status = STATUS_LABEL[clientStatus(c)]
             const pct = clientProgressPercent(c)
+            const last = c.questionnaire.lastSaved || c.createdAt
             return (
-              <div key={c.id} className="flex items-center gap-3 p-4">
-                <div className="min-w-0 flex-1">
+              <div key={c.id} className="group flex items-center gap-4 p-4 hover:bg-gray-50/70 transition-colors">
+                <button onClick={() => actions.onView(c)} className="min-w-0 flex-1 text-left">
                   <p className="font-semibold text-gray-900 truncate">{c.name}</p>
-                  <p className="text-xs text-gray-400 mt-0.5 truncate">{c.caseType}</p>
+                  <p className="text-xs text-gray-400 mt-0.5 truncate">
+                    {[c.caseType, formatPhone(c.phone)].filter(Boolean).join(' · ')}
+                  </p>
                   <div className="flex items-center gap-2 mt-2 max-w-xs">
                     <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
                       <div
@@ -516,20 +558,62 @@ function FolderDetail({
                     </div>
                     <span className="text-xs text-gray-400 whitespace-nowrap">{pct}%</span>
                   </div>
-                </div>
+                </button>
+
+                <span className="hidden lg:block text-xs text-gray-400 whitespace-nowrap w-20 text-right">
+                  {c.documentCount} doc{c.documentCount === 1 ? '' : 's'}
+                </span>
+                <span className="hidden lg:block text-xs text-gray-400 whitespace-nowrap w-16 text-right">
+                  {last ? new Date(last).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''}
+                </span>
                 <span className={`text-xs font-semibold px-2 py-1 rounded-full whitespace-nowrap ${status.cls}`}>
                   {status.label}
                 </span>
-                {isUnassigned ? (
-                  <MoveInto folders={folders} onPick={id => onMove(c.id, id)} />
-                ) : (
+
+                <div className="flex items-center gap-1.5 whitespace-nowrap opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
                   <button
-                    onClick={() => onMove(c.id, null)}
-                    className="text-xs font-semibold text-gray-400 hover:text-red-600 whitespace-nowrap transition-colors"
+                    onClick={() => actions.onShare(c)}
+                    className="text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white transition-colors"
                   >
-                    Remove
+                    Share
                   </button>
-                )}
+                  <button
+                    onClick={() => actions.onPrint(c)}
+                    className="text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-700 hover:text-white transition-colors"
+                  >
+                    Print
+                  </button>
+                  {/* Where the questionnaires, the answers, the documents and
+                      sending Module 1, 2 and 3 all live. */}
+                  <button
+                    onClick={() => actions.onView(c)}
+                    className="text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-gold/10 text-gold hover:bg-gold hover:text-white transition-colors"
+                  >
+                    Open →
+                  </button>
+                  {isUnassigned ? (
+                    <MoveInto folders={folders} onPick={id => onMove(c.id, id)} />
+                  ) : (
+                    <button
+                      onClick={() => onMove(c.id, null)}
+                      title="Take off this case — the client is not deleted"
+                      className="text-xs font-semibold px-2.5 py-1.5 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors"
+                    >
+                      Remove
+                    </button>
+                  )}
+                  <button
+                    onClick={() => actions.onDelete(c.id)}
+                    aria-label={`Delete ${c.name}`}
+                    title="Delete this client and everything on file for them"
+                    className="p-1.5 rounded-lg text-gray-300 hover:bg-red-50 hover:text-red-500 transition-colors"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M1 7h22" />
+                    </svg>
+                  </button>
+                </div>
               </div>
             )
           })}
