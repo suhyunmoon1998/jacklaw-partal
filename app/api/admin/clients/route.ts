@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
 import { isLang } from '@/lib/langs'
-import { MODULES_GIVEN_ON_CREATE } from '@/lib/modules'
+import { MODULES_GIVEN_ON_CREATE, moduleSectionCount } from '@/lib/modules'
 
 function isAdmin(req: NextRequest) {
   return req.headers.get('x-admin-key') === process.env.ADMIN_PASSWORD
@@ -23,13 +23,29 @@ export async function GET(req: NextRequest) {
   // asked of a client, not only the onboarding questionnaire — a client added
   // solely to be sent a set would otherwise read as "Not Started" after
   // finishing it.
-  const [{ data: qStates }, { data: docs }, { data: assignments }] = await Promise.all([
-    getSupabase().from('questionnaire_states').select('client_id, completed_sections, submitted, last_saved'),
-    getSupabase().from('documents').select('client_id'),
-    getSupabase().from('client_question_set_assignments').select('client_id, status'),
-  ])
+  const [{ data: qStates }, { data: docs }, { data: assignments }, { data: sends }] =
+    await Promise.all([
+      getSupabase()
+        .from('questionnaire_states')
+        .select(
+          'client_id, completed_sections, submitted, last_saved, m2_completed_sections, m2_submitted'
+        ),
+      getSupabase().from('documents').select('client_id'),
+      getSupabase().from('client_question_set_assignments').select('client_id, status'),
+      // Which steps this client has actually been handed. A module nobody sent
+      // is not a module the client is behind on.
+      getSupabase().from('client_module_sends').select('client_id, module_id, sent_at, opened_at'),
+    ])
 
   const qMap = Object.fromEntries((qStates ?? []).map(q => [q.client_id, q]))
+
+  const sendMap = (sends ?? []).reduce<Record<string, Record<string, { sentAt: string; openedAt: string | null }>>>(
+    (acc, s) => {
+      ;(acc[s.client_id] ??= {})[s.module_id] = { sentAt: s.sent_at, openedAt: s.opened_at ?? null }
+      return acc
+    },
+    {}
+  )
   const docCount = (docs ?? []).reduce<Record<string, number>>((acc, d) => {
     acc[d.client_id] = (acc[d.client_id] ?? 0) + 1
     return acc
@@ -66,6 +82,33 @@ export async function GET(req: NextRequest) {
       : { completedSections: [], submitted: false, lastSaved: '' },
     documentCount: docCount[c.id] ?? 0,
     assignments: setCount[c.id] ?? { total: 0, completed: 0 },
+    /**
+     * Enough for the caller to run stepViews() itself.
+     *
+     * One overall bar said 100% for a client who had finished the intake and
+     * never been sent anything else, and the same 100% for one who had finished
+     * all three — the office could not tell those apart at a glance. The
+     * per-step state is computed by the same function the client's own
+     * dashboard uses, so the two screens cannot disagree about what is done.
+     */
+    moduleSends: sendMap[c.id] ?? {},
+    moduleProgress: {
+      module1: {
+        submitted: Boolean(qMap[c.id]?.submitted),
+        completedSections: qMap[c.id]?.completed_sections ?? [],
+        totalSections: moduleSectionCount('module1'),
+      },
+      module2: {
+        submitted: Boolean(qMap[c.id]?.m2_submitted),
+        completedSections: qMap[c.id]?.m2_completed_sections ?? [],
+        totalSections: moduleSectionCount('module2'),
+      },
+      module3: {
+        submitted: false,
+        completedSections: [],
+        totalSections: moduleSectionCount('module3'),
+      },
+    },
   }))
 
   return NextResponse.json({ clients: enriched })

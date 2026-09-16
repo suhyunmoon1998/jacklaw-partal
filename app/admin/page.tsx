@@ -36,6 +36,9 @@ interface AdminClient {
   documentCount: number
   /** Question sets this client can see, and how many they have finished. */
   assignments: AssignmentRollup
+  /** Which steps have been handed over, and how far each one has got. */
+  moduleSends: Partial<Record<ModuleId, ModuleSend>>
+  moduleProgress: Partial<Record<ModuleId, ModuleProgress>>
 }
 import { QUESTIONNAIRE_SECTIONS } from '@/lib/questionnaireData'
 import { legacyAnswerGroups, liveQuestionIds } from '@/lib/questionnaireLegacy'
@@ -47,6 +50,8 @@ import { AnswerValue, QuestionnaireState, UploadedDocument } from '@/types'
 import CaseFoldersPanel from '@/components/admin/CaseFoldersPanel'
 import QuestionSetsPanel from '@/components/admin/QuestionSetsPanel'
 import ClientAssignments from '@/components/admin/ClientAssignments'
+import { ModuleId } from '@/lib/modules'
+import { ModuleProgress, ModuleSend } from '@/lib/moduleSteps'
 import PasteQuestionsDialog from '@/components/admin/PasteQuestionsDialog'
 import SendAssignmentDialog from '@/components/admin/SendAssignmentDialog'
 import { LANGUAGES, LANG_ENGLISH_NAME, Lang, toLang } from '@/lib/langs'

@@ -18,6 +18,8 @@ import { useCallback, useEffect, useState } from 'react'
 import { MOCK_ADMIN_PASSWORD } from '@/lib/mockData'
 import { ClientWork, STATUS_LABEL, clientProgressPercent, clientStatus } from '@/lib/clientProgress'
 import { formatPhone } from '@/lib/auth'
+import { ModuleId, moduleById } from '@/lib/modules'
+import { ModuleProgress, ModuleSend, stepViews } from '@/lib/moduleSteps'
 
 export interface CaseFolder {
   id: string
@@ -38,6 +40,9 @@ export interface PanelClient extends ClientWork {
   documentCount: number
   createdAt: string
   questionnaire: { submitted: boolean; completedSections: number[]; lastSaved: string }
+  /** Which steps have been handed over, and how far each one has got. */
+  moduleSends: Partial<Record<ModuleId, ModuleSend>>
+  moduleProgress: Partial<Record<ModuleId, ModuleProgress>>
 }
 
 /**
@@ -540,7 +545,6 @@ function FolderDetail<C extends PanelClient>({
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm divide-y divide-gray-50">
           {inside.map(c => {
             const status = STATUS_LABEL[clientStatus(c)]
-            const pct = clientProgressPercent(c)
             const last = c.questionnaire.lastSaved || c.createdAt
             return (
               <div key={c.id} className="group flex items-center gap-4 p-4 hover:bg-gray-50/70 transition-colors">
@@ -549,15 +553,7 @@ function FolderDetail<C extends PanelClient>({
                   <p className="text-xs text-gray-400 mt-0.5 truncate">
                     {[c.caseType, formatPhone(c.phone)].filter(Boolean).join(' · ')}
                   </p>
-                  <div className="flex items-center gap-2 mt-2 max-w-xs">
-                    <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                      <div
-                        className={`h-full rounded-full ${pct === 100 ? 'bg-green-500' : 'bg-gold'}`}
-                        style={{ width: `${pct}%` }}
-                      />
-                    </div>
-                    <span className="text-xs text-gray-400 whitespace-nowrap">{pct}%</span>
-                  </div>
+                  <ModuleBars client={c} />
                 </button>
 
                 <span className="hidden lg:block text-xs text-gray-400 whitespace-nowrap w-20 text-right">
@@ -619,6 +615,52 @@ function FolderDetail<C extends PanelClient>({
           })}
         </div>
       )}
+    </div>
+  )
+}
+
+/**
+ * One bar per step, rather than one bar for the client.
+ *
+ * A single figure read 100% both for somebody who finished the intake and was
+ * never sent anything else, and for somebody who finished all three — which is
+ * the difference the office is actually looking for. The state comes from
+ * stepViews(), the same function the client's own dashboard uses, so the two
+ * screens cannot disagree about what is done.
+ *
+ * A step nobody sent is drawn as not sent, not as 0%: the client is not behind
+ * on something they were never given. Module 3 has not been built yet, so it
+ * says so instead of showing an empty bar that reads as a failure.
+ */
+function ModuleBars({ client }: { client: PanelClient }) {
+  const steps = stepViews(client.moduleSends, client.moduleProgress)
+
+  return (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-2">
+      {steps.map(step => {
+        const built = moduleById(step.id)?.built ?? false
+        const sent = Boolean(client.moduleSends[step.id])
+        const done = step.percent === 100
+
+        return (
+          <div key={step.id} className="flex items-center gap-1.5 w-40">
+            <span className="text-[10px] font-semibold text-gray-400 w-5 shrink-0">
+              M{step.step}
+            </span>
+            <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+              {built && sent && (
+                <div
+                  className={`h-full rounded-full ${done ? 'bg-green-500' : 'bg-gold'}`}
+                  style={{ width: `${step.percent}%` }}
+                />
+              )}
+            </div>
+            <span className="text-[10px] text-gray-400 whitespace-nowrap w-14 shrink-0">
+              {!built ? 'not built' : !sent ? 'not sent' : `${step.percent}%`}
+            </span>
+          </div>
+        )
+      })}
     </div>
   )
 }
