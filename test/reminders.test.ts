@@ -52,7 +52,9 @@ function plan(opts: {
   already?: ReminderKind[]
   now?: Date
 }) {
-  const alreadySent = new Map([['c1', new Map([['module1', new Set(opts.already ?? [])]])]])
+  const alreadySent = new Map([
+    ['c1', new Map([['module1', new Set<ReminderKind>(opts.already ?? [])]])],
+  ])
   return planReminders({
     steps: opts.steps ?? [sent()],
     targets: new Map([['c1', someone(opts.target)]]),
@@ -62,13 +64,17 @@ function plan(opts: {
 }
 
 describe('the ladder', () => {
-  it('climbs on days 2, 5, 7 and then calls', () => {
+  it('climbs on days 2 and 5, then calls on day 10', () => {
     expect(LADDER.map(r => [r.kind, r.afterDays, r.channel])).toEqual([
       ['day2', 2, 'sms'],
       ['day5', 5, 'sms'],
-      ['day7', 7, 'sms'],
       ['call', 10, 'call'],
     ])
+  })
+
+  it('has no third text — two go unread, and the next thing is a voice', () => {
+    expect(LADDER.filter(r => r.channel === 'sms')).toHaveLength(2)
+    expect(LADDER.some(r => r.afterDays === 7)).toBe(false)
   })
 
   it('sends nothing before the second day', () => {
@@ -85,7 +91,7 @@ describe('the ladder', () => {
   it('never repeats a rung it has already sent', () => {
     expect(dueFor(2, new Set<ReminderKind>(['day2']))).toBeNull()
     expect(dueFor(5, new Set<ReminderKind>(['day5']))).toBe('day2')
-    expect(dueFor(12, new Set<ReminderKind>(['day2', 'day5', 'day7', 'call']))).toBeNull()
+    expect(dueFor(12, new Set<ReminderKind>(['day2', 'day5', 'call']))).toBeNull()
   })
 
   it('walks one client from silence to a phone call', () => {
@@ -97,7 +103,7 @@ describe('the ladder', () => {
       seen.push(k)
     }
     expect(seen).toEqual([
-      null, null, 'day2', null, null, 'day5', null, 'day7', null, null, 'call', null, null,
+      null, null, 'day2', null, null, 'day5', null, null, null, null, 'call', null, null,
     ])
   })
 })
@@ -106,7 +112,8 @@ describe('who gets chased', () => {
   it('chases a client who was sent something and has not submitted', () => {
     const { due } = plan({ now: AT('2026-09-16T17:30:00Z') })
     expect(due).toHaveLength(1)
-    expect(due[0]).toMatchObject({ kind: 'day7', channel: 'sms', clientId: 'c1' })
+    // Seven days out, and the last text goes on day 5, so day 5 is what is owed.
+    expect(due[0]).toMatchObject({ kind: 'day5', channel: 'sms', clientId: 'c1' })
   })
 
   it('leaves a client who submitted alone', () => {
@@ -147,7 +154,7 @@ describe('who gets chased', () => {
       now: MORNING,
     })
     expect(due.map(d => [d.moduleId, d.kind])).toEqual([
-      ['module1', 'day7'],
+      ['module1', 'day5'],
       ['module2', 'day2'],
     ])
   })
@@ -176,7 +183,7 @@ describe('who gets chased', () => {
 
     expect(due).toHaveLength(1)
     // The one further along the ladder is the one that goes.
-    expect(due[0]).toMatchObject({ clientId: 'a', kind: 'day7' })
+    expect(due[0]).toMatchObject({ clientId: 'a', kind: 'day5' })
     expect(skipped.find(s => s.clientId === 'b')?.reason).toBe('one a day')
   })
 
@@ -217,17 +224,17 @@ describe('when it is allowed to send', () => {
 
   it('nobody is lost by a quiet day — the rung is still owed on Monday', () => {
     const steps = [sent({ sentAt: '2026-09-12T18:00:00Z' })]
-    const saturday = AT('2026-09-19T17:30:00Z') // would have been day 7
-    const monday = AT('2026-09-21T17:30:00Z') // day 9, and day 7 is still unsent
+    const saturday = AT('2026-09-19T17:30:00Z') // day 7
+    const monday = AT('2026-09-21T17:30:00Z') // day 9, and day 5 is still unsent
     expect(isSendingTime(saturday)).toBe(false)
-    expect(plan({ steps, now: monday }).due[0]).toMatchObject({ kind: 'day7' })
+    expect(plan({ steps, now: monday }).due[0]).toMatchObject({ kind: 'day5' })
   })
 })
 
 describe('what it says', () => {
   it('writes every rung in every language, naming the firm and the way out', () => {
     for (const { code } of LANGUAGES) {
-      for (const kind of ['day2', 'day5', 'day7'] as const) {
+      for (const kind of ['day2', 'day5'] as const) {
         const body = reminderBody(kind, code, { name: 'Maria Lopez', link: 'https://x.test/client' })
         expect(body, `${code}/${kind}`).toContain('866 JACK LAW')
         expect(body, `${code}/${kind}`).toContain('https://x.test/client')

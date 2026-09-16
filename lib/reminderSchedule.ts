@@ -14,14 +14,21 @@
 import { Lang } from '@/lib/langs'
 import { ModuleId } from '@/lib/modules'
 
-export type ReminderKind = 'day2' | 'day5' | 'day7' | 'call'
+export type ReminderKind = 'day2' | 'day5' | 'call'
 
-/** The rung, and how many days after the send it comes due. */
+/**
+ * The rung, and how many days after the send it comes due.
+ *
+ * Two texts, then a voice. A third text on day 7 was dropped: somebody who has
+ * ignored two is not going to read a third, and the five days of quiet before
+ * the call make it land as a real follow-up rather than as more of the same.
+ *
+ * Rows recorded under the old day-7 rung stay in the database and stay valid —
+ * they simply match nothing here, so nobody is chased for them again.
+ */
 export const LADDER: { kind: ReminderKind; afterDays: number; channel: 'sms' | 'call' }[] = [
   { kind: 'day2', afterDays: 2, channel: 'sms' },
   { kind: 'day5', afterDays: 5, channel: 'sms' },
-  { kind: 'day7', afterDays: 7, channel: 'sms' },
-  // Three texts have gone unanswered by now, so the next thing is a voice.
   { kind: 'call', afterDays: 10, channel: 'call' },
 ]
 

@@ -1,10 +1,13 @@
 /**
  * What a reminder actually says, in the client's own language.
  *
- * Three texts and then a call, each one a little more direct than the last. The
- * firm names itself in every one, because a text from an unknown number about
- * "your case" is what a scam looks like and the client has no reason to trust
- * a bare link.
+ * Two texts and then a call, the second more direct than the first. The firm
+ * names itself in every one, because a text from an unknown number about "your
+ * case" is what a scam looks like and the client has no reason to trust a bare
+ * link.
+ *
+ * Day 5 is the last text, so it is the one that offers the phone — after it the
+ * next thing the client hears is the office ringing them.
  *
  * Every text carries the opt-out. Twilio blocks a number that replies STOP at
  * its end, but the sentence has to be in the message for the client to know
@@ -18,7 +21,7 @@ import { ReminderKind } from '@/lib/reminderSchedule'
 const FIRM = '866 JACK LAW'
 
 /** Short enough to stay one segment once the link is added. */
-type Copy = { day2: string; day5: string; day7: string; call: string }
+type Copy = { day2: string; day5: string; call: string }
 
 /**
  * `{name}` is the client's first name and `{link}` the portal.
@@ -32,9 +35,6 @@ const COPY: Record<Lang, Copy> = {
       `${FIRM}: Hi {name}, your case questionnaire is still waiting. ` +
       `It takes about 15 minutes: {link}\nReply STOP to stop these texts.`,
     day5:
-      `${FIRM}: {name}, we still need your answers to move your case forward. ` +
-      `You can finish where you left off: {link}\nReply STOP to stop these texts.`,
-    day7:
       `${FIRM}: {name}, this is our last text about your questionnaire. ` +
       `Please finish it or call us at (866) 522-5529: {link}\nReply STOP to stop these texts.`,
     call:
@@ -49,9 +49,6 @@ const COPY: Record<Lang, Copy> = {
       `${FIRM}: Hola {name}, su cuestionario sigue pendiente. ` +
       `Toma unos 15 minutos: {link}\nResponda STOP para no recibir más mensajes.`,
     day5:
-      `${FIRM}: {name}, todavía necesitamos sus respuestas para avanzar con su caso. ` +
-      `Puede continuar donde lo dejó: {link}\nResponda STOP para no recibir más mensajes.`,
-    day7:
       `${FIRM}: {name}, este es nuestro último mensaje sobre el cuestionario. ` +
       `Por favor termínelo o llámenos al (866) 522-5529: {link}\nResponda STOP para no recibir más mensajes.`,
     call:
@@ -66,9 +63,6 @@ const COPY: Record<Lang, Copy> = {
       `${FIRM}：您好 {name}，您的案件问卷还没有完成，` +
       `大约需要15分钟：{link}\n回复 STOP 可停止接收短信。`,
     day5:
-      `${FIRM}：{name}，我们仍然需要您的回答才能推进您的案件。` +
-      `您可以从上次停下的地方继续：{link}\n回复 STOP 可停止接收短信。`,
-    day7:
       `${FIRM}：{name}，这是关于问卷的最后一条短信。` +
       `请完成它，或致电 (866) 522-5529：{link}\n回复 STOP 可停止接收短信。`,
     call:
@@ -83,9 +77,6 @@ const COPY: Record<Lang, Copy> = {
       `${FIRM}: {name}님, 사건 설문이 아직 남아 있습니다. ` +
       `15분이면 됩니다: {link}\n수신을 원하지 않으시면 STOP 이라고 답장해 주세요.`,
     day5:
-      `${FIRM}: {name}님, 사건을 진행하려면 답변이 필요합니다. ` +
-      `하시던 곳부터 이어서 하실 수 있습니다: {link}\n수신 거부는 STOP 이라고 답장해 주세요.`,
-    day7:
       `${FIRM}: {name}님, 설문 관련 마지막 문자입니다. ` +
       `마무리해 주시거나 (866) 522-5529 로 전화 주세요: {link}\n수신 거부는 STOP 이라고 답장해 주세요.`,
     call:
