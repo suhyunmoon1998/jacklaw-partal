@@ -1164,7 +1164,7 @@ export default function AdminPage() {
   if (loading) return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       <div className="bg-black h-14 border-b border-white/10" />
-      <main className="flex-1 px-4 py-6 max-w-6xl mx-auto w-full">
+      <main className="flex-1 w-full px-4 sm:px-6 lg:px-8 py-6">
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
           {[...Array(4)].map((_, i) => (
             <div key={i} className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
@@ -1198,7 +1198,7 @@ export default function AdminPage() {
     <div className="min-h-screen bg-gray-50 flex flex-col animate-fade-in">
       {/* Header */}
       <header className="bg-black border-b border-white/10">
-        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
+        <div className="w-full px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between">
           <button
             onClick={() => router.push('/')}
             className="flex items-center gap-3 hover:opacity-80 transition-opacity"
@@ -1245,7 +1245,7 @@ export default function AdminPage() {
       </header>
 
 
-      <main className="flex-1 px-4 py-6 max-w-6xl mx-auto w-full">
+      <main className="flex-1 w-full px-4 sm:px-6 lg:px-8 py-6">
         {/* Quick Access Tools */}
         <div className="mb-6 flex gap-3">
           <button
@@ -1487,13 +1487,16 @@ export default function AdminPage() {
               <thead>
                 <tr className="bg-gray-50/50 border-b border-gray-100">
                   {[
-                    ['Client', 'w-[26%]'],
-                    ['Case Type', 'w-[13%]'],
-                    ['Status', 'w-[13%]'],
-                    ['Progress', 'w-[16%]'],
-                    ['Docs', 'w-[8%]'],
-                    ['Last Active', 'w-[10%]'],
-                    ['', 'w-[14%]'],
+                    // The last column holds four controls and was the reason
+                    // this table scrolled sideways: 14% could not seat them, so
+                    // every screen got a scrollbar however wide it was.
+                    ['Client', 'w-[24%]'],
+                    ['Case Type', 'w-[11%]'],
+                    ['Status', 'w-[11%]'],
+                    ['Progress', 'w-[14%]'],
+                    ['Docs', 'w-[6%]'],
+                    ['Last Active', 'w-[9%]'],
+                    ['', 'w-[25%]'],
                   ].map(([h, w]) => (
                     <th key={h} className={`${w} text-left text-xs font-semibold text-gray-400 uppercase tracking-wider px-6 py-3`}>
                       {h}
@@ -1566,7 +1569,7 @@ export default function AdminPage() {
                         </p>
                       </td>
                       <td className="px-6 py-4">
-                        <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-all duration-150">
+                        <div className="flex items-center justify-end gap-2 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-all duration-150">
                           <button
                             onClick={() => handleShareClientLink(client)}
                             className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white transition-all duration-150 active:scale-[0.97] flex items-center gap-1"
