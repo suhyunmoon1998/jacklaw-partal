@@ -23,18 +23,50 @@ import LanguagePicker from '@/components/LanguagePicker'
  */
 const SAFE_NEXT = /^\/(dashboard|documents|questionnaire(\/[A-Za-z0-9-]+)?)$/
 
+/**
+ * When the office opened the case, in the client's own language.
+ *
+ * It is on the picker because two cases with no folder and no note read
+ * identically without it, and then the choice is a guess.
+ */
+function openedOn(iso: string, lang: string): string {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  try {
+    return d.toLocaleDateString(lang, { year: 'numeric', month: 'short', day: 'numeric' })
+  } catch {
+    return d.toISOString().slice(0, 10)
+  }
+}
+
 function nextPath(): string {
   if (typeof window === 'undefined') return '/dashboard'
   const raw = new URLSearchParams(window.location.search).get('next') ?? ''
   return SAFE_NEXT.test(raw) ? raw : '/dashboard'
 }
 
+/** One case as the sign-in screen offers it. */
+interface FoundCase {
+  id: string
+  name: string
+  case_type: string
+  case_label: string
+  opened: string
+}
+
 export default function LoginPage() {
   const [phone, setPhone] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  /**
+   * The cases on this number, once there is more than one to choose between.
+   * A client suing two employers has a row per employer, because a row holds
+   * one set of questionnaire answers and the two jobs are not the same facts.
+   */
+  const [choices, setChoices] = useState<FoundCase[]>([])
   const router = useRouter()
-  const { t } = useLanguage()
+  const { t, lang } = useLanguage()
 
   useEffect(() => {
     const session = getSession()
@@ -46,6 +78,24 @@ export default function LoginPage() {
     const digits = raw.replace(/\D/g, '').slice(0, 10)
     setPhone(formatPhone(digits))
     setError('')
+    // Editing the number abandons whatever was found for the old one.
+    setChoices([])
+  }
+
+  /** True when the list cannot be told apart by what is shown on it. */
+  const ambiguous =
+    choices.length > 1 &&
+    new Set(choices.map(c => `${c.case_label}|${c.case_type}|${openedOn(c.opened, lang)}`)).size <
+      choices.length
+
+  const signIn = (client: FoundCase) => {
+    setSession({
+      clientId: client.id,
+      phone: normalizePhone(phone),
+      name: client.name,
+      caseType: client.case_type ?? '',
+    })
+    router.replace(nextPath())
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -59,14 +109,15 @@ export default function LoginPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ phone: normalized }),
     })
-    const { client } = await res.json()
+    const { clients } = await res.json()
+    const found: FoundCase[] = clients ?? []
 
-    if (client) {
-      setSession({ clientId: client.id, phone: normalized, name: client.name, caseType: client.case_type ?? '' })
-      router.replace(nextPath())
-    } else {
-      setError(t('not_found'))
-    }
+    // One case is the ordinary path and nothing about it changes. Two means the
+    // office has this person on two matters, and only they can say which one
+    // they came here for.
+    if (found.length === 1) signIn(found[0])
+    else if (found.length > 1) setChoices(found)
+    else setError(t('not_found'))
 
     setLoading(false)
   }
@@ -93,6 +144,42 @@ export default function LoginPage() {
             <h2 className="text-xl font-semibold text-navy mb-1">{t('welcome')}</h2>
             <p className="text-gray-500 text-sm mb-8">{t('welcome_sub')}</p>
 
+            {choices.length > 0 ? (
+              <div className="space-y-3">
+                <p className="text-sm text-gray-600">{t('choose_case')}</p>
+                {choices.map((c, i) => (
+                  <button
+                    key={c.id}
+                    onClick={() => signIn(c)}
+                    className="w-full flex items-center gap-3 text-left border border-gray-200 rounded-xl p-4 hover:border-gold hover:bg-gold/5 transition-colors"
+                  >
+                    <span className="text-xl">📁</span>
+                    <span className="flex-1 min-w-0">
+                      <span className="block font-semibold text-navy truncate">
+                        {c.case_label}
+                        {/* Two cases the office has not named yet, opened the
+                            same day, would read identically — and then the
+                            choice is a coin toss. Numbering them at least makes
+                            them two different things to pick between. */}
+                        {ambiguous && ` (${i + 1})`}
+                      </span>
+                      <span className="block text-xs text-gray-400 mt-0.5 truncate">
+                        {[c.case_type, openedOn(c.opened, lang)].filter(Boolean).join(' · ')}
+                      </span>
+                    </span>
+                    <svg className="w-4 h-4 text-gray-300 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </button>
+                ))}
+                <button
+                  onClick={() => { setChoices([]); setPhone(''); }}
+                  className="text-sm text-gray-400 hover:text-navy transition-colors pt-1"
+                >
+                  {t('use_another_number')}
+                </button>
+              </div>
+            ) : (
             <form onSubmit={handleSubmit} className="space-y-5" noValidate>
               <div>
                 <label htmlFor="phone" className="label">{t('phone_label')}</label>
@@ -138,6 +225,7 @@ export default function LoginPage() {
                 ) : t('continue_btn')}
               </button>
             </form>
+            )}
           </div>
 
           <div className="mt-6 bg-gold/5 border border-gold/30 rounded-xl p-4">

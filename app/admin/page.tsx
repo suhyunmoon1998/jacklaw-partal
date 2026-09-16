@@ -639,15 +639,35 @@ function AddClientModal({ onClose, onAdded }: { onClose: () => void; onAdded: ()
     if (digits.length < 7) { setError('Enter a valid phone number.'); return }
 
     setSaving(true)
-    const res = await fetch('/api/admin/clients', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-admin-key': MOCK_ADMIN_PASSWORD },
-      body: JSON.stringify({ name: name.trim(), phone: digits, caseType, lang }),
-    }).catch(() => null)
+    const post = (secondCase: boolean) =>
+      fetch('/api/admin/clients', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-key': MOCK_ADMIN_PASSWORD },
+        body: JSON.stringify({ name: name.trim(), phone: digits, caseType, lang, secondCase }),
+      }).catch(() => null)
+
+    let res = await post(false)
+    let data = res ? await res.json().catch(() => ({})) : {}
+
+    /**
+     * The number is already on file. Usually a mistake; occasionally the point
+     * — one person suing two employers needs a row per employer, because a row
+     * holds one set of questionnaire answers and the two jobs are not the same
+     * facts. So it asks instead of refusing, and the client picks the case when
+     * they sign in.
+     */
+    if (res?.status === 409 && data?.error === 'PHONE_IN_USE') {
+      const ok = confirm(
+        `${data.existingName} is already on file with this number.\n\n` +
+        'Add this as a second case for the same person? They will choose which case to open when they sign in.'
+      )
+      if (!ok) { setSaving(false); setError(''); return }
+      res = await post(true)
+      data = res ? await res.json().catch(() => ({})) : {}
+    }
     setSaving(false)
 
     if (!res) { setError('Could not reach the server. Check your connection and try again.'); return }
-    const data = await res.json().catch(() => ({}))
     if (!res.ok) { setError(data.error ?? 'Failed to add client.'); return }
 
     // The list is refreshed here rather than at the end: the client is added,
@@ -1081,12 +1101,13 @@ export default function AdminPage() {
       return
     }
 
-    // Check if client with same phone already exists
+    // A number already on file is usually a mistake and occasionally a second
+    // case for the same person, so it asks rather than refusing.
     const existing = allClients.find(c => c.phone.replace(/\D/g, '') === phone.replace(/\D/g, ''))
-    if (existing) {
-      alert(`Client "${existing.name}" with this phone number already exists.`)
-      return
-    }
+    if (existing && !confirm(
+      `${existing.name} is already on file with this number.\n\n` +
+      'Add this as a second case for the same person? They will choose which case to open when they sign in.'
+    )) return
 
     // Use the API to add client
     fetch('/api/admin/clients', {
@@ -1096,6 +1117,7 @@ export default function AdminPage() {
         name: clientName,
         phone: phone,
         caseType: 'Employment Law', // Default case type
+        secondCase: Boolean(existing),
       }),
     }).then(res => {
       if (res.ok) {
@@ -1123,6 +1145,21 @@ export default function AdminPage() {
   }
 
   const getStatus = (client: AdminClient) => STATUS_LABEL[clientStatus(client)]
+
+  /**
+   * How many rows share each phone number.
+   *
+   * One person suing two employers is two rows, because a row holds one set of
+   * questionnaire answers and the two jobs are not the same facts. Left
+   * unmarked they read as two different people with the same name, which is
+   * what the office was working around by inventing a second number.
+   */
+  const casesOnNumber = allClients.reduce<Record<string, number>>((acc, c) => {
+    const digits = c.phone.replace(/\D/g, '')
+    acc[digits] = (acc[digits] ?? 0) + 1
+    return acc
+  }, {})
+  const sameName = (c: AdminClient) => casesOnNumber[c.phone.replace(/\D/g, '')] > 1
 
   if (loading) return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
@@ -1379,6 +1416,14 @@ export default function AdminPage() {
                   <div className="flex items-start justify-between mb-3">
                     <div>
                       <p className="font-semibold text-gray-900">{client.name}</p>
+                      {sameName(client) && (
+                        <span
+                          title="This number is on more than one case — the same person, filed twice"
+                          className="inline-block mt-0.5 text-[10px] font-semibold uppercase tracking-wide text-gold bg-gold/10 border border-gold/20 rounded px-1.5 py-0.5"
+                        >
+                          1 of {casesOnNumber[client.phone.replace(/\D/g, '')]} cases
+                        </span>
+                      )}
                       <CaseNameField
                         clientId={client.id}
                         caseName={client.caseName}
@@ -1465,6 +1510,14 @@ export default function AdminPage() {
                     <tr key={client.id} className="hover:bg-gray-50/50 transition-colors group">
                       <td className="px-6 py-4">
                         <p className="font-semibold text-gray-900 text-sm">{client.name}</p>
+                        {sameName(client) && (
+                          <span
+                            title="This number is on more than one case — the same person, filed twice"
+                            className="inline-block mt-0.5 text-[10px] font-semibold uppercase tracking-wide text-gold bg-gold/10 border border-gold/20 rounded px-1.5 py-0.5"
+                          >
+                            1 of {casesOnNumber[client.phone.replace(/\D/g, '')]} cases
+                          </span>
+                        )}
                         <CaseNameField
                           clientId={client.id}
                           caseName={client.caseName}

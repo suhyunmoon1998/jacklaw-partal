@@ -11,6 +11,8 @@ export const en = {
   continue_btn: 'Continue',
   checking: 'Checking...',
   not_found: 'We could not find your file. Please contact the office.',
+  choose_case: 'You have more than one case with our office. Which one are you here about?',
+  use_another_number: '← Use a different number',
   emergency: 'This portal system is for case information and evidence intake only.',
   emergency_sub: 'To communicate with our office, please call',
 
@@ -271,6 +273,8 @@ export const es: typeof en = {
   continue_btn: 'Continuar',
   checking: 'Verificando...',
   not_found: 'No encontramos su expediente. Por favor comuníquese con la oficina.',
+  choose_case: 'Usted tiene más de un caso con nuestra oficina. ¿Sobre cuál viene hoy?',
+  use_another_number: '← Usar otro número',
   emergency: 'Este portal es únicamente para información del caso y entrega de evidencia.',
   emergency_sub: 'Para comunicarse con nuestra oficina, por favor llame al',
 
@@ -523,6 +527,8 @@ export const zh: typeof en = {
   continue_btn: '继续',
   checking: '正在核对...',
   not_found: '未能找到您的档案。请联系本所。',
+  choose_case: '您在本所有不止一个案件。您今天要办理哪一个？',
+  use_another_number: '← 使用其他号码',
   emergency: '本门户系统仅用于案件信息与证据提交。',
   emergency_sub: '如需与本所联系，请致电',
 
@@ -775,6 +781,8 @@ export const ko: typeof en = {
   continue_btn: '계속',
   checking: '확인 중...',
   not_found: '고객님의 파일을 찾을 수 없습니다. 사무실로 연락해 주세요.',
+  choose_case: '저희 사무실에 사건이 두 건 이상 있습니다. 어느 사건으로 오셨습니까?',
+  use_another_number: '← 다른 번호 사용',
   emergency: '본 포털은 사건 정보와 증거 접수 전용입니다.',
   emergency_sub: '사무실과 통화하시려면 다음 번호로 전화해 주세요',
 

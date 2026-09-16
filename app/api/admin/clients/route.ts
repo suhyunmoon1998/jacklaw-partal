@@ -75,11 +75,34 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   if (!isAdmin(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { name, phone, caseType, lang } = await req.json()
+  const { name, phone, caseType, lang, secondCase } = await req.json()
   const digits = (phone ?? '').replace(/\D/g, '')
 
   if (!name || digits.length < 7 || !caseType) {
     return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
+  }
+
+  /**
+   * A number already on file is usually a mistake and occasionally the point.
+   *
+   * One person suing two employers needs a row per employer — a row holds one
+   * set of questionnaire answers, and the two jobs have different dates, pay
+   * and managers. The database no longer refuses it, so the check lives here
+   * and asks rather than blocks: the office confirms and sends `secondCase`.
+   */
+  if (!secondCase) {
+    const { data: already } = await getSupabase()
+      .from('clients')
+      .select('id, name')
+      .eq('phone', digits)
+      .limit(1)
+
+    if (already?.length) {
+      return NextResponse.json(
+        { error: 'PHONE_IN_USE', existingName: already[0].name },
+        { status: 409 }
+      )
+    }
   }
 
   const id = `client-${Date.now()}`
@@ -98,10 +121,7 @@ export async function POST(req: NextRequest) {
     .select()
     .single()
 
-  if (error) {
-    const msg = error.code === '23505' ? 'Phone number already registered.' : 'Insert failed.'
-    return NextResponse.json({ error: msg }, { status: 400 })
-  }
+  if (error) return NextResponse.json({ error: 'Insert failed.' }, { status: 400 })
 
   // The intake questionnaire is theirs from the moment they exist — that is what
   // "every client receives this" means, and what the person adding them expects.
