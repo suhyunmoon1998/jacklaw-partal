@@ -24,6 +24,8 @@ import { ModuleProgress, ModuleSend, stepViews } from '@/lib/moduleSteps'
 export interface CaseFolder {
   id: string
   name: string
+  /** Free-text name tags — what the office calls this case. */
+  tags: string[]
   clientCount: number
   createdAt?: string
   updatedAt?: string
@@ -123,6 +125,18 @@ export default function CaseFoldersPanel<C extends PanelClient>({
     refresh()
   }
 
+  const retag = async (id: string, tags: string[]) => {
+    setError('')
+    // Shown before it is saved: typing a tag and watching it sit still reads as
+    // the click not having worked.
+    setFolders(fs => fs.map(f => (f.id === id ? { ...f, tags } : f)))
+    const res = await fetch('/api/admin/case-folders', {
+      method: 'PATCH', headers: JSON_KEY, body: JSON.stringify({ id, tags }),
+    })
+    if (!res.ok) { setError((await res.json()).error ?? 'Could not save the tags.'); load(); return }
+    load()
+  }
+
   const remove = async (folder: CaseFolder) => {
     const n = countOf(folder.id)
     const warning = n
@@ -183,7 +197,7 @@ export default function CaseFoldersPanel<C extends PanelClient>({
   }
 
   const open = openId === UNASSIGNED
-    ? { id: UNASSIGNED, name: 'Unassigned', clientCount: countOf(UNASSIGNED) }
+    ? { id: UNASSIGNED, name: 'Unassigned', tags: [], clientCount: countOf(UNASSIGNED) }
     : folders.find(f => f.id === openId)
 
   if (open) {
@@ -197,6 +211,7 @@ export default function CaseFoldersPanel<C extends PanelClient>({
         onRename={rename}
         onMove={move}
         onMerge={merge}
+        onRetag={retag}
         folders={folders}
         actions={actions}
       />
@@ -330,8 +345,15 @@ function FolderRow({
         ) : (
           <button onClick={onOpen} className="block w-full text-left">
             <span className="block font-semibold text-black truncate">{folder.name}</span>
-            <span className="block text-xs text-gray-400 mt-0.5">
-              {count} client{count === 1 ? '' : 's'}
+            <span className="flex flex-wrap items-center gap-1.5 mt-1">
+              <span className="text-xs text-gray-400">
+                {count} client{count === 1 ? '' : 's'}
+              </span>
+              {folder.tags.map(tag => (
+                <span key={tag} className="text-[10px] font-semibold text-gold bg-gold/10 border border-gold/20 rounded px-1.5 py-0.5">
+                  {tag}
+                </span>
+              ))}
             </span>
           </button>
         )}
@@ -398,7 +420,7 @@ function NameInput({
 
 // ─── Inside one folder ────────────────────────────────────────────────────────
 function FolderDetail<C extends PanelClient>({
-  folder, isUnassigned, clients, folders, error, onBack, onRename, onMove, onMerge, actions,
+  folder, isUnassigned, clients, folders, error, onBack, onRename, onMove, onMerge, onRetag, actions,
 }: {
   folder: CaseFolder
   isUnassigned: boolean
@@ -409,6 +431,7 @@ function FolderDetail<C extends PanelClient>({
   onRename: (id: string, name: string) => void
   onMove: (clientId: string, folderId: string | null) => void
   onMerge: (from: CaseFolder, intoId: string) => void
+  onRetag: (id: string, tags: string[]) => void
   actions: ClientActions<C>
 }) {
   const [editing, setEditing] = useState(false)
@@ -449,6 +472,9 @@ function FolderDetail<C extends PanelClient>({
               {inside.length} client{inside.length === 1 ? '' : 's'}
               {isUnassigned && ' · not on a case yet'}
             </p>
+            {!isUnassigned && (
+              <TagEditor tags={folder.tags} onChange={tags => onRetag(folder.id, tags)} />
+            )}
           </div>
           {!isUnassigned && !editing && (
             <button
@@ -661,6 +687,70 @@ function ModuleBars({ client }: { client: PanelClient }) {
           </div>
         )
       })}
+    </div>
+  )
+}
+
+/**
+ * The name tags on a case, editable in place.
+ *
+ * Free text rather than a fixed list: the point is a label the office
+ * recognises, and a list somebody has to maintain goes stale the first time a
+ * matter does not fit it. The tags already in use are offered as suggestions so
+ * the same idea does not end up spelled three ways.
+ */
+function TagEditor({ tags, onChange }: { tags: string[]; onChange: (tags: string[]) => void }) {
+  const [draft, setDraft] = useState('')
+  const [adding, setAdding] = useState(false)
+
+  const add = () => {
+    const tag = draft.trim().replace(/\s+/g, ' ')
+    setDraft('')
+    if (!tag) { setAdding(false); return }
+    if (tags.some(t => t.toLowerCase() === tag.toLowerCase())) { setAdding(false); return }
+    onChange([...tags, tag])
+    setAdding(false)
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 mt-2">
+      {tags.map(tag => (
+        <span
+          key={tag}
+          className="group/tag flex items-center gap-1 text-[11px] font-semibold text-gold bg-gold/10 border border-gold/20 rounded-md pl-2 pr-1 py-0.5"
+        >
+          {tag}
+          <button
+            onClick={() => onChange(tags.filter(t => t !== tag))}
+            aria-label={`Remove tag ${tag}`}
+            className="text-gold/50 hover:text-red-600 transition-colors leading-none text-sm"
+          >
+            ×
+          </button>
+        </span>
+      ))}
+
+      {adding ? (
+        <input
+          autoFocus
+          value={draft}
+          onChange={e => setDraft(e.target.value)}
+          onBlur={add}
+          onKeyDown={e => {
+            if (e.key === 'Enter') add()
+            if (e.key === 'Escape') { setDraft(''); setAdding(false) }
+          }}
+          placeholder="Wage & Hour"
+          className="text-[11px] w-32 px-2 py-0.5 rounded-md border border-gold focus:outline-none focus:ring-1 focus:ring-gold/30"
+        />
+      ) : (
+        <button
+          onClick={() => setAdding(true)}
+          className="text-[11px] font-semibold text-gray-400 hover:text-gold border border-dashed border-gray-300 hover:border-gold rounded-md px-2 py-0.5 transition-colors"
+        >
+          + tag
+        </button>
+      )}
     </div>
   )
 }
