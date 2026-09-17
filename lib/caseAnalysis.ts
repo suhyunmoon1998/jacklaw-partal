@@ -307,6 +307,12 @@ async function runBaseline(input: AnalysisInput) {
     Overview,
     `This stage establishes the employment baseline only. Do not analyse any damages category.
 
+Your summary is the first thing the reader sees about this case, so write it as a summary of
+the CASE — who this person is, who they worked for, doing what, for how long, and what they
+say went wrong, plus anything in the answers that contradicts itself. Never open by saying
+what this stage does or does not cover: the reader sees one reading and does not know or care
+that it was produced in parts.
+
 Give the baseline as the office's methodology asks for it (sec. 2 and sec. 21): employer,
 role, work location, start and end dates, whether employment ended, rate or rates, days per
 week, hours per day, approximate weeks worked, estimated workdays. One entry per line, each

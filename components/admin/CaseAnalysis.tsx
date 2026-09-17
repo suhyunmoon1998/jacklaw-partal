@@ -330,12 +330,17 @@ export default function CaseAnalysis({ clientId, clientName }: { clientId: strin
 
       {a.baseline.length > 0 && (
         <Section title="Employment baseline">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
+          {/* One column. A baseline value is often a sentence — "Not established;
+              the client answered I don't know" — and in two columns each one
+              wrapped into a tall narrow ribbon nobody could read across. */}
+          <div className="divide-y divide-gray-50">
             {a.baseline.map((b, i) => (
-              <div key={i} className="flex items-baseline gap-2 text-sm">
-                <span className="text-gray-400 w-32 shrink-0 truncate" title={b.label}>{b.label}</span>
+              <div key={i} className="py-1.5 sm:flex sm:items-baseline sm:gap-3 text-sm">
+                <span className="text-gray-400 sm:w-40 sm:shrink-0 block">{b.label}</span>
                 <span className="text-gray-900 flex-1">{b.value}</span>
-                <BasisChip basis={b.basis} />
+                <span className="inline-block mt-0.5 sm:mt-0 sm:ml-2">
+                  <BasisChip basis={b.basis} />
+                </span>
               </div>
             ))}
           </div>
