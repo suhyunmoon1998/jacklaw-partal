@@ -101,7 +101,9 @@ const COPY: Record<Lang, Copy> = {
  * so this cannot end up pointing at localhost in production.
  */
 export const IMAGE_FOR: Partial<Record<ReminderKind, string>> = {
-  day2: '/mascot-dog.png',
+  // JPEG, cropped and compressed to ~360KB: carriers resize or reject what is
+  // too big, and the original was five times that with black bars down the side.
+  day2: '/mascot-dog.jpg',
 }
 
 /** Twilio's voice for each language, so the call is not read in an accent. */
