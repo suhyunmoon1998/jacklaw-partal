@@ -279,6 +279,36 @@ function systemBlocks(extra: string) {
   ]
 }
 
+/**
+ * What went wrong, said in a sentence the office can act on.
+ *
+ * The SDK hands back the provider's raw JSON, so a reading that failed because
+ * the firm's account ran out of credit showed the admin a wall of
+ * {"type":"error","error":{"type":"invalid_request_error", ... — which reads as
+ * a bug in the portal rather than as a bill to pay.
+ */
+function plainly(err: unknown, what: string): Error {
+  const raw = err instanceof Error ? err.message : String(err)
+  const said = /"message"\s*:\s*"([^"]+)"/.exec(raw)?.[1] ?? raw
+
+  if (/credit balance is too low/i.test(said)) {
+    return new Error(
+      'The firm\'s Anthropic account is out of credit, so the reading could not run. ' +
+        'Top it up at console.anthropic.com and press Continue — nothing already read was lost.'
+    )
+  }
+  if (/rate.?limit|429/i.test(said)) {
+    return new Error('The reading was rate-limited. Wait a minute and press Continue.')
+  }
+  if (/overloaded|529|503/i.test(said)) {
+    return new Error('The model is overloaded right now. Press Continue in a few minutes.')
+  }
+  if (/api key|authentication|401/i.test(said)) {
+    return new Error('ANTHROPIC_API_KEY is missing or rejected, so no reading can be run.')
+  }
+  return new Error(`The ${what} reading failed: ${said.slice(0, 300)}`)
+}
+
 async function ask<T>(
   client: Anthropic,
   what: string,
@@ -293,7 +323,9 @@ async function ask<T>(
    * browser. Streaming keeps bytes moving; finalMessage() waits for the whole
    * parsed result.
    */
-  const response = await client.messages
+  let response
+  try {
+    response = await client.messages
     .stream({
       model: ANALYSIS_MODEL,
       // Thinking is charged against this ceiling. At 16k a full questionnaire
@@ -309,6 +341,9 @@ async function ask<T>(
       messages: [{ role: 'user', content: user }],
     })
     .finalMessage()
+  } catch (err) {
+    throw plainly(err, what)
+  }
 
   if (response.stop_reason === 'max_tokens') {
     throw new Error(`The ${what} reading ran out of room before it finished. Run it again.`)
