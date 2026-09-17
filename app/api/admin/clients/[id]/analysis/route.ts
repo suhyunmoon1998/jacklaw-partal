@@ -67,6 +67,13 @@ function present(
 ) {
   return {
     analysis: completed(stored),
+    /**
+     * Each stage's output on its own, so the panel can show the summary the
+     * moment it lands rather than holding everything back for four minutes.
+     * `analysis` stays: it is null until the reading is whole, which is what
+     * tells the panel whether it is looking at a finished reading.
+     */
+    parts: stored,
     // So the panel knows whether to offer Run, Continue, or nothing.
     nextStage: nextStage(stored),
     createdAt: row?.created_at,
@@ -94,7 +101,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   if (!input) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   const row = await load(params.id)
-  if (!row) return NextResponse.json({ analysis: null, nextStage: 'baseline' })
+  if (!row) return NextResponse.json({ analysis: null, parts: {}, nextStage: 'baseline' })
 
   return NextResponse.json(present(row, (row.result ?? {}) as StoredAnalysis, analysisFingerprint(input)))
 }

@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { MOCK_ADMIN_PASSWORD } from '@/lib/mockData'
-import { Analysis, Basis, Issue, STAGES, STAGE_LABEL, Stage, Strength } from '@/lib/caseAnalysisShape'
+import {
+  Analysis, Basis, Issue, STAGES, STAGE_LABEL, Stage, StoredAnalysis, Strength,
+} from '@/lib/caseAnalysisShape'
 
 /**
  * The AI reading of one client's answers, against California wage-and-hour law.
@@ -70,6 +72,44 @@ function Elapsed() {
   }, [])
   const m = Math.floor(seconds / 60)
   return <>{m ? `${m}m ` : ''}{seconds % 60}s</>
+}
+
+/**
+ * What is still running, above what has already been read.
+ *
+ * It was a full-screen spinner, which meant four minutes of nothing and then
+ * everything at once — and threw away the summary the moment the next stage
+ * started. The reading is done in stages precisely so the office can begin on
+ * the baseline while the categories are still being read.
+ */
+function Progress({ stage, full }: { stage: Stage; full: boolean }) {
+  const step = STAGES.indexOf(stage) + 1
+  return (
+    <div className={full ? 'p-10 text-center' : 'px-5 py-3 bg-gold/5 border-b border-gold/20'}>
+      <div className={full ? '' : 'flex items-center gap-3'}>
+        {full && (
+          <div className="w-8 h-8 mx-auto mb-4 rounded-full border-2 border-gold border-t-transparent animate-spin" />
+        )}
+        {!full && (
+          <div className="w-4 h-4 shrink-0 rounded-full border-2 border-gold border-t-transparent animate-spin" />
+        )}
+        <div className={full ? '' : 'flex-1 min-w-0'}>
+          <p className={`font-semibold text-gray-700 ${full ? 'text-sm' : 'text-xs'}`}>
+            Step {step} of {STAGES.length} — {STAGE_LABEL[stage]}
+          </p>
+          <p className="text-[11px] text-gray-400 mt-0.5 tabular-nums">
+            <Elapsed />
+            {full ? ' · the first part arrives in about a minute' : ' · what is below is already read'}
+          </p>
+        </div>
+        <div className={`flex gap-1 ${full ? 'justify-center mt-3' : 'shrink-0'}`}>
+          {STAGES.map((s, i) => (
+            <span key={s} className={`h-1 w-8 rounded-full ${i < step ? 'bg-gold' : 'bg-gray-200'}`} />
+          ))}
+        </div>
+      </div>
+    </div>
+  )
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -161,7 +201,10 @@ function IssueCard({ issue }: { issue: Issue }) {
 }
 
 interface Loaded {
+  /** Null until every stage is in. What tells the panel the reading is finished. */
   analysis: Analysis | null
+  /** Each stage's output on its own, so what is read can be shown while the rest runs. */
+  parts: StoredAnalysis
   /** What still has to run, or null when the reading is whole. */
   nextStage: Stage | null
   createdAt?: string
@@ -185,7 +228,7 @@ export default function CaseAnalysis({ clientId, clientName }: { clientId: strin
     fetch(`/api/admin/clients/${clientId}/analysis`, { headers })
       .then(r => r.json())
       .then(d => { if (live) setState(d) })
-      .catch(() => { if (live) setState({ analysis: null, nextStage: 'baseline' }) })
+      .catch(() => { if (live) setState({ analysis: null, parts: {}, nextStage: 'baseline' }) })
     return () => { live = false }
   }, [clientId])
 
@@ -225,35 +268,13 @@ export default function CaseAnalysis({ clientId, clientName }: { clientId: strin
     return <div className="p-8 text-center text-sm text-gray-400">Loading…</div>
   }
 
-  const a = state.analysis
+  const { overview, findings, assembly } = state.parts ?? {}
+  const nothingYet = !overview && !findings && !assembly
 
-  if (running) {
-    const step = STAGES.indexOf(running) + 1
-    return (
-      <div className="p-10 text-center">
-        <div className="w-8 h-8 mx-auto mb-4 rounded-full border-2 border-gold border-t-transparent animate-spin" />
-        <p className="text-sm font-semibold text-gray-700">
-          Reading {clientName}&apos;s answers against California law
-        </p>
-        <p className="text-xs text-gray-600 mt-2">
-          Step {step} of {STAGES.length} — {STAGE_LABEL[running]}
-        </p>
-        <div className="flex gap-1 justify-center mt-3">
-          {STAGES.map((s, i) => (
-            <span
-              key={s}
-              className={`h-1 w-10 rounded-full ${i < step ? 'bg-gold' : 'bg-gray-200'}`}
-            />
-          ))}
-        </div>
-        <p className="text-xs text-gray-400 mt-3 tabular-nums">
-          <Elapsed /> · the whole reading takes four to five minutes
-        </p>
-      </div>
-    )
-  }
+  if (nothingYet && running) return <Progress stage={running} full />
 
-  if (!a) {
+  // Nothing read, and nothing running: the start screen.
+  if (nothingYet && !running) {
     // Part of a reading may already be on file, if an earlier attempt stopped
     // partway. Offering Continue there spends one stage rather than three.
     const partway = state.nextStage && state.nextStage !== 'baseline'
@@ -293,7 +314,7 @@ export default function CaseAnalysis({ clientId, clientName }: { clientId: strin
     )
   }
 
-  const issues = [...a.issues].sort(
+  const issues = [...(findings?.issues ?? [])].sort(
     (x, y) => STRENGTH_ORDER.indexOf(x.strength) - STRENGTH_ORDER.indexOf(y.strength)
   )
 
@@ -307,7 +328,24 @@ export default function CaseAnalysis({ clientId, clientName }: { clientId: strin
         </p>
       </div>
 
-      {(state.stale || error) && (
+      {running && <Progress stage={running} full={false} />}
+
+      {/* A reading that stopped partway, with what it did read above it. */}
+      {!running && !state.analysis && !nothingYet && (
+        <div className="px-5 py-2.5 bg-blue-50 border-b border-blue-200 flex items-center gap-3">
+          <p className="text-[11px] text-blue-800 flex-1">
+            {error ?? `This reading is not finished. ${STAGE_LABEL[(state.nextStage ?? 'baseline') as Stage]} is what is left.`}
+          </p>
+          <button
+            onClick={() => run((state.nextStage ?? 'baseline') as Stage)}
+            className="text-[11px] font-bold text-blue-700 hover:text-blue-900 whitespace-nowrap"
+          >
+            Continue
+          </button>
+        </div>
+      )}
+
+      {(state.stale || error) && state.analysis && (
         <div className="px-5 py-2.5 bg-blue-50 border-b border-blue-200 flex items-center gap-3">
           <p className="text-[11px] text-blue-800 flex-1">
             {error ??
@@ -324,17 +362,19 @@ export default function CaseAnalysis({ clientId, clientName }: { clientId: strin
         </div>
       )}
 
-      <div className="px-5 py-4">
-        <p className="text-sm text-gray-800 leading-relaxed whitespace-pre-line">{a.summary}</p>
-      </div>
+      {overview && (
+        <div className="px-5 py-4">
+          <p className="text-sm text-gray-800 leading-relaxed whitespace-pre-line">{overview.summary}</p>
+        </div>
+      )}
 
-      {a.baseline.length > 0 && (
+      {overview && overview.baseline.length > 0 && (
         <Section title="Employment baseline">
           {/* One column. A baseline value is often a sentence — "Not established;
               the client answered I don't know" — and in two columns each one
               wrapped into a tall narrow ribbon nobody could read across. */}
           <div className="divide-y divide-gray-50">
-            {a.baseline.map((b, i) => (
+            {overview.baseline.map((b, i) => (
               <div key={i} className="py-1.5 sm:flex sm:items-baseline sm:gap-3 text-sm">
                 <span className="text-gray-400 sm:w-40 sm:shrink-0 block">{b.label}</span>
                 <span className="text-gray-900 flex-1">{b.value}</span>
@@ -347,7 +387,7 @@ export default function CaseAnalysis({ clientId, clientName }: { clientId: strin
         </Section>
       )}
 
-      {issues.length > 0 && (
+      {findings && issues.length > 0 && (
         <Section title={`Issues (${issues.length})`}>
           <div className="space-y-2">
             {issues.map((issue, i) => <IssueCard key={i} issue={issue} />)}
@@ -355,12 +395,13 @@ export default function CaseAnalysis({ clientId, clientName }: { clientId: strin
         </Section>
       )}
 
+      {assembly && (
       <Section title="Preliminary value">
         <div className="space-y-1.5 text-sm">
           {([
-            ['Known or strongly supported', a.totals.supported],
-            ['Reasonably estimated', a.totals.estimated],
-            ['Potential additional statutory', a.totals.potentialStatutory],
+            ['Known or strongly supported', assembly.totals.supported],
+            ['Reasonably estimated', assembly.totals.estimated],
+            ['Potential additional statutory', assembly.totals.potentialStatutory],
           ] as const).map(([label, value]) => (
             <div key={label} className="flex items-baseline gap-2">
               <span className="text-gray-400 flex-1">{label}</span>
@@ -374,16 +415,17 @@ export default function CaseAnalysis({ clientId, clientName }: { clientId: strin
                 excluding PAGA, interest, fees and costs
               </span>
             </span>
-            <span className="text-gray-900 font-bold">{a.totals.preliminaryTotal}</span>
+            <span className="text-gray-900 font-bold">{assembly.totals.preliminaryTotal}</span>
           </div>
         </div>
-        {a.drivers && <p className="text-sm text-gray-600 mt-3 leading-relaxed">{a.drivers}</p>}
+        {assembly.drivers && <p className="text-sm text-gray-600 mt-3 leading-relaxed">{assembly.drivers}</p>}
       </Section>
+      )}
 
-      {a.separateExposure.length > 0 && (
+      {assembly && assembly.separateExposure.length > 0 && (
         <Section title="Separate exposure">
           <div className="space-y-2">
-            {a.separateExposure.map((e, i) => (
+            {assembly.separateExposure.map((e, i) => (
               <div key={i} className="text-sm">
                 <div className="flex items-baseline gap-2">
                   <span className="text-gray-400 flex-1">{e.label}</span>
@@ -396,32 +438,32 @@ export default function CaseAnalysis({ clientId, clientName }: { clientId: strin
         </Section>
       )}
 
-      {a.limitations && (
+      {assembly && assembly.limitations && (
         <Section title="Limitations">
-          <p className="text-sm text-gray-700 leading-relaxed">{a.limitations}</p>
+          <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-line">{assembly.limitations}</p>
         </Section>
       )}
 
-      {a.doubleCounting.length > 0 && (
+      {assembly && assembly.doubleCounting.length > 0 && (
         <Section title="Overlap to resolve before totalling">
-          <Bullets items={a.doubleCounting} />
+          <Bullets items={assembly.doubleCounting} />
         </Section>
       )}
 
-      {a.missingFacts.length > 0 && (
+      {assembly && assembly.missingFacts.length > 0 && (
         <Section title="Missing facts that could change the result">
-          <Bullets items={a.missingFacts} />
+          <Bullets items={assembly.missingFacts} />
         </Section>
       )}
 
-      {a.nextSteps.length > 0 && (
+      {assembly && assembly.nextSteps.length > 0 && (
         <Section title="Next">
-          <Bullets items={a.nextSteps} />
+          <Bullets items={assembly.nextSteps} />
         </Section>
       )}
 
-      {a.notRaised.length > 0 && (
-        <Section title={`Considered and set aside (${a.notRaised.length})`}>
+      {findings && findings.notRaised.length > 0 && (
+        <Section title={`Considered and set aside (${findings.notRaised.length})`}>
           <button
             onClick={() => setShowNotRaised(s => !s)}
             className="text-xs font-semibold text-gray-500 hover:text-gray-800"
@@ -430,7 +472,7 @@ export default function CaseAnalysis({ clientId, clientName }: { clientId: strin
           </button>
           {showNotRaised && (
             <div className="mt-2 space-y-1.5">
-              {a.notRaised.map((n, i) => (
+              {findings.notRaised.map((n, i) => (
                 <p key={i} className="text-sm text-gray-600">
                   <span className="font-medium text-gray-800">{n.category}</span> — {n.why}
                 </p>

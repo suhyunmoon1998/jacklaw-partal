@@ -136,12 +136,12 @@ describe('the floor below which there is nothing to read', () => {
 })
 
 describe('a reading that runs in stages', () => {
-  const overview = { summary: 's', baseline: [], limitations: 'l' }
+  const overview = { summary: 's', baseline: [], limitationsAnchor: 'anchor' }
   const findings = { issues: [], notRaised: [] }
   const assembly = {
     doubleCounting: [], missingFacts: [], nextSteps: [], separateExposure: [],
     totals: { supported: '', estimated: '', potentialStatutory: '', preliminaryTotal: '' },
-    drivers: 'd',
+    drivers: 'd', limitations: 'l',
   }
 
   it('asks for the baseline when nothing has been read', () => {

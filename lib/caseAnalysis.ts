@@ -33,8 +33,9 @@ import { staffFlags, FLAG_LABEL } from '@/lib/staffFlags'
 import {
   Analysis,
   AnalysisInput,
-  Assembly,
   Findings,
+  Outlook,
+  Reconcile,
   Issue,
   Overview,
   STAGES,
@@ -170,11 +171,18 @@ export const MIN_ANSWERS = 8
 /**
  * The damages categories, divided into readings that can run at once.
  *
- * Divided by what has to be weighed together rather than evenly. Meal and rest
- * share a premium structure and a set of answers, and splitting them would have
- * one reading unable to see whether the other had already claimed a workday.
- * Time and pay have to be read as one because an off-the-clock minute may be an
+ * Divided first by what has to be weighed together. Meal and rest share a
+ * premium structure and a set of answers, and splitting them would have one
+ * reading unable to see whether the other had already claimed a workday. Hours
+ * and pay have to be read as one because an off-the-clock minute may be an
  * overtime minute, and whichever reading sees it second has to know that.
+ *
+ * Then divided by how much each writes, because these run at the same time and
+ * the longest one sets the clock. Measured on a real 184-answer file, the three
+ * branches this started as wrote 10,900 / 9,700 / 16,100 characters — so a third
+ * of the wait was one branch carrying six categories while another carried two.
+ * Splitting that branch in half took the whole stage from 110 seconds to the
+ * length of its longest remaining piece. Keep them even when adding a category.
  */
 const PASSES: { key: string; title: string; categories: string[] }[] = [
   {
@@ -198,17 +206,64 @@ const PASSES: { key: string; title: string; categories: string[] }[] = [
   },
   {
     key: 'records',
-    title: 'Pay records, separation, expenses and retaliation',
-    categories: [
-      'Wage statements',
-      'Waiting-time penalties',
-      'Liquidated damages',
-      'Expense reimbursement',
-      'Retaliation',
-      'Other',
-    ],
+    title: 'Pay records and separation',
+    categories: ['Wage statements', 'Waiting-time penalties', 'Liquidated damages'],
+  },
+  {
+    key: 'expenses',
+    title: 'Expenses and retaliation',
+    categories: ['Expense reimbursement', 'Retaliation', 'Other'],
   },
 ]
+
+/**
+ * WHY THIS IS SLOW, AND WHAT DOES NOT FIX IT.
+ *
+ * A reading of a full questionnaire writes about 14,500 tokens — roughly ten
+ * pages. Generation runs at 65-78 tokens a second and the first byte arrives in
+ * under two seconds, so essentially all of the wait is writing, not thinking or
+ * reading the law. Three things were measured against a real 184-answer file
+ * and REJECTED; do not spend the afternoon rediscovering them:
+ *
+ *   effort: 'low'         Saved one second on the baseline stage (58s -> 57s)
+ *                         and three on the totals (50s -> 47s). In exchange the
+ *                         baseline got the three-year filing deadline wrong by
+ *                         two years, dropped the 72-hours-notice question that
+ *                         the whole waiting-time claim turns on, and stopped
+ *                         recording the categories the answers ruled OUT. The
+ *                         time here is output length, not reasoning depth.
+ *
+ *   caps on single fields Capping because/why/confirm made the output LONGER
+ *                         (16,100 -> 17,600 chars). The text moved into math,
+ *                         the one field left uncapped. Length pressure applied
+ *                         field by field relocates prose; it does not remove it.
+ *
+ *   a budget per issue    A 1,200-character budget across all of an issue's
+ *                         fields did cut it — 16,100 -> 8,800 chars, 110s ->
+ *                         71s. It also made the reading start inventing. Under
+ *                         the budget it printed the section 226(e) penalty as
+ *                         $250 per pay period (it is not), put a dollar figure
+ *                         on an hourly rate the client had said she did not
+ *                         know, dropped the low/most-likely/high ranges, and
+ *                         lost the no-averaging rule the liquidated-damages
+ *                         theory rests on. Squeezed for room, it stops saying
+ *                         "not established" and starts asserting. That is the
+ *                         one failure this office cannot ship.
+ *
+ * What did work was never about writing less. It was about not writing it in a
+ * queue: even the parallel branches so one is not carrying six categories while
+ * another carries two, split the last stage's two unrelated jobs so they run at
+ * once, and move the limitations analysis to the stage that knows what the
+ * claims are. And show each stage the moment it lands — the office reads the
+ * summary and the baseline while the categories are still being read, which is
+ * the difference the office actually feels.
+ *
+ * One thing deliberately NOT split: minimum wage stays in the same branch as
+ * off-the-clock work and overtime. Unpaid hours are recovered at the GREATER of
+ * the contract rate or the minimum wage, never both, and a branch that cannot
+ * see the hours it is pricing cannot apply that rule. Ten seconds is not worth
+ * moving a load-bearing rule across a seam.
+ */
 
 /** The law, sent as a cached prefix so the parallel passes pay for it once. */
 function systemBlocks(extra: string) {
@@ -319,8 +374,15 @@ week, hours per day, approximate weeks worked, estimated workdays. One entry per
 labelled with its basis. Where the answers do not establish something, the value says so and
 the basis is CONFIRM — never fill it in with something plausible.
 
-Then state which parts of the claimed period fall inside which limitations period, and say so
-in terms of the dates on file. If the dates are not established, say what is needed to fix them.`,
+Do not leave a row out because its answer is "no". "Seventh day: none — she answers No to ever
+working seven days in a row" is a fact the reader needs; silence on it is not.
+
+Keep each value to at most two sentences. It is a baseline row, not an argument — the fact,
+and if it is not established, what would establish it. Nothing else.
+
+limitationsAnchor is THREE SENTENCES: which limitations windows are in play, what date anchors
+them, and what is needed to pin that date down. Do not write the limitations analysis here —
+a later stage does that, once the claims are known.`,
     `${header}\n\n${flags}\n\n${answersBlock}`
   )
 }
@@ -328,7 +390,7 @@ in terms of the dates on file. If the dates are not established, say what is nee
 const baselineBlock = (overview: z.infer<typeof Overview>) =>
   `=== EMPLOYMENT BASELINE (established, use these figures) ===\n${overview.baseline
     .map(b => `${b.label}: ${b.value} [${b.basis}]`)
-    .join('\n')}\n\nLIMITATIONS: ${overview.limitations}`
+    .join('\n')}\n\nLIMITATIONS ANCHOR: ${overview.limitationsAnchor}`
 
 /** The categories, read at the same time against that shared baseline. */
 async function runFindings(input: AnalysisInput, overview: z.infer<typeof Overview>) {
@@ -366,8 +428,14 @@ and label the estimate accordingly.`,
 /**
  * What they come to together.
  *
- * Separate because no single category reading can run the overlap check: it is
- * precisely the question of what two of them have both claimed.
+ * Separate from the category readings because no single one can run the overlap
+ * check: it is precisely the question of what two of them have both claimed.
+ *
+ * Two calls at once rather than one. Reconciling the arithmetic and working out
+ * what is still missing are different questions off the same input, and neither
+ * needs the other's answer — as one call this wrote 12,900 characters and took
+ * 71 seconds. Split, the stage is the longer half. Merged before it is stored,
+ * so the reader sees one section either way.
  */
 async function runAssembly(
   input: AnalysisInput,
@@ -376,42 +444,73 @@ async function runAssembly(
 ) {
   const { client, header } = prepare(input)
   const { issues, notRaised } = findings
-  return ask(
-    client,
-    'total',
-    Assembly,
-    `This stage totals a reading that has already been done. The issues below were found by
-separate readings of the same answers. You are not re-analysing them and you are not adding
-categories; you are checking them against each other and adding them up.
+
+  const shared = `${header}\n\n${baselineBlock(overview)}\n\n=== ISSUES FOUND (${
+    issues.length
+  }) ===\n\n${issues.map(brief).join('\n\n')}\n\n=== CONSIDERED AND SET ASIDE ===\n${notRaised
+    .map(n => `${n.category}: ${n.why}`)
+    .join('\n')}`
+
+  const preamble = `This stage works on a reading that has already been done. The issues below were found
+by separate readings of the same answers. You are not re-analysing them and you are not
+adding categories.
+
+Be brief and be selective. This is the page a lawyer reads before picking up the phone, and
+a list of fifteen is a list nobody acts on.
+
+Never shorten by becoming less careful. If a figure rests on a fact the client did not give,
+say so and leave it in terms of the unknown — a wrong number stated briefly is the one thing
+worse than a long answer.`
+
+  const [reconcile, outlook] = await Promise.all([
+    ask(
+      client,
+      'total',
+      Reconcile,
+      `${preamble}
+
+Your half is the arithmetic. Check the issues against each other and add them up.
 
 Run the double-counting check at sec. 20 across everything below, and put every overlap you
-find in doubleCounting rather than silently netting it off. Then give the totals in the
-methodology's own terms (sec. 23), as strings — "not calculable from these answers" is a
-correct answer where the facts do not support a figure, and is better than a number that
-looks solid and is not. Keep PAGA, interest, fees and costs out of the total and put them in
-separateExposure.
+find in doubleCounting rather than silently netting it off. An entry saying two things do NOT
+overlap is not an overlap — leave it out. At most 8.
+
+Then give the totals in the methodology's own terms (sec. 23), as strings — "not calculable
+from these answers" is a correct answer where the facts do not support a figure, and is
+better than a number that looks solid and is not. At most four sentences each: the figure, or
+what single fact would make it calculable. Do not restate the issues.
+
+Keep PAGA, interest, fees and costs out of the total and put them in separateExposure, at
+most 6. drivers is one to three sentences on what drives the value of this case.`,
+      shared
+    ),
+    ask(
+      client,
+      'what is still open',
+      Outlook,
+      `${preamble}
+
+Your half is what is still open.
+
+limitations is the full analysis. Now that the claims are known, say which of THEM fall inside
+which window, and cite the provision for each: Code Civ. Proc. sec. 338(a) for the three-year
+statutory wage claims, Bus. & Prof. Code sec. 17200 for the four-year UCL restitution, Code
+Civ. Proc. sec. 340(a) for the one-year penalties, Lab. Code sec. 203(b) for waiting-time
+penalties running with the wages, and the PAGA period from the LWDA notice. Name the anchor
+date you measured from and say it is assumed. If a date on file is doubtful, say what the
+analysis becomes if the other reading of it is right.
 
 missingFacts is only what could materially change the result (sec. 22) — not everything
-unknown. nextSteps is what the office does about it: what to ask this client, what to ask
-the employer, what to pull from the documents.
+unknown. At most 10, the one that blocks the most first.
 
-Be brief, and be selective. This is the page a lawyer reads before picking up the phone, and
-a list of fifteen is a list nobody acts on. Hard limits, and reaching them is not a target:
+nextSteps is what the office does about it: what to ask this client, what to ask the employer,
+what to pull from the documents. At most 8, each one an instruction somebody can carry out
+today.`,
+      shared
+    ),
+  ])
 
-- doubleCounting: at most 8, and only real overlaps. An entry that says two things do NOT
-  overlap is not an overlap — leave it out.
-- missingFacts: at most 10, ordered with the one that blocks the most first.
-- nextSteps: at most 8, each one an instruction somebody can carry out today.
-- separateExposure: at most 6.
-- Each of the four totals: at most four sentences. Give the figure or say it is not
-  calculable and name the one fact that would make it calculable. Do not restate the issues.
-- drivers: one to three sentences, as the methodology asks.`,
-    `${header}\n\n${baselineBlock(overview)}\n\n=== ISSUES FOUND (${issues.length}) ===\n\n${issues
-      .map(brief)
-      .join('\n\n')}\n\n=== CONSIDERED AND SET ASIDE ===\n${notRaised
-      .map(n => `${n.category}: ${n.why}`)
-      .join('\n')}`
-  )
+  return { ...reconcile, ...outlook }
 }
 
 /**

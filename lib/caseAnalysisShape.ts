@@ -91,8 +91,17 @@ export const Overview = z.object({
    */
   summary: z.string(),
   baseline: z.array(BaselineItem),
-  /** Which parts of the claimed period fall inside which limitations period. */
-  limitations: z.string(),
+  /**
+   * The dates the limitations analysis hangs on, in three sentences: which
+   * windows are in play, what anchors them, and what is needed to fix them.
+   *
+   * Short on purpose. It exists so the category readings know whether the
+   * period they are costing is inside a window; the analysis a lawyer reads is
+   * produced at the end, where the claims are known. Written out in full here
+   * as well, it was the single most expensive thing on the critical path and it
+   * had to guess at claims that had not been found yet.
+   */
+  limitationsAnchor: z.string(),
 })
 
 export const Findings = z.object({
@@ -101,13 +110,17 @@ export const Findings = z.object({
   notRaised: z.array(z.object({ category: z.enum(CATEGORIES), why: z.string() })),
 })
 
-export const Assembly = z.object({
+/**
+ * What the issues come to, once they exist — the arithmetic half.
+ *
+ * Split from Outlook below because the two answer different questions off the
+ * same input and neither needs the other's answer. As one call the last stage
+ * wrote 12,900 characters and took 71 seconds; as two running at once it is the
+ * longer half. Nothing is dropped: both halves are merged back into Assembly.
+ */
+export const Reconcile = z.object({
   /** sec. 20 — overlaps that must be resolved before anything is totalled. */
   doubleCounting: z.array(z.string()),
-  /** sec. 22 — only what could materially change the result. */
-  missingFacts: z.array(z.string()),
-  /** What to ask this client, or the employer, next. */
-  nextSteps: z.array(z.string()),
   /** sec. 17 — kept out of the employee's damages. */
   separateExposure: z.array(z.object({ label: z.string(), value: z.string(), note: z.string() })),
   /** sec. 23. Strings, so "not calculable" is a permitted answer. */
@@ -120,6 +133,25 @@ export const Assembly = z.object({
   /** sec. 23 — one to three sentences on what drives the value of this case. */
   drivers: z.string(),
 })
+
+/** What is still open — the half that says what the office does next. */
+export const Outlook = z.object({
+  /**
+   * Which parts of the claimed period fall inside which limitations period.
+   *
+   * Here rather than with the baseline because it is only answerable once the
+   * claims are known: a period is not "time-barred" in the abstract, it is
+   * time-barred for a particular claim under a particular statute.
+   */
+  limitations: z.string(),
+  /** sec. 22 — only what could materially change the result. */
+  missingFacts: z.array(z.string()),
+  /** What to ask this client, or the employer, next. */
+  nextSteps: z.array(z.string()),
+})
+
+/** The two halves as they are stored and rendered — one stage to the reader. */
+export const Assembly = Reconcile.merge(Outlook)
 
 /** The whole reading, as the panel and the stored row see it. */
 export type Analysis = z.infer<typeof Overview> &
