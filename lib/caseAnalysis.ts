@@ -31,6 +31,7 @@ import { LAW_VERSION, LEGAL_SOURCE } from '@/lib/caLaw'
 import { answersForReading } from '@/lib/modules'
 import { staffFlags, FLAG_LABEL } from '@/lib/staffFlags'
 import {
+  ANALYSIS_SHAPE_VERSION,
   Analysis,
   AnalysisInput,
   Findings,
@@ -106,6 +107,7 @@ auditable reading these answers will carry.`
 export function analysisFingerprint(input: AnalysisInput): string {
   const h = createHash('sha256')
   h.update(LAW_VERSION)
+  h.update(String(ANALYSIS_SHAPE_VERSION))
   h.update(ANALYSIS_MODEL)
   h.update(input.clientName)
   h.update(input.caseType)

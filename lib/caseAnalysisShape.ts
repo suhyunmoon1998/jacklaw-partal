@@ -180,6 +180,15 @@ export const STAGE_LABEL: Record<Stage, string> = {
   assembly: 'Totalling and checking for overlap',
 }
 
+/**
+ * Bumped whenever the shape of a stored reading changes.
+ *
+ * Part of the fingerprint, so a reading written against an older shape reads as
+ * stale and the office is offered a re-run — rather than being rendered by code
+ * that is looking for fields it does not have.
+ */
+export const ANALYSIS_SHAPE_VERSION = 2
+
 /** What is on file so far. A reading is complete when all three are present. */
 export interface StoredAnalysis {
   overview?: z.infer<typeof Overview>

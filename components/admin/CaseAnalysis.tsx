@@ -314,6 +314,17 @@ export default function CaseAnalysis({ clientId, clientName }: { clientId: strin
     )
   }
 
+  /**
+   * Limitations moved from the first stage to the last, where it can name which
+   * claims fall outside which window. A reading stored before that move still
+   * has it on the overview, and dropping the section for those would lose work
+   * the office already paid for — so it is read from either place.
+   */
+  const limitations =
+    assembly?.limitations ??
+    (overview as { limitations?: string } | undefined)?.limitations ??
+    ''
+
   const issues = [...(findings?.issues ?? [])].sort(
     (x, y) => STRENGTH_ORDER.indexOf(x.strength) - STRENGTH_ORDER.indexOf(y.strength)
   )
@@ -438,9 +449,9 @@ export default function CaseAnalysis({ clientId, clientName }: { clientId: strin
         </Section>
       )}
 
-      {assembly && assembly.limitations && (
+      {limitations && (
         <Section title="Limitations">
-          <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-line">{assembly.limitations}</p>
+          <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-line">{limitations}</p>
         </Section>
       )}
 

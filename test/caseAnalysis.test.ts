@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import { analysisFingerprint, buildTranscript, MIN_ANSWERS } from '@/lib/caseAnalysis'
 import {
-  completed, mergeFindings, nextStage, AnalysisInput, STAGES, STAGE_LABEL,
+  completed, mergeFindings, nextStage, AnalysisInput, ANALYSIS_SHAPE_VERSION,
+  STAGES, STAGE_LABEL,
 } from '@/lib/caseAnalysisShape'
 import { DAMAGES_SOURCE, LAW_VERSION, LEGAL_SOURCE, STATUTORY_MAP } from '@/lib/caLaw'
 
@@ -211,5 +212,15 @@ describe('joining the category readings back together', () => {
     ] as never)
     expect(merged.issues.map(i => i.category)).toEqual(['Meal periods', 'Rest periods', 'Overtime'])
     expect(merged.notRaised.map(n => n.category)).toEqual(['Double time'])
+  })
+})
+
+describe('a reading stored before the shape changed', () => {
+  it('is marked stale when the shape moves, not only when the law does', () => {
+    // The fields moved between stages. Rendering an old row with code that
+    // looks for the new ones shows a reading with sections quietly missing.
+    expect(ANALYSIS_SHAPE_VERSION).toBeGreaterThan(0)
+    const before = analysisFingerprint(input({ answers: { a: '1' } }))
+    expect(before).toHaveLength(32)
   })
 })
