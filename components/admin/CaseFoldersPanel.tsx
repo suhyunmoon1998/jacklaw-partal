@@ -62,6 +62,8 @@ export interface PanelClient extends ClientWork {
  */
 export interface ClientActions<C extends PanelClient = PanelClient> {
   onView: (client: C) => void
+  /** Opens the same window at the AI reading of this client's answers. */
+  onAnalyze: (client: C) => void
   onShare: (client: C) => void
   onPrint: (client: C) => void
   onDelete: (clientId: string) => void
@@ -631,6 +633,17 @@ function FolderDetail<C extends PanelClient>({
                 </span>
 
                 <div className="flex items-center gap-1.5 whitespace-nowrap opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                  {/* Their answers read against California wage-and-hour law.
+                      Next to Open because it is a way into the same window —
+                      one that starts with what the answers add up to rather
+                      than with how much of the form is filled in. */}
+                  <button
+                    onClick={() => actions.onAnalyze(c)}
+                    title="Read these answers against California law"
+                    className="text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-purple-50 text-purple-600 hover:bg-purple-600 hover:text-white transition-colors"
+                  >
+                    Analyze
+                  </button>
                   <button
                     onClick={() => actions.onShare(c)}
                     className="text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white transition-colors"

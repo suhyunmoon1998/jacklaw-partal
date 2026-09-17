@@ -21,6 +21,10 @@ import {
   type GeneratedGFROGDraft,
 } from '@/lib/auth'
 import { MOCK_ADMIN_PASSWORD } from '@/lib/mockData'
+import CaseAnalysis from '@/components/admin/CaseAnalysis'
+
+/** The client window's tabs. Analyse opens the window straight at 'analysis'. */
+type DetailTab = 'progress' | 'analysis' | 'answers' | 'documents' | 'questionnaires'
 
 interface AdminClient {
   id: string
@@ -144,6 +148,7 @@ function ClientDetailModal({
   documents,
   onClose,
   onRefresh,
+  initialTab = 'progress',
 }: {
   client: AdminClient
   qState: QuestionnaireState
@@ -151,8 +156,10 @@ function ClientDetailModal({
   onClose: () => void
   /** Re-read the documents, so a file just taken shows as taken. */
   onRefresh: () => void
+  /** Which tab to land on. Analyse opens this window straight at the reading. */
+  initialTab?: DetailTab
 }) {
-  const [tab, setTab] = useState<'progress' | 'answers' | 'documents' | 'questionnaires'>('progress')
+  const [tab, setTab] = useState<DetailTab>(initialTab)
   const [expandedSection, setExpandedSection] = useState<number | null>(null)
   const [translatedAnswers, setTranslatedAnswers] = useState<Record<string, string> | null>(null)
   const [translating, setTranslating] = useState(false)
@@ -248,6 +255,7 @@ function ClientDetailModal({
         <div className="flex border-b border-gray-100 shrink-0 bg-gray-50">
           {([
             { key: 'progress', label: 'Progress' },
+            { key: 'analysis', label: 'Analysis' },
             { key: 'answers', label: 'Answers' },
             { key: 'documents', label: `Documents (${documents.length})` },
             { key: 'questionnaires', label: 'Question Sets' },
@@ -255,7 +263,9 @@ function ClientDetailModal({
             <button
               key={t.key}
               onClick={() => setTab(t.key)}
-              className={`flex-1 py-3 text-sm font-medium transition-colors ${
+              // Five tabs now. Small and unwrapped on a phone, so the row
+              // stays one line rather than stacking into three.
+              className={`flex-1 py-3 px-1 text-[11px] sm:text-sm font-medium whitespace-nowrap transition-colors ${
                 tab === t.key
                   ? 'border-b-2 border-gold text-gold bg-white'
                   : 'text-gray-400 hover:text-gray-600'
@@ -268,6 +278,9 @@ function ClientDetailModal({
 
         {/* Content */}
         <div className="flex-1 min-h-0 overflow-y-auto">
+
+          {/* ── Analysis tab ── */}
+          {tab === 'analysis' && <CaseAnalysis clientId={client.id} clientName={client.name} />}
 
           {/* ── Progress tab ── */}
           {tab === 'progress' && (
@@ -1030,6 +1043,7 @@ export default function AdminPage() {
   const [authenticated, setAuthenticated] = useState(false)
   const [loading, setLoading] = useState(true)
   const [selectedClient, setSelectedClient] = useState<AdminClient | null>(null)
+  const [detailTab, setDetailTab] = useState<DetailTab>('progress')
   const [clientData, setClientData] = useState<{ qState: QuestionnaireState; documents: UploadedDocument[] } | null>(null)
   const [unreadCount, setUnreadCount] = useState(0)
   const [showNotifications, setShowNotifications] = useState(false)
@@ -1275,6 +1289,18 @@ export default function AdminPage() {
     setSelectedClient(client)
   }
 
+  /**
+   * The same window, opened at the reading instead of at Progress.
+   *
+   * Deliberately the same window rather than one of its own: the analysis is
+   * about these answers and these documents, and a reader who doubts a line of
+   * it should be one tab away from what raised it.
+   */
+  const handleAnalyzeClient = async (client: AdminClient) => {
+    setDetailTab('analysis')
+    await handleViewClient(client)
+  }
+
   const getStatus = (client: AdminClient) => STATUS_LABEL[clientStatus(client)]
 
   /**
@@ -1500,6 +1526,7 @@ export default function AdminPage() {
               clients={allClients}
               onChanged={fetchClients}
               onView={handleViewClient}
+              onAnalyze={handleAnalyzeClient}
               onShare={handleShareClientLink}
               onPrint={handlePrintClient}
               onDelete={handleDeleteClient}
@@ -1805,8 +1832,9 @@ export default function AdminPage() {
           client={selectedClient}
           qState={clientData.qState}
           documents={clientData.documents}
-          onClose={() => { setSelectedClient(null); setClientData(null) }}
+          onClose={() => { setSelectedClient(null); setClientData(null); setDetailTab('progress') }}
           onRefresh={() => refreshClientDocuments(selectedClient.id)}
+          initialTab={detailTab}
         />
       )}
 
