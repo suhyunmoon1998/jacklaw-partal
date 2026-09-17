@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { MOCK_ADMIN_PASSWORD } from '@/lib/mockData'
-import { Analysis, Basis, Issue, Strength } from '@/lib/caseAnalysis'
+import { Analysis, Basis, Issue, STAGES, STAGE_LABEL, Stage, Strength } from '@/lib/caseAnalysisShape'
 
 /**
  * The AI reading of one client's answers, against California wage-and-hour law.
@@ -162,6 +162,8 @@ function IssueCard({ issue }: { issue: Issue }) {
 
 interface Loaded {
   analysis: Analysis | null
+  /** What still has to run, or null when the reading is whole. */
+  nextStage: Stage | null
   createdAt?: string
   model?: string
   durationMs?: number
@@ -171,7 +173,8 @@ interface Loaded {
 
 export default function CaseAnalysis({ clientId, clientName }: { clientId: string; clientName: string }) {
   const [state, setState] = useState<Loaded | null>(null)
-  const [running, setRunning] = useState(false)
+  /** The stage being read right now, so the wait says what it is doing. */
+  const [running, setRunning] = useState<Stage | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [showNotRaised, setShowNotRaised] = useState(false)
 
@@ -182,22 +185,40 @@ export default function CaseAnalysis({ clientId, clientName }: { clientId: strin
     fetch(`/api/admin/clients/${clientId}/analysis`, { headers })
       .then(r => r.json())
       .then(d => { if (live) setState(d) })
-      .catch(() => { if (live) setState({ analysis: null }) })
+      .catch(() => { if (live) setState({ analysis: null, nextStage: 'baseline' }) })
     return () => { live = false }
   }, [clientId])
 
-  const run = useCallback(async () => {
-    setRunning(true)
+  /**
+   * Walks the reading through its stages, one request each.
+   *
+   * `from` is where to start: a fresh run starts at the baseline, and picking up
+   * an interrupted one starts at whatever is still outstanding. A stage that
+   * fails stops the walk and leaves what already succeeded on file, so pressing
+   * Continue resumes rather than paying for the whole reading again.
+   */
+  const run = useCallback(async (from: Stage = 'baseline') => {
     setError(null)
-    try {
-      const res = await fetch(`/api/admin/clients/${clientId}/analysis`, { method: 'POST', headers })
-      const data = await res.json()
-      if (!res.ok) setError(data?.error ?? 'The analysis could not be run.')
-      else setState(data)
-    } catch {
-      setError('The analysis could not be reached. Try again.')
+    for (const stage of STAGES.slice(STAGES.indexOf(from))) {
+      setRunning(stage)
+      try {
+        const res = await fetch(`/api/admin/clients/${clientId}/analysis`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ stage }),
+        })
+        const data = await res.json()
+        if (!res.ok) {
+          setError(data?.error ?? 'The reading could not be run.')
+          break
+        }
+        setState(data)
+      } catch {
+        setError('The reading could not be reached. What was already read is kept — press Continue.')
+        break
+      }
     }
-    setRunning(false)
+    setRunning(null)
   }, [clientId])
 
   if (!state) {
@@ -207,35 +228,67 @@ export default function CaseAnalysis({ clientId, clientName }: { clientId: strin
   const a = state.analysis
 
   if (running) {
+    const step = STAGES.indexOf(running) + 1
     return (
       <div className="p-10 text-center">
         <div className="w-8 h-8 mx-auto mb-4 rounded-full border-2 border-gold border-t-transparent animate-spin" />
-        <p className="text-sm font-semibold text-gray-700">Reading {clientName}&apos;s answers</p>
-        <p className="text-xs text-gray-400 mt-1">
-          Against the office&apos;s damages methodology and the Labor Code.
+        <p className="text-sm font-semibold text-gray-700">
+          Reading {clientName}&apos;s answers against California law
         </p>
-        <p className="text-xs text-gray-400 mt-2 tabular-nums">
-          <Elapsed /> · usually three to five minutes
+        <p className="text-xs text-gray-600 mt-2">
+          Step {step} of {STAGES.length} — {STAGE_LABEL[running]}
+        </p>
+        <div className="flex gap-1 justify-center mt-3">
+          {STAGES.map((s, i) => (
+            <span
+              key={s}
+              className={`h-1 w-10 rounded-full ${i < step ? 'bg-gold' : 'bg-gray-200'}`}
+            />
+          ))}
+        </div>
+        <p className="text-xs text-gray-400 mt-3 tabular-nums">
+          <Elapsed /> · the whole reading takes four to five minutes
         </p>
       </div>
     )
   }
 
   if (!a) {
+    // Part of a reading may already be on file, if an earlier attempt stopped
+    // partway. Offering Continue there spends one stage rather than three.
+    const partway = state.nextStage && state.nextStage !== 'baseline'
     return (
       <div className="p-8 text-center">
-        <p className="text-sm font-semibold text-gray-700">No analysis yet</p>
+        <p className="text-sm font-semibold text-gray-700">
+          {partway ? 'The reading stopped partway' : 'No analysis yet'}
+        </p>
         <p className="text-xs text-gray-500 mt-1 max-w-sm mx-auto">
-          Reads everything {clientName} has answered against California wage-and-hour law and
-          reports what it runs into, with the arithmetic and what is still missing.
+          {partway
+            ? `What was read is kept. ${STAGE_LABEL[state.nextStage as Stage]} is what is left.`
+            : `Reads everything ${clientName} has answered against California wage-and-hour law and
+               reports what it runs into, with the arithmetic and what is still missing.`}
         </p>
         {error && <p className="text-xs text-red-600 mt-3 max-w-sm mx-auto">{error}</p>}
-        <button
-          onClick={run}
-          className="mt-4 px-4 py-2 bg-gold text-white text-sm font-semibold rounded-xl hover:bg-gold/90 transition-colors"
-        >
-          Run analysis
-        </button>
+        <div className="flex items-center justify-center gap-2 mt-4">
+          {partway && (
+            <button
+              onClick={() => run(state.nextStage as Stage)}
+              className="px-4 py-2 bg-gold text-white text-sm font-semibold rounded-xl hover:bg-gold/90 transition-colors"
+            >
+              Continue
+            </button>
+          )}
+          <button
+            onClick={() => run('baseline')}
+            className={`px-4 py-2 text-sm font-semibold rounded-xl transition-colors ${
+              partway
+                ? 'bg-gray-100 text-gray-600 hover:bg-gray-700 hover:text-white'
+                : 'bg-gold text-white hover:bg-gold/90'
+            }`}
+          >
+            {partway ? 'Start again' : 'Run analysis'}
+          </button>
+        </div>
       </div>
     )
   }
@@ -263,7 +316,7 @@ export default function CaseAnalysis({ clientId, clientName }: { clientId: strin
                 : 'The answers or the file have changed since this was written.')}
           </p>
           <button
-            onClick={run}
+            onClick={() => run('baseline')}
             className="text-[11px] font-bold text-blue-700 hover:text-blue-900 whitespace-nowrap"
           >
             Re-run
@@ -391,7 +444,7 @@ export default function CaseAnalysis({ clientId, clientName }: { clientId: strin
           {state.durationMs ? ` · ${Math.round(state.durationMs / 1000)}s` : ''}
         </p>
         <button
-          onClick={run}
+          onClick={() => run('baseline')}
           className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-700 hover:text-white transition-colors"
         >
           Re-run

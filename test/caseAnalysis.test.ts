@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest'
-import { analysisFingerprint, buildTranscript, AnalysisInput, MIN_ANSWERS } from '@/lib/caseAnalysis'
+import { analysisFingerprint, buildTranscript, MIN_ANSWERS } from '@/lib/caseAnalysis'
+import {
+  completed, mergeFindings, nextStage, AnalysisInput, STAGES, STAGE_LABEL,
+} from '@/lib/caseAnalysisShape'
 import { DAMAGES_SOURCE, LAW_VERSION, LEGAL_SOURCE, STATUTORY_MAP } from '@/lib/caLaw'
 
 const input = (over: Partial<AnalysisInput> = {}): AnalysisInput => ({
@@ -129,5 +132,84 @@ describe('the floor below which there is nothing to read', () => {
   it('is low enough to admit a part-finished questionnaire', () => {
     expect(MIN_ANSWERS).toBeGreaterThan(0)
     expect(MIN_ANSWERS).toBeLessThan(20)
+  })
+})
+
+describe('a reading that runs in stages', () => {
+  const overview = { summary: 's', baseline: [], limitations: 'l' }
+  const findings = { issues: [], notRaised: [] }
+  const assembly = {
+    doubleCounting: [], missingFacts: [], nextSteps: [], separateExposure: [],
+    totals: { supported: '', estimated: '', potentialStatutory: '', preliminaryTotal: '' },
+    drivers: 'd',
+  }
+
+  it('asks for the baseline when nothing has been read', () => {
+    expect(nextStage(null)).toBe('baseline')
+    expect(nextStage({})).toBe('baseline')
+  })
+
+  it('walks the stages in the order they depend on each other', () => {
+    expect(nextStage({ overview })).toBe('findings')
+    expect(nextStage({ overview, findings })).toBe('assembly')
+    expect(nextStage({ overview, findings, assembly })).toBeNull()
+  })
+
+  it('shows nothing until every stage is in', () => {
+    // A partial reading shown as a whole one is a case file missing its totals
+    // and its overlap check, with nothing on screen saying so.
+    expect(completed({ overview })).toBeNull()
+    expect(completed({ overview, findings })).toBeNull()
+    expect(completed(null)).toBeNull()
+  })
+
+  it('joins the three into one reading', () => {
+    const whole = completed({ overview, findings, assembly })
+    expect(whole).not.toBeNull()
+    expect(whole!.summary).toBe('s')
+    expect(whole!.issues).toEqual([])
+    expect(whole!.drivers).toBe('d')
+  })
+
+  it('names every stage it walks', () => {
+    for (const stage of STAGES) expect(STAGE_LABEL[stage]).toBeTruthy()
+    expect(STAGES[0]).toBe('baseline')
+  })
+})
+
+describe('joining the category readings back together', () => {
+  const issue = (category: string) => ({
+    category, headline: 'h', because: [], law: 'l', why: 'w',
+    strength: 'moderate' as const, math: '', estimate: '', basis: 'FACT' as const, confirm: [],
+  })
+
+  it('never lists a category as set aside when another reading raised it', () => {
+    // A pass told to stay off another's categories still sometimes writes them
+    // down to say it left them alone. That lands in the case file as "Overtime
+    // — considered and set aside" beside an Overtime issue worth five figures.
+    const merged = mergeFindings([
+      { issues: [issue('Overtime')], notRaised: [] },
+      { issues: [], notRaised: [{ category: 'Overtime', why: 'Assigned to another pass.' }] },
+    ] as never)
+    expect(merged.issues).toHaveLength(1)
+    expect(merged.notRaised).toHaveLength(0)
+  })
+
+  it('lists a genuinely untouched category once, not once per reading', () => {
+    const merged = mergeFindings([
+      { issues: [], notRaised: [{ category: 'Piece rate', why: 'No facts either way.' }] },
+      { issues: [], notRaised: [{ category: 'Piece rate', why: 'Nothing on production pay.' }] },
+    ] as never)
+    expect(merged.notRaised).toHaveLength(1)
+    expect(merged.notRaised[0].category).toBe('Piece rate')
+  })
+
+  it('keeps every issue each reading found', () => {
+    const merged = mergeFindings([
+      { issues: [issue('Meal periods'), issue('Rest periods')], notRaised: [] },
+      { issues: [issue('Overtime')], notRaised: [{ category: 'Double time', why: 'Never past 12.' }] },
+    ] as never)
+    expect(merged.issues.map(i => i.category)).toEqual(['Meal periods', 'Rest periods', 'Overtime'])
+    expect(merged.notRaised.map(n => n.category)).toEqual(['Double time'])
   })
 })

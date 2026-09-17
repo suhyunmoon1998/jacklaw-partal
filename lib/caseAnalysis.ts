@@ -30,130 +30,22 @@ import { createHash } from 'crypto'
 import { LAW_VERSION, LEGAL_SOURCE } from '@/lib/caLaw'
 import { answersForReading } from '@/lib/modules'
 import { staffFlags, FLAG_LABEL } from '@/lib/staffFlags'
+import {
+  Analysis,
+  AnalysisInput,
+  Assembly,
+  Findings,
+  Issue,
+  Overview,
+  STAGES,
+  Stage,
+  StoredAnalysis,
+  mergeFindings,
+} from '@/lib/caseAnalysisShape'
 import { AnswerValue } from '@/types'
 
 export const ANALYSIS_MODEL = 'claude-opus-5'
 
-/**
- * How a statement is being made. The office's methodology ends by requiring
- * exactly this separation, and it is the difference between a damages figure a
- * lawyer can stand behind in a demand letter and one they have to re-derive.
- */
-const Basis = z.enum(['FACT', 'ESTIMATE', 'ASSUMPTION', 'CONFIRM'])
-export type Basis = z.infer<typeof Basis>
-
-const Strength = z.enum(['strong', 'moderate', 'weak', 'needs facts'])
-export type Strength = z.infer<typeof Strength>
-
-/** The categories the methodology says to analyse separately (sec. 3). */
-const CATEGORIES = [
-  'Unpaid straight time',
-  'Off-the-clock work',
-  'Overtime',
-  'Double time',
-  'Meal periods',
-  'Rest periods',
-  'Minimum wage',
-  'Liquidated damages',
-  'Waiting-time penalties',
-  'Wage statements',
-  'Expense reimbursement',
-  'Piece rate',
-  'Reporting time / split shift',
-  'Seventh day of rest',
-  'Retaliation',
-  'Other',
-] as const
-
-const BaselineItem = z.object({
-  label: z.string(),
-  value: z.string(),
-  basis: Basis,
-})
-
-const Issue = z.object({
-  category: z.enum(CATEGORIES),
-  /** One line a lawyer can read in the list without opening it. */
-  headline: z.string(),
-  /** The client's own answers that raise it, quoted or closely paraphrased. */
-  because: z.array(z.string()),
-  /** The provision, named. "Lab. Code sec. 512; Wage Order 5, sec. 11". */
-  law: z.string(),
-  /** How those facts meet that provision. */
-  why: z.string(),
-  strength: Strength,
-  /** The formula, written out. Empty where the facts do not support one. */
-  math: z.string(),
-  /** What the formula comes to, or why it cannot be computed yet. */
-  estimate: z.string(),
-  basis: Basis,
-  /** What has to be confirmed before this figure is relied on. */
-  confirm: z.array(z.string()),
-})
-export type Issue = z.infer<typeof Issue>
-
-/**
- * What one reading is made of, split into the calls that produce it.
- *
- * One call for all of this was five to six minutes of generation on a full
- * questionnaire — long enough that the SDK refuses it outright, long enough for
- * the connection to be dropped halfway through, and far too long to sit in
- * front of. The work divides cleanly, so it is divided: the employment baseline
- * first, then the damages categories read at the same time against that shared
- * baseline, then a short pass that totals what came back and checks it for
- * overlap. The law text is a cached prefix, so the parallel calls pay for it
- * once between them.
- */
-const Overview = z.object({
-  /**
-   * What this person described, in plain English, as a colleague would tell it
-   * to you. Employer, job, period, and what went wrong.
-   */
-  summary: z.string(),
-  baseline: z.array(BaselineItem),
-  /** Which parts of the claimed period fall inside which limitations period. */
-  limitations: z.string(),
-})
-
-const Findings = z.object({
-  issues: z.array(Issue),
-  /** Categories considered and set aside, so the reader knows they were read. */
-  notRaised: z.array(z.object({ category: z.enum(CATEGORIES), why: z.string() })),
-})
-
-const Assembly = z.object({
-  /** sec. 20 — overlaps that must be resolved before anything is totalled. */
-  doubleCounting: z.array(z.string()),
-  /** sec. 22 — only what could materially change the result. */
-  missingFacts: z.array(z.string()),
-  /** What to ask this client, or the employer, next. */
-  nextSteps: z.array(z.string()),
-  /** sec. 17 — kept out of the employee's damages. */
-  separateExposure: z.array(z.object({ label: z.string(), value: z.string(), note: z.string() })),
-  /** sec. 23. Strings, so "not calculable" is a permitted answer. */
-  totals: z.object({
-    supported: z.string(),
-    estimated: z.string(),
-    potentialStatutory: z.string(),
-    preliminaryTotal: z.string(),
-  }),
-  /** sec. 23 — one to three sentences on what drives the value of this case. */
-  drivers: z.string(),
-})
-
-/** The whole reading, as the panel and the stored row see it. */
-export type Analysis = z.infer<typeof Overview> &
-  z.infer<typeof Findings> &
-  z.infer<typeof Assembly>
-
-export interface AnalysisInput {
-  clientName: string
-  caseType: string
-  caseName: string
-  answers: Record<string, AnswerValue>
-  /** Titles only — the reading says what to look for in them, never their contents. */
-  documents: string[]
-}
 
 const SYSTEM = `You are a California wage-and-hour analyst working inside a plaintiff-side
 employment law office. You read one client's intake answers and report what those answers
@@ -387,11 +279,10 @@ const brief = (i: Issue) =>
     i.math || '(none)'
   }\n  estimate: ${i.estimate} (${i.basis})`
 
-export async function analyzeCase(input: AnalysisInput): Promise<Analysis> {
+function prepare(input: AnalysisInput) {
   if (!process.env.ANTHROPIC_API_KEY) {
     throw new Error('ANTHROPIC_API_KEY is not configured, so a case cannot be analysed.')
   }
-
   const { text, answered } = buildTranscript(input)
   if (answered < MIN_ANSWERS) {
     throw new NotEnoughAnswers(
@@ -399,19 +290,22 @@ export async function analyzeCase(input: AnalysisInput): Promise<Analysis> {
         `There is not enough on file to read against the law yet.`
     )
   }
+  return {
+    client: new Anthropic({ maxRetries: 2 }),
+    header: fileHeader(input, answered),
+    answersBlock: `=== THE CLIENT'S ANSWERS ===\n\n${text}`,
+    flags: `The office's automatic flags on these answers:\n${flagSummary(input.answers)}`,
+  }
+}
 
-  const client = new Anthropic({ maxRetries: 2 })
-  const header = fileHeader(input, answered)
-  const answersBlock = `=== THE CLIENT'S ANSWERS ===\n\n${text}`
-
-  // ── First, who they worked for and for how long ──────────────────────────
-  // Everything else is multiplied by this, so it is settled once and handed to
-  // the readings rather than derived three times over and three different ways.
-  const overview = await ask(
+/** The figures every later stage is multiplied by, settled once. */
+async function runBaseline(input: AnalysisInput) {
+  const { client, header, answersBlock, flags } = prepare(input)
+  return ask(
     client,
     'baseline',
     Overview,
-    `This pass establishes the employment baseline only. Do not analyse any damages category.
+    `This stage establishes the employment baseline only. Do not analyse any damages category.
 
 Give the baseline as the office's methodology asks for it (sec. 2 and sec. 21): employer,
 role, work location, start and end dates, whether employment ended, rate or rates, days per
@@ -421,14 +315,18 @@ the basis is CONFIRM — never fill it in with something plausible.
 
 Then state which parts of the claimed period fall inside which limitations period, and say so
 in terms of the dates on file. If the dates are not established, say what is needed to fix them.`,
-    `${header}\n\nThe office's automatic flags on these answers:\n${flagSummary(input.answers)}\n\n${answersBlock}`
+    `${header}\n\n${flags}\n\n${answersBlock}`
   )
+}
 
-  const baselineBlock = `=== EMPLOYMENT BASELINE (established, use these figures) ===\n${overview.baseline
+const baselineBlock = (overview: z.infer<typeof Overview>) =>
+  `=== EMPLOYMENT BASELINE (established, use these figures) ===\n${overview.baseline
     .map(b => `${b.label}: ${b.value} [${b.basis}]`)
     .join('\n')}\n\nLIMITATIONS: ${overview.limitations}`
 
-  // ── Then the categories, at the same time ────────────────────────────────
+/** The categories, read at the same time against that shared baseline. */
+async function runFindings(input: AnalysisInput, overview: z.infer<typeof Overview>) {
+  const { client, header, answersBlock, flags } = prepare(input)
   const found = await Promise.all(
     PASSES.map(pass =>
       ask(
@@ -439,33 +337,44 @@ in terms of the dates on file. If the dates are not established, say what is nee
 
 ${pass.categories.map(c => `- ${c}`).join('\n')}
 
-Say nothing about any other category; another reading has those and duplicating them would
-double-count the case. Every category in your list appears exactly once in your answer —
-in issues where the answers raise it, and in notRaised where they do not, with the reason
-("no facts either way" is a proper reason and a common one).
+Say nothing about any other category. Another reading has those, and duplicating them would
+double-count the case. Do not list them in notRaised either — notRaised is for a category of
+YOURS that these answers do not raise, with the reason ("no facts either way" is a proper
+reason and a common one); it is not a place to note what you left to someone else. Never
+mention the other readings; the reader sees one reading, not how it was divided.
+
+Every category in your list appears exactly once in your answer: in issues where the answers
+raise it, or in notRaised where they do not.
 
 Use the employment baseline given below as established. Do not re-derive it and do not
 substitute your own figures. Where a calculation needs a fact the baseline marks CONFIRM,
 write the formula with the unknown named in it, put the figure it would need under confirm,
 and label the estimate accordingly.`,
-        `${header}\n\n${baselineBlock}\n\nThe office's automatic flags on these answers:\n${flagSummary(
-          input.answers
-        )}\n\n${answersBlock}`
+        `${header}\n\n${baselineBlock(overview)}\n\n${flags}\n\n${answersBlock}`
       )
     )
   )
+  return mergeFindings(found)
+}
 
-  const issues = found.flatMap(f => f.issues)
-  const notRaised = found.flatMap(f => f.notRaised)
-
-  // ── Then what they come to together ──────────────────────────────────────
-  // Separate because no single category reading can run the overlap check: it
-  // is precisely the question of what two of them have both claimed.
-  const assembly = await ask(
+/**
+ * What they come to together.
+ *
+ * Separate because no single category reading can run the overlap check: it is
+ * precisely the question of what two of them have both claimed.
+ */
+async function runAssembly(
+  input: AnalysisInput,
+  overview: z.infer<typeof Overview>,
+  findings: z.infer<typeof Findings>
+) {
+  const { client, header } = prepare(input)
+  const { issues, notRaised } = findings
+  return ask(
     client,
     'total',
     Assembly,
-    `This pass totals a reading that has already been done. The issues below were found by
+    `This stage totals a reading that has already been done. The issues below were found by
 separate readings of the same answers. You are not re-analysing them and you are not adding
 categories; you are checking them against each other and adding them up.
 
@@ -479,12 +388,33 @@ separateExposure.
 missingFacts is only what could materially change the result (sec. 22) — not everything
 unknown. nextSteps is what the office does about it: what to ask this client, what to ask
 the employer, what to pull from the documents.`,
-    `${header}\n\n${baselineBlock}\n\n=== ISSUES FOUND (${issues.length}) ===\n\n${issues
+    `${header}\n\n${baselineBlock(overview)}\n\n=== ISSUES FOUND (${issues.length}) ===\n\n${issues
       .map(brief)
       .join('\n\n')}\n\n=== CONSIDERED AND SET ASIDE ===\n${notRaised
       .map(n => `${n.category}: ${n.why}`)
       .join('\n')}`
   )
+}
 
-  return { ...overview, issues, notRaised, ...assembly }
+/**
+ * Runs one stage and returns what is on file after it.
+ *
+ * Takes what has been stored so far rather than re-deriving it, so the three
+ * requests build on each other without any of them repeating the work — or the
+ * cost — of the one before.
+ */
+export async function runStage(
+  input: AnalysisInput,
+  stage: Stage,
+  stored: StoredAnalysis
+): Promise<StoredAnalysis> {
+  if (stage === 'baseline') return { overview: await runBaseline(input) }
+
+  if (!stored.overview) throw new Error('The baseline has not been read yet. Start again.')
+  if (stage === 'findings') {
+    return { ...stored, findings: await runFindings(input, stored.overview) }
+  }
+
+  if (!stored.findings) throw new Error('The categories have not been read yet. Start again.')
+  return { ...stored, assembly: await runAssembly(input, stored.overview, stored.findings) }
 }

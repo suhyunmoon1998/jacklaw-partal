@@ -3,25 +3,31 @@ import { getSupabase } from '@/lib/supabase'
 import { isAdmin } from '@/lib/adminAuth'
 import { LAW_VERSION } from '@/lib/caLaw'
 import {
-  ANALYSIS_MODEL,
   AnalysisInput,
+  STAGES,
+  Stage,
+  StoredAnalysis,
+  completed,
+  nextStage,
+} from '@/lib/caseAnalysisShape'
+import {
+  ANALYSIS_MODEL,
   NotEnoughAnswers,
   analysisFingerprint,
-  analyzeCase,
+  runStage,
 } from '@/lib/caseAnalysis'
 import { AnswerValue } from '@/types'
 
 /**
- * A reading is several model calls, and it is slow.
+ * One stage of a reading, not the whole one.
  *
- * Measured end to end against a real 184-answer file: 260 seconds. The default
- * cuts that off partway and shows the office a failure for work that is still
- * running — and the office then presses the button again and pays for it twice.
- * The ceiling here is roughly double what was measured, because the number of
- * issues a file raises is what drives the time and this one was not the worst
- * case.
+ * The hosting plan caps a request at 300 seconds and an undivided reading of a
+ * full questionnaire measured at 260 — close enough to the ceiling that a file
+ * with one more issue than that one would fail after four minutes of work. Each
+ * stage gets its own request instead, with room to spare, and the panel walks
+ * through them.
  */
-export const maxDuration = 600
+export const maxDuration = 300
 
 /** Everything the reading is built from, gathered in one place. */
 async function gather(clientId: string): Promise<AnalysisInput | null> {
@@ -38,9 +44,38 @@ async function gather(clientId: string): Promise<AnalysisInput | null> {
     caseType: client.case_type ?? '',
     caseName: client.case_name ?? '',
     answers: (state?.answers ?? {}) as Record<string, AnswerValue>,
-    // Titles only. What a document says is not read here; the analysis says
-    // what to look for in them, which is a job for whoever opens the file.
+    // Titles only. What a document says is not read here; the reading says what
+    // to look for in them, which is a job for whoever opens the file.
     documents: (docs ?? []).map(d => String(d.name ?? '')).filter(Boolean),
+  }
+}
+
+async function load(clientId: string) {
+  const { data } = await getSupabase()
+    .from('case_analyses')
+    .select('fingerprint, law_version, model, result, duration_ms, created_at')
+    .eq('client_id', clientId)
+    .maybeSingle()
+  return data
+}
+
+/** What both verbs answer with, so the panel reads one shape either way. */
+function present(
+  row: { fingerprint: string; law_version: string; model: string; duration_ms: number | null; created_at: string } | null,
+  stored: StoredAnalysis,
+  currentFingerprint: string
+) {
+  return {
+    analysis: completed(stored),
+    // So the panel knows whether to offer Run, Continue, or nothing.
+    nextStage: nextStage(stored),
+    createdAt: row?.created_at,
+    model: row?.model,
+    durationMs: row?.duration_ms,
+    stale: row ? row.fingerprint !== currentFingerprint : false,
+    // Named separately so a stale badge can say WHY, rather than leaving the
+    // office to guess whether the client answered more or the law file moved.
+    lawChanged: row ? row.law_version !== LAW_VERSION : false,
   }
 }
 
@@ -58,73 +93,92 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   const input = await gather(params.id)
   if (!input) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  const { data: row } = await getSupabase()
-    .from('case_analyses')
-    .select('fingerprint, law_version, model, result, duration_ms, created_at')
-    .eq('client_id', params.id)
-    .maybeSingle()
+  const row = await load(params.id)
+  if (!row) return NextResponse.json({ analysis: null, nextStage: 'baseline' })
 
-  if (!row) return NextResponse.json({ analysis: null })
-
-  return NextResponse.json({
-    analysis: row.result,
-    createdAt: row.created_at,
-    model: row.model,
-    durationMs: row.duration_ms,
-    stale: row.fingerprint !== analysisFingerprint(input),
-    // Named separately so a stale badge can say WHY, rather than leaving the
-    // office to guess whether the client answered more or the law file moved.
-    lawChanged: row.law_version !== LAW_VERSION,
-  })
+  return NextResponse.json(present(row, (row.result ?? {}) as StoredAnalysis, analysisFingerprint(input)))
 }
 
-/** POST — run it now, and keep the result. */
+/**
+ * POST { stage } — run one stage and keep what it produced.
+ *
+ * 'baseline' starts a fresh reading and discards whatever was on file, so a
+ * re-run cannot end up with this week's findings sitting on last week's
+ * baseline. The later stages build on what is stored.
+ */
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   if (!isAdmin(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const body = await req.json().catch(() => ({}))
+  const stage = String(body?.stage ?? '') as Stage
+  if (!STAGES.includes(stage)) {
+    return NextResponse.json(
+      { error: `Send one of: ${STAGES.join(', ')}.` },
+      { status: 400 }
+    )
+  }
 
   const input = await gather(params.id)
   if (!input) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
+  const row = await load(params.id)
+  const fingerprint = analysisFingerprint(input)
+  const before: StoredAnalysis = stage === 'baseline' ? {} : ((row?.result ?? {}) as StoredAnalysis)
+
+  // Stages after the first build on the one before, and the answers may have
+  // moved between requests. Carrying on would staple new findings to a baseline
+  // drawn from different facts, so the reading restarts instead.
+  if (stage !== 'baseline' && row && row.fingerprint !== fingerprint) {
+    return NextResponse.json(
+      {
+        error: 'The answers changed while this was being read. Start the reading again.',
+        restart: true,
+      },
+      { status: 409 }
+    )
+  }
+
   const started = Date.now()
   try {
-    const analysis = await analyzeCase(input)
-    const durationMs = Date.now() - started
+    const stored = await runStage(input, stage, before)
+    // Each stage adds its own time to the total, so the office sees what the
+    // whole reading cost rather than only its last leg.
+    const durationMs = (stage === 'baseline' ? 0 : row?.duration_ms ?? 0) + (Date.now() - started)
 
     const { error } = await getSupabase()
       .from('case_analyses')
       .upsert(
         {
           client_id: params.id,
-          fingerprint: analysisFingerprint(input),
+          fingerprint,
           law_version: LAW_VERSION,
           model: ANALYSIS_MODEL,
-          result: analysis,
+          result: stored,
           duration_ms: durationMs,
           created_at: new Date().toISOString(),
         },
         { onConflict: 'client_id' }
       )
-    // A reading that could not be stored is still a reading. It is handed back
-    // and the office is told it was not kept, rather than losing two minutes of
-    // Opus to a database error.
-    if (error) console.error('could not store analysis:', error)
+    // A stage that could not be stored still ran. It is handed back and the
+    // office is told it was not kept, rather than losing the work to a database
+    // error — but the next stage will not find it, so this is worth seeing.
+    if (error) console.error('could not store analysis stage:', error)
 
     return NextResponse.json({
-      analysis,
-      createdAt: new Date().toISOString(),
-      model: ANALYSIS_MODEL,
-      durationMs,
-      stale: false,
-      lawChanged: false,
+      ...present(
+        { fingerprint, law_version: LAW_VERSION, model: ANALYSIS_MODEL, duration_ms: durationMs, created_at: new Date().toISOString() },
+        stored,
+        fingerprint
+      ),
       stored: !error,
     })
   } catch (err) {
     if (err instanceof NotEnoughAnswers) {
       return NextResponse.json({ error: err.message, notEnough: true }, { status: 422 })
     }
-    console.error('case analysis failed:', err)
+    console.error(`case analysis (${stage}) failed:`, err)
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'The analysis could not be run.' },
+      { error: err instanceof Error ? err.message : 'The reading could not be run.' },
       { status: 502 }
     )
   }
