@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { timingSafeEqual } from 'crypto'
 import { getSupabase } from '@/lib/supabase'
 import { Lang } from '@/lib/langs'
 import { submissionLanguage } from '@/lib/machineTranslate'
@@ -34,12 +35,26 @@ import { isConfigured, placeCall, sendSms, xmlEscape } from '@/lib/twilio'
  * texting any of them.
  */
 
+/**
+ * Only the scheduler, and only with the secret.
+ *
+ * This used to also accept the admin panel's x-admin-key. That key is a literal
+ * compiled into the admin page's JavaScript and served to every visitor, so the
+ * effect was that anybody who opened the site could make a law firm text and
+ * ring its clients. CRON_SECRET is server-side only; Vercel sends it as a
+ * bearer token on the scheduled run and nothing else knows it.
+ *
+ * Without CRON_SECRET set, nothing is authorised at all — which is what happened
+ * for the system's first weeks, and is a great deal better than the alternative.
+ */
 function authorised(req: NextRequest) {
   const secret = process.env.CRON_SECRET
+  if (!secret) return false
   const auth = req.headers.get('authorization')
-  if (secret && auth === `Bearer ${secret}`) return true
-  // The office can also run it by hand from the admin panel.
-  return req.headers.get('x-admin-key') === process.env.ADMIN_PASSWORD
+  if (!auth) return false
+  const a = Buffer.from(auth)
+  const b = Buffer.from(`Bearer ${secret}`)
+  return a.length === b.length && timingSafeEqual(a, b)
 }
 
 export async function GET(req: NextRequest) {
@@ -60,13 +75,47 @@ export async function GET(req: NextRequest) {
   }
 
   const db = getSupabase()
-  const [{ data: sends }, { data: states }, { data: clients }, { data: logged }] =
-    await Promise.all([
-      db.from('client_module_sends').select('client_id, module_id, sent_at'),
-      db.from('questionnaire_states').select('client_id, submitted, m2_submitted'),
-      db.from('clients').select('id, name, phone, portal_lang, sms_opt_out'),
-      db.from('client_reminders').select('client_id, module_id, kind'),
-    ])
+  const [sendsRes, statesRes, clientsRes, loggedRes] = await Promise.all([
+    db.from('client_module_sends').select('client_id, module_id, sent_at'),
+    db.from('questionnaire_states').select('client_id, submitted, m2_submitted'),
+    db.from('clients').select('id, name, phone, portal_lang, sms_opt_out'),
+    db.from('client_reminders').select('client_id, module_id, kind'),
+  ])
+
+  /**
+   * Any of these failing means sending the wrong thing to the wrong people.
+   *
+   * Each read was previously destructured for its data alone and every consumer
+   * coalesced a failure to an empty list — which reads as "nobody has submitted
+   * anything, nobody has opted out, and nobody has been reminded yet". A single
+   * failed read of questionnaire_states would have chased every client on file,
+   * including the ones who finished weeks ago, and placed a call to anyone past
+   * day ten. Nothing goes out unless all four came back.
+   */
+  const failed = [
+    ['module sends', sendsRes.error],
+    ['questionnaire states', statesRes.error],
+    ['clients', clientsRes.error],
+    ['reminder log', loggedRes.error],
+  ].filter(([, e]) => e)
+
+  if (failed.length) {
+    console.error('cron reminders: aborted, could not read', failed.map(([w]) => w).join(', '))
+    return NextResponse.json(
+      {
+        ran: false,
+        reason:
+          `Could not read ${failed.map(([w]) => w).join(', ')} from the database, so nothing was sent. ` +
+          `Sending on a partial read would chase clients who have already submitted.`,
+      },
+      { status: 503 }
+    )
+  }
+
+  const sends = sendsRes.data
+  const states = statesRes.data
+  const clients = clientsRes.data
+  const logged = loggedRes.data
 
   const submitted = new Map(
     (states ?? []).map(s => [s.client_id, { module1: !!s.submitted, module2: !!s.m2_submitted }])
@@ -130,7 +179,17 @@ export async function GET(req: NextRequest) {
   }
 
   const { due, skipped } = planReminders({ steps, targets, alreadySent, now })
-  const origin = req.nextUrl.origin
+  /**
+   * The public address of the portal, fixed — not whatever host this request
+   * happened to arrive on.
+   *
+   * Two things ride on it: the link a client taps, and the URL the carrier
+   * fetches the picture from. A scheduled run that landed on a deployment URL
+   * rather than the custom domain would put a link behind Vercel's deployment
+   * protection into a client's text, and hand the carrier a picture it cannot
+   * fetch — and neither failure is visible from here.
+   */
+  const origin = (process.env.PUBLIC_ORIGIN ?? 'https://jacklaw-portal.vercel.app').replace(/\/$/, '')
 
   /**
    * With no provider there is nothing to send, and running anyway would be
