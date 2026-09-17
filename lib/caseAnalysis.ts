@@ -387,7 +387,19 @@ separateExposure.
 
 missingFacts is only what could materially change the result (sec. 22) — not everything
 unknown. nextSteps is what the office does about it: what to ask this client, what to ask
-the employer, what to pull from the documents.`,
+the employer, what to pull from the documents.
+
+Be brief, and be selective. This is the page a lawyer reads before picking up the phone, and
+a list of fifteen is a list nobody acts on. Hard limits, and reaching them is not a target:
+
+- doubleCounting: at most 8, and only real overlaps. An entry that says two things do NOT
+  overlap is not an overlap — leave it out.
+- missingFacts: at most 10, ordered with the one that blocks the most first.
+- nextSteps: at most 8, each one an instruction somebody can carry out today.
+- separateExposure: at most 6.
+- Each of the four totals: at most four sentences. Give the figure or say it is not
+  calculable and name the one fact that would make it calculable. Do not restate the issues.
+- drivers: one to three sentences, as the methodology asks.`,
     `${header}\n\n${baselineBlock(overview)}\n\n=== ISSUES FOUND (${issues.length}) ===\n\n${issues
       .map(brief)
       .join('\n\n')}\n\n=== CONSIDERED AND SET ASIDE ===\n${notRaised

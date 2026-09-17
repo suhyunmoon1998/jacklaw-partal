@@ -159,10 +159,24 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         },
         { onConflict: 'client_id' }
       )
-    // A stage that could not be stored still ran. It is handed back and the
-    // office is told it was not kept, rather than losing the work to a database
-    // error — but the next stage will not find it, so this is worth seeing.
-    if (error) console.error('could not store analysis stage:', error)
+    if (error) {
+      console.error('could not store analysis stage:', error)
+      // The last stage returns the whole reading, so a failed write there costs
+      // only the keeping of it. The earlier two are read back by the stage after
+      // them: carrying on would send the office to a stage that cannot find its
+      // input and fails with "the baseline has not been read yet", which says
+      // nothing about what actually went wrong. Stop here and say so.
+      if (stage !== 'assembly') {
+        return NextResponse.json(
+          {
+            error:
+              'The reading ran but could not be saved, so the next stage has nothing to build on. ' +
+              'This is a database problem, not a problem with the answers.',
+          },
+          { status: 500 }
+        )
+      }
+    }
 
     return NextResponse.json({
       ...present(

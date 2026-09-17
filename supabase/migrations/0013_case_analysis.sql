@@ -32,3 +32,18 @@ create table if not exists public.case_analyses (
 
 comment on table public.case_analyses is
   'Staff-only AI reading of a client''s intake answers against California wage-and-hour law. Preliminary; never shown to a client.';
+
+alter table public.case_analyses enable row level security;
+
+-- Everything reaches this through the service role from the API routes, as the
+-- rest of the schema does. Without these grants PostgREST does not expose the
+-- table at all — it answers "permission denied", and the reading is run, paid
+-- for, handed back, and then lost because the next stage cannot find it.
+--
+-- anon and authenticated get no data access at all, not even select. This is a
+-- staff-only work product about a client's own case, and it is the one table in
+-- the schema a client must never be able to read.
+grant select, insert, update, delete, references, trigger, truncate
+  on table public.case_analyses to service_role;
+grant references, trigger, truncate
+  on table public.case_analyses to anon, authenticated;
