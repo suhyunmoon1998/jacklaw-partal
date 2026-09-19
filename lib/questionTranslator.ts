@@ -12,6 +12,7 @@
  * corrected is never sent here to be overwritten.
  */
 
+import { TRANSLATION_MODEL } from '@/lib/models'
 import Anthropic from '@anthropic-ai/sdk'
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod'
 import { z } from 'zod'
@@ -99,7 +100,7 @@ export async function translateQuestions(
   const client = new Anthropic()
 
   const response = await client.messages.parse({
-    model: 'claude-opus-5',
+    model: TRANSLATION_MODEL,
     max_tokens: 16000,
     system: systemPrompt(langs),
     thinking: { type: 'adaptive' },

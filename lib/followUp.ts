@@ -43,7 +43,9 @@ import { FollowUpSet, FollowUpSetShape } from '@/lib/followUpShape'
 
 export * from '@/lib/followUpShape'
 
-export const FOLLOWUP_MODEL = 'claude-opus-5'
+import { FOLLOWUP_MODEL } from '@/lib/models'
+
+export { FOLLOWUP_MODEL }
 
 /**
  * Everything the layers below already know they are missing.

@@ -32,7 +32,9 @@ import { cite, quote } from '@/lib/authority'
 import { LedgerEntry, standing } from '@/lib/factLedger'
 import { plainly } from '@/lib/modelErrors'
 
-export const MATRIX_MODEL = 'claude-opus-5'
+import { MATRIX_MODEL } from '@/lib/models'
+
+export { MATRIX_MODEL }
 
 /**
  * How an element stands on the present record.

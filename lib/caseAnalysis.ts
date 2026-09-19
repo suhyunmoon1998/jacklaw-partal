@@ -47,7 +47,9 @@ import {
 } from '@/lib/caseAnalysisShape'
 import { AnswerValue } from '@/types'
 
-export const ANALYSIS_MODEL = 'claude-opus-5'
+import { ANALYSIS_MODEL } from '@/lib/models'
+
+export { ANALYSIS_MODEL }
 
 
 const SYSTEM = `You are a California wage-and-hour analyst working inside a plaintiff-side

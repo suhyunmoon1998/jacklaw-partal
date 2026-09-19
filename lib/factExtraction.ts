@@ -27,7 +27,9 @@ import { FactNugget, LedgerEntry } from '@/lib/factLedger'
 import { plainly } from '@/lib/modelErrors'
 import { AnswerValue } from '@/types'
 
-export const EXTRACTION_MODEL = 'claude-opus-5'
+import { EXTRACTION_MODEL } from '@/lib/models'
+
+export { EXTRACTION_MODEL }
 
 /** What one section of the questionnaire yields. */
 const SectionFacts = z.object({ facts: z.array(FactNugget) })

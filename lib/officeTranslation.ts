@@ -16,6 +16,7 @@
  * what they actually wrote; the English sits beside it.
  */
 
+import { TRANSLATION_MODEL } from '@/lib/models'
 import Anthropic from '@anthropic-ai/sdk'
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod'
 import { z } from 'zod'
@@ -87,7 +88,7 @@ export async function toEnglishForOffice(
   try {
     const client = new Anthropic({ maxRetries: 2 })
     const response = await client.messages.parse({
-      model: 'claude-opus-5',
+      model: TRANSLATION_MODEL,
       max_tokens: 16000,
       system,
       thinking: { type: 'adaptive' },

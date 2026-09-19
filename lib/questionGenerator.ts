@@ -20,6 +20,7 @@
  * the slowest one rather than the sum of them.
  */
 
+import { QUESTION_MODEL } from '@/lib/models'
 import Anthropic from '@anthropic-ai/sdk'
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod'
 import { z } from 'zod'
@@ -467,7 +468,7 @@ interface BatchResult {
 /** One model call over one batch of the paste. */
 async function readBatch(client: Anthropic, source: string, target: Lang): Promise<BatchResult> {
   const response = await client.messages.parse({
-    model: 'claude-opus-5',
+    model: QUESTION_MODEL,
     max_tokens: 16000,
     system: systemPrompt(target, MAX_QUESTIONS_PER_BATCH),
     thinking: { type: 'adaptive' },

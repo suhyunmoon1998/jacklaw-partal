@@ -42,7 +42,9 @@ import { LedgerEntry } from '@/lib/factLedger'
 import { factSheet } from '@/lib/claimMatrix'
 import { plainly } from '@/lib/modelErrors'
 
-export const SPINE_MODEL = 'claude-opus-5'
+import { SPINE_MODEL } from '@/lib/models'
+
+export { SPINE_MODEL }
 
 /**
  * The corpus's order of proof, best first (sec. 4).

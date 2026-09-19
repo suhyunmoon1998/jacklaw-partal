@@ -43,7 +43,9 @@ import { LedgerEntry } from '@/lib/factLedger'
 import { factSheet } from '@/lib/claimMatrix'
 import { plainly } from '@/lib/modelErrors'
 
-export const CHOICE_MODEL = 'claude-opus-5'
+import { CHOICE_MODEL } from '@/lib/models'
+
+export { CHOICE_MODEL }
 
 /** The seventeen industry orders. MW is the minimum wage order and governs nobody's industry. */
 export const ORDERS = Array.from({ length: 17 }, (_, i) => String(i + 1))
