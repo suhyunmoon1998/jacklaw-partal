@@ -14,6 +14,26 @@
 import { Lang, isLang } from '@/lib/langs'
 import { ModuleId } from '@/lib/modules'
 
+/**
+ * What a rung is chasing.
+ *
+ * A numbered module, or one question-set assignment — a generated round of
+ * follow-up questions. Opaque to everything here: this file decides who is
+ * owed a reminder and which rung, and does not care what the thing is. The
+ * caller encodes it and the caller decodes it.
+ */
+export type Chasing = ModuleId | `assignment:${string}`
+
+/** The assignment a key refers to, or null if it is a module. */
+export function assignmentOf(chasing: Chasing): string | null {
+  return chasing.startsWith('assignment:') ? chasing.slice('assignment:'.length) : null
+}
+
+/** The module a key refers to, or null if it is an assignment. */
+export function moduleOf(chasing: Chasing): ModuleId | null {
+  return chasing.startsWith('assignment:') ? null : (chasing as ModuleId)
+}
+
 export type ReminderKind = 'day2' | 'day5' | 'call'
 
 /**
@@ -34,7 +54,7 @@ export const LADDER: { kind: ReminderKind; afterDays: number; channel: 'sms' | '
 
 export interface SentStep {
   clientId: string
-  moduleId: ModuleId
+  chasing: Chasing
   /** When the office sent it. The day counting starts here. */
   sentAt: string
   submitted: boolean
@@ -53,7 +73,7 @@ export interface DueReminder {
   name: string
   phone: string
   lang: Lang
-  moduleId: ModuleId
+  chasing: Chasing
   kind: ReminderKind
   channel: 'sms' | 'call'
   /** Days between the send and the day being planned. */
@@ -72,7 +92,7 @@ export type SkipReason =
 
 export interface Skipped {
   clientId: string
-  moduleId: ModuleId
+  chasing: Chasing
   kind: ReminderKind | null
   reason: SkipReason
 }
@@ -155,7 +175,7 @@ export const channelOf = (kind: ReminderKind): 'sms' | 'call' =>
 export function planReminders(input: {
   steps: SentStep[]
   targets: Map<string, ReminderTarget>
-  /** client_id → module_id → kinds already recorded. */
+  /** client_id → what is being chased → kinds already recorded. */
   alreadySent: Map<string, Map<string, Set<ReminderKind>>>
   now: Date
 }): { due: DueReminder[]; skipped: Skipped[] } {
@@ -165,7 +185,7 @@ export function planReminders(input: {
 
   for (const step of steps) {
     const sentKinds =
-      alreadySent.get(step.clientId)?.get(step.moduleId) ?? new Set<ReminderKind>()
+      alreadySent.get(step.clientId)?.get(step.chasing) ?? new Set<ReminderKind>()
 
     if (step.submitted) {
       skipped.push({ ...ids(step), kind: null, reason: 'submitted' })
@@ -202,7 +222,7 @@ export function planReminders(input: {
       name: who.name,
       phone: who.phone,
       lang: who.lang,
-      moduleId: step.moduleId,
+      chasing: step.chasing,
       kind,
       channel: channelOf(kind),
       daysWaiting,
@@ -244,9 +264,9 @@ function oneEach(due: DueReminder[], skipped: Skipped[]): { due: DueReminder[]; 
     due: Array.from(best.values()),
     skipped: [
       ...skipped,
-      ...held.map(h => ({ clientId: h.clientId, moduleId: h.moduleId, kind: h.kind, reason: 'one a day' as SkipReason })),
+      ...held.map(h => ({ clientId: h.clientId, chasing: h.chasing, kind: h.kind, reason: 'one a day' as SkipReason })),
     ],
   }
 }
 
-const ids = (s: SentStep) => ({ clientId: s.clientId, moduleId: s.moduleId })
+const ids = (s: SentStep) => ({ clientId: s.clientId, chasing: s.chasing })

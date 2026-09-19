@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
 import { isAdmin } from '@/lib/adminAuth'
 import { advancesTo, assignmentLink, getAssignmentDetail } from '@/lib/questionSets'
+import { isConfigured, sendSms } from '@/lib/twilio'
+import { invitationSms, lookupClientPhone, origin } from '@/lib/assignmentInvite'
 import { Lang, isLang } from '@/lib/langs'
 import { localizeName } from '@/lib/questionLogic'
 import { lookupClientEmail, lookupClientLanguage, sendAssignmentEmail } from '@/lib/sendAssignmentEmail'
@@ -22,7 +24,19 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   return NextResponse.json({ link: assignmentLink(req.nextUrl.origin, params.id), email, lang })
 }
 
-// POST /api/admin/assignments/[id]/send  { email? }
+/**
+ * Sending one assignment to the client.
+ *
+ * Text first, email second, and either alone counts as sent.
+ *
+ * This route was email-only, which for this office's clients meant it often
+ * did not arrive: the reminder ladder that chases an unfinished questionnaire
+ * is text on day 2, text on day 5, a telephone call on day 10 — three of three
+ * by phone — because that is how these clients are actually reached. A round
+ * of follow-up questions that could only go out by email was a round most
+ * people would never see.
+ */
+// POST /api/admin/assignments/[id]/send  { email?, sms? }
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   if (!isAdmin(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
@@ -35,27 +49,51 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const lang: Lang = isLang(body?.lang) ? body.lang : await lookupClientLanguage(assignment.clientId)
   const link = assignmentLink(req.nextUrl.origin, params.id)
 
-  if (!to.includes('@')) {
+  const wantsSms = body?.sms !== false
+  const phone = wantsSms ? await lookupClientPhone(assignment.clientId) : ''
+  const name = assignment.clientName || 'there'
+
+  if (!to.includes('@') && !phone) {
     return NextResponse.json(
-      { error: 'No email address on file for this client. Enter one, or copy the link and send it yourself.', link },
+      {
+        error:
+          'No email address or phone number on file for this client. Enter an email, or copy the link and send it yourself.',
+        link,
+      },
       { status: 400 }
     )
   }
 
-  try {
-    await sendAssignmentEmail({
-      to,
-      clientName: assignment.clientName || 'there',
-      setName: localizeName(assignment.questionSetName, assignment.questionSetNameTranslations, lang),
-      // The set description is a staff-only note, so it stays out of the client's email.
-      questionCount: assignment.questionCount,
-      link,
-      lang,
-    })
-  } catch (err) {
-    console.error('assignment send failed:', err)
+  // The text carries the front door, not this assignment's URL: sign-in is by
+  // phone, and nothing in a text should be a key to somebody's case file.
+  const sms = phone && isConfigured() ? await sendSms(phone, invitationSms(lang, name, origin(req))) : null
+  let emailed = false
+  let emailError = ''
+
+  if (to.includes('@')) {
+    try {
+      await sendAssignmentEmail({
+        to,
+        clientName: name,
+        setName: localizeName(assignment.questionSetName, assignment.questionSetNameTranslations, lang),
+        // The set description is a staff-only note, so it stays out of the client's email.
+        questionCount: assignment.questionCount,
+        link,
+        lang,
+      })
+      emailed = true
+    } catch (err) {
+      console.error('assignment send failed:', err)
+      emailError = err instanceof Error ? err.message : 'Could not send the email.'
+    }
+  }
+
+  // Either channel arriving is a send. Both failing is not — and the status is
+  // not advanced, so the office sees it is still a draft rather than believing
+  // a client was contacted.
+  if (!emailed && !sms?.ok) {
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Could not send the email.', link },
+      { error: emailError || sms?.error || 'Neither the text nor the email could be sent.', link },
       { status: 502 }
     )
   }
@@ -70,5 +108,13 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   await getSupabase().from('client_question_set_assignments').update(patch).eq('id', params.id)
 
-  return NextResponse.json({ sent: true, email: to, link, lang })
+  return NextResponse.json({
+    sent: true,
+    email: emailed ? to : null,
+    emailError: emailError || undefined,
+    sms: sms?.ok ? phone : null,
+    smsError: sms && !sms.ok ? sms.error : undefined,
+    link,
+    lang,
+  })
 }

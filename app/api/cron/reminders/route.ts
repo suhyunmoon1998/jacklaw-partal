@@ -5,6 +5,8 @@ import { Lang } from '@/lib/langs'
 import { submissionLanguage } from '@/lib/machineTranslate'
 import { ModuleId } from '@/lib/modules'
 import {
+  Chasing,
+  assignmentOf,
   DueReminder,
   LADDER,
   ReminderKind,
@@ -75,11 +77,18 @@ export async function GET(req: NextRequest) {
   }
 
   const db = getSupabase()
-  const [sendsRes, statesRes, clientsRes, loggedRes] = await Promise.all([
+  const [sendsRes, statesRes, clientsRes, loggedRes, roundsRes] = await Promise.all([
     db.from('client_module_sends').select('client_id, module_id, sent_at'),
     db.from('questionnaire_states').select('client_id, submitted, m2_submitted'),
     db.from('clients').select('id, name, phone, portal_lang, sms_opt_out'),
-    db.from('client_reminders').select('client_id, module_id, kind'),
+    db.from('client_reminders').select('client_id, module_id, assignment_id, kind'),
+    // A round of follow-up questions that has actually gone out. Drafts are
+    // excluded by the status filter, which is the review gate: a round nobody
+    // has read is not chased, because it was never sent.
+    db
+      .from('client_question_set_assignments')
+      .select('id, client_id, status, sent_at, completed_at')
+      .in('status', ['sent', 'in_progress']),
   ])
 
   /**
@@ -97,6 +106,7 @@ export async function GET(req: NextRequest) {
     ['questionnaire states', statesRes.error],
     ['clients', clientsRes.error],
     ['reminder log', loggedRes.error],
+    ['follow-up rounds', roundsRes.error],
   ].filter(([, e]) => e)
 
   if (failed.length) {
@@ -113,6 +123,7 @@ export async function GET(req: NextRequest) {
   }
 
   const sends = sendsRes.data
+  const rounds = roundsRes.data
   const states = statesRes.data
   const clients = clientsRes.data
   const logged = loggedRes.data
@@ -121,15 +132,28 @@ export async function GET(req: NextRequest) {
     (states ?? []).map(s => [s.client_id, { module1: !!s.submitted, module2: !!s.m2_submitted }])
   )
 
-  const steps: SentStep[] = (sends ?? []).map(s => ({
-    clientId: s.client_id,
-    moduleId: s.module_id as ModuleId,
-    sentAt: s.sent_at,
-    submitted:
-      s.module_id === 'module2'
-        ? Boolean(submitted.get(s.client_id)?.module2)
-        : Boolean(submitted.get(s.client_id)?.module1),
-  }))
+  const steps: SentStep[] = [
+    ...(sends ?? []).map(s => ({
+      clientId: s.client_id,
+      chasing: s.module_id as ModuleId as Chasing,
+      sentAt: s.sent_at,
+      submitted:
+        s.module_id === 'module2'
+          ? Boolean(submitted.get(s.client_id)?.module2)
+          : Boolean(submitted.get(s.client_id)?.module1),
+    })),
+    // A round is finished when the assignment is, which the client's own
+    // answers set — so a client part way through is still chased, and one who
+    // has answered the last question is not.
+    ...(rounds ?? [])
+      .filter(r => r.sent_at)
+      .map(r => ({
+        clientId: r.client_id as string,
+        chasing: `assignment:${r.id}` as Chasing,
+        sentAt: r.sent_at as string,
+        submitted: Boolean(r.completed_at),
+      })),
+  ]
 
   /**
    * The language to write to this client in.
@@ -171,11 +195,13 @@ export async function GET(req: NextRequest) {
 
   const alreadySent = new Map<string, Map<string, Set<ReminderKind>>>()
   for (const row of logged ?? []) {
-    const byModule = alreadySent.get(row.client_id) ?? new Map<string, Set<ReminderKind>>()
-    const kinds = byModule.get(row.module_id) ?? new Set<ReminderKind>()
+    const key = row.assignment_id ? `assignment:${row.assignment_id}` : row.module_id
+    if (!key) continue
+    const byThing = alreadySent.get(row.client_id) ?? new Map<string, Set<ReminderKind>>()
+    const kinds = byThing.get(key) ?? new Set<ReminderKind>()
     kinds.add(row.kind as ReminderKind)
-    byModule.set(row.module_id, kinds)
-    alreadySent.set(row.client_id, byModule)
+    byThing.set(key, kinds)
+    alreadySent.set(row.client_id, byThing)
   }
 
   const { due, skipped } = planReminders({ steps, targets, alreadySent, now })
@@ -225,9 +251,11 @@ export async function GET(req: NextRequest) {
 
     // Claim the rung first. If two runs overlap, the second insert violates the
     // unique index and this client is skipped rather than texted twice.
+    const round = assignmentOf(item.chasing)
     const { error: claimError } = await db.from('client_reminders').insert({
       client_id: item.clientId,
-      module_id: item.moduleId,
+      module_id: round ? null : item.chasing,
+      assignment_id: round,
       kind: item.kind,
       channel: item.channel,
       to_number: item.phone,
@@ -245,21 +273,12 @@ export async function GET(req: NextRequest) {
         ? await sendSms(item.phone, body, mediaUrl)
         : await placeCall(item.phone, twimlFor(item, body))
 
-    if (!sent.ok) {
-      await db
-        .from('client_reminders')
-        .update({ status: 'failed', error: sent.error })
-        .eq('client_id', item.clientId)
-        .eq('module_id', item.moduleId)
-        .eq('kind', item.kind)
-    } else {
-      await db
-        .from('client_reminders')
-        .update({ provider_id: sent.id })
-        .eq('client_id', item.clientId)
-        .eq('module_id', item.moduleId)
-        .eq('kind', item.kind)
-    }
+    // The rung just claimed, addressed by whichever column identifies it.
+    const patch = sent.ok ? { provider_id: sent.id } : { status: 'failed', error: sent.error }
+    const rung = db.from('client_reminders').update(patch).eq('kind', item.kind)
+    await (round
+      ? rung.eq('assignment_id', round)
+      : rung.eq('client_id', item.clientId).eq('module_id', item.chasing))
 
     results.push({ ...ref(item), link, status: sent.ok ? 'sent' : 'failed', error: sent.ok ? undefined : sent.error })
   }
@@ -311,6 +330,7 @@ export async function POST(req: NextRequest) {
       LADDER.map(rung => ({
         client_id: s.client_id,
         module_id: s.module_id,
+        assignment_id: null,
         kind: rung.kind,
         channel: rung.channel,
         status: 'skipped' as const,
@@ -336,7 +356,7 @@ export async function POST(req: NextRequest) {
 const ref = (d: DueReminder) => ({
   clientId: d.clientId,
   name: d.name,
-  moduleId: d.moduleId,
+  chasing: d.chasing,
   kind: d.kind,
   channel: d.channel,
   // So the dry run answers "and what language will they get this in?"
@@ -348,11 +368,14 @@ function preview(d: DueReminder, origin: string) {
   // Sign-in is by phone, so the link is the front door rather than a per-client
   // URL — nothing in a text should be a key to somebody's case file.
   const link = `${origin}/client`
-  const image = IMAGE_FOR[d.kind]
+  // A round of extra questions is not "your questionnaire is still waiting" —
+  // that person finished it. The copy says what is actually being asked.
+  const subject = assignmentOf(d.chasing) ? ('follow-up' as const) : ('questionnaire' as const)
+  const image = subject === 'questionnaire' ? IMAGE_FOR[d.kind] : undefined
   return {
     ...ref(d),
     link,
-    body: reminderBody(d.kind, d.lang, { name: d.name, link }),
+    body: reminderBody(d.kind, d.lang, { name: d.name, link, subject }),
     // Twilio fetches this itself, so it has to be the public origin.
     mediaUrl: d.channel === 'sms' && image ? `${origin}${image}` : undefined,
   }

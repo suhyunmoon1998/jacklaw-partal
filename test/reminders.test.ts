@@ -10,6 +10,7 @@
  * number, or asked us to stop". Those are the tests.
  */
 
+import { invitationSms } from '@/lib/assignmentInvite'
 import { describe, expect, it } from 'vitest'
 import {
   LADDER,
@@ -41,7 +42,7 @@ const someone = (over: Partial<ReminderTarget> = {}): ReminderTarget => ({
 
 const sent = (over: Partial<SentStep> = {}): SentStep => ({
   clientId: 'c1',
-  moduleId: 'module1',
+  chasing: 'module1',
   sentAt: '2026-09-09T18:00:00Z',
   submitted: false,
   ...over,
@@ -142,8 +143,8 @@ describe('who gets chased', () => {
     // Two different people, so the one-a-day rule below is not what is being
     // measured here: module 2 went out later, so it is earlier on the ladder.
     const steps: SentStep[] = [
-      { clientId: 'c1', moduleId: 'module1', sentAt: '2026-09-09T18:00:00Z', submitted: false },
-      { clientId: 'c2', moduleId: 'module2', sentAt: '2026-09-14T18:00:00Z', submitted: false },
+      { clientId: 'c1', chasing: 'module1', sentAt: '2026-09-09T18:00:00Z', submitted: false },
+      { clientId: 'c2', chasing: 'module2', sentAt: '2026-09-14T18:00:00Z', submitted: false },
     ]
     const { due } = planReminders({
       steps,
@@ -154,7 +155,7 @@ describe('who gets chased', () => {
       alreadySent: new Map(),
       now: MORNING,
     })
-    expect(due.map(d => [d.moduleId, d.kind])).toEqual([
+    expect(due.map(d => [d.chasing, d.kind])).toEqual([
       ['module1', 'day5'],
       ['module2', 'day2'],
     ])
@@ -168,8 +169,8 @@ describe('who gets chased', () => {
    */
   it('texts a person once a morning even when two of their cases are due', () => {
     const steps: SentStep[] = [
-      { clientId: 'a', moduleId: 'module1', sentAt: '2026-09-09T18:00:00Z', submitted: false },
-      { clientId: 'b', moduleId: 'module1', sentAt: '2026-09-14T18:00:00Z', submitted: false },
+      { clientId: 'a', chasing: 'module1', sentAt: '2026-09-09T18:00:00Z', submitted: false },
+      { clientId: 'b', chasing: 'module1', sentAt: '2026-09-14T18:00:00Z', submitted: false },
     ]
     const sharedNumber = '4243332514'
     const { due, skipped } = planReminders({
@@ -191,7 +192,7 @@ describe('who gets chased', () => {
   it('leaves the held-back case to come due again tomorrow', () => {
     // Nothing was recorded against it, so the next run offers it afresh.
     const steps: SentStep[] = [
-      { clientId: 'b', moduleId: 'module1', sentAt: '2026-09-14T18:00:00Z', submitted: false },
+      { clientId: 'b', chasing: 'module1', sentAt: '2026-09-14T18:00:00Z', submitted: false },
     ]
     const { due } = planReminders({
       steps,
@@ -308,5 +309,113 @@ describe('phone numbers as Twilio wants them', () => {
 
   it('refuses what cannot be dialled rather than guessing', () => {
     for (const raw of ['', '555', '12345', 'abc']) expect(toE164(raw), raw).toBeNull()
+  })
+})
+
+describe('chasing a round of follow-up questions', () => {
+  const who = new Map([
+    ['c1', { clientId: 'c1', name: 'Dayeon Kim', phone: '+12135774446', lang: 'ko' as const, optedOut: false }],
+  ])
+
+  it('walks the same ladder a module does', () => {
+    // The round was sent once and then nothing chased it, which is the exact
+    // problem the ladder exists to solve.
+    const round = 'assignment:abc-123' as const
+    for (const [days, expected] of [[2, 'day2'], [5, 'day5'], [10, 'call']] as const) {
+      const { due } = planReminders({
+        steps: [{ clientId: 'c1', chasing: round, sentAt: '2026-09-01T17:00:00Z', submitted: false }],
+        targets: who,
+        alreadySent: new Map(),
+        now: new Date(`2026-09-${String(1 + days).padStart(2, '0')}T17:00:00Z`),
+      })
+      expect(due[0]?.kind, `day ${days}`).toBe(expected)
+      expect(due[0]?.chasing).toBe(round)
+    }
+  })
+
+  it('stops once she has answered the last question', () => {
+    const { due, skipped } = planReminders({
+      steps: [{ clientId: 'c1', chasing: 'assignment:abc-123', sentAt: '2026-09-01T17:00:00Z', submitted: true }],
+      targets: who,
+      alreadySent: new Map(),
+      now: new Date('2026-09-20T17:00:00Z'),
+    })
+    expect(due).toEqual([])
+    expect(skipped[0].reason).toBe('submitted')
+  })
+
+  it('does not let a module rung stand in for a round’s', () => {
+    // Both are keyed on the client; if they shared a key, finishing module 1
+    // would silently exhaust the follow-up ladder.
+    const { due } = planReminders({
+      steps: [{ clientId: 'c1', chasing: 'assignment:abc-123', sentAt: '2026-09-01T17:00:00Z', submitted: false }],
+      targets: who,
+      alreadySent: new Map([['c1', new Map([['module1', new Set<ReminderKind>(['day2', 'day5', 'call'])]])]]),
+      now: new Date('2026-09-12T17:00:00Z'),
+    })
+    expect(due[0]?.kind).toBe('call')
+  })
+
+  it('still sends one message a person a morning', () => {
+    // A client waiting on a module AND on a round is one phone number.
+    const { due, skipped } = planReminders({
+      steps: [
+        { clientId: 'c1', chasing: 'module1', sentAt: '2026-09-01T17:00:00Z', submitted: false },
+        { clientId: 'c1', chasing: 'assignment:abc-123', sentAt: '2026-09-09T17:00:00Z', submitted: false },
+      ],
+      targets: who,
+      alreadySent: new Map(),
+      now: new Date('2026-09-12T17:00:00Z'),
+    })
+    expect(due).toHaveLength(1)
+    expect(due[0].chasing).toBe('module1') // the higher rung: day 11 vs day 3
+    expect(skipped.some(s => s.reason === 'one a day')).toBe(true)
+  })
+})
+
+describe('what a follow-up round actually says', () => {
+  it('does not tell somebody who finished that their questionnaire is waiting', () => {
+    const asked = reminderBody('day2', 'ko', { name: 'DAYEON KIM', link: 'x', subject: 'follow-up' })
+    expect(asked).toContain('답변 잘 봤습니다')
+    expect(asked).not.toContain('아직 남아 있습니다')
+    expect(asked).toContain('STOP')
+  })
+
+  it('writes the round in every language the portal offers', () => {
+    for (const lang of ['en', 'es', 'zh', 'ko'] as const) {
+      for (const kind of ['day2', 'day5', 'call'] as const) {
+        const said = reminderBody(kind, lang, { name: 'Ana', link: 'https://x/client', subject: 'follow-up' })
+        expect(said.length, `${lang} ${kind}`).toBeGreaterThan(40)
+        expect(said, `${lang} ${kind}`).toContain('866')
+        if (kind !== 'call') expect(said, `${lang} ${kind}`).toContain('https://x/client')
+      }
+    }
+  })
+
+  it('leaves the first ask alone', () => {
+    const first = reminderBody('day2', 'ko', { name: 'DAYEON KIM', link: 'x' })
+    expect(first).toContain('설문이 아직 남아 있습니다')
+  })
+})
+
+describe('the text that invites a client to a question set', () => {
+  it('sends the front door, not a link that opens the case file', () => {
+    // Sign-in is by phone. A phone is lent and screens are read over
+    // shoulders, so a text must not carry a key to somebody's case.
+    const said = invitationSms('ko', 'DAYEON KIM', 'https://jacklaw-portal.vercel.app/')
+    expect(said).toContain('https://jacklaw-portal.vercel.app/client')
+    expect(said).not.toMatch(/questionnaire\/[0-9a-f-]{8}/)
+    expect(said).toContain('DAYEON')
+    expect(said).toContain('STOP')
+  })
+
+  it('uses the first name only, because a full legal name reads as a summons', () => {
+    expect(invitationSms('en', 'Dayeon Kim', 'https://x')).toContain('Hi Dayeon,')
+  })
+
+  it('writes it in every language', () => {
+    for (const lang of ['en', 'es', 'zh', 'ko'] as const) {
+      expect(invitationSms(lang, 'Ana', 'https://x').length, lang).toBeGreaterThan(40)
+    }
   })
 })
