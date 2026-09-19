@@ -265,20 +265,35 @@ export interface MatrixOptions {
   wageOrder?: string
 }
 
+/**
+ * What came back, and what did not.
+ *
+ * Separated because a claim that failed is not a claim with no findings, and
+ * nothing may quietly turn one into the other. A run that reads nine claims and
+ * loses the tenth has to say which one, or the office reads a matrix with a
+ * hole in it and cannot see the hole.
+ */
+export interface Matrix {
+  findings: ClaimFinding[]
+  failed: { claimId: string; why: string }[]
+}
+
 export async function buildMatrix(
   entries: LedgerEntry[],
   claims: Claim[] = CLAIMS,
   opts: MatrixOptions = {}
-): Promise<ClaimFinding[]> {
+): Promise<Matrix> {
+  const facts = factSheet(entries)
+  // Nothing to read is not a configuration problem, so it is answered before
+  // the key is looked for.
+  if (!facts.trim() || !claims.length) return { findings: [], failed: [] }
   if (!process.env.ANTHROPIC_API_KEY) {
     throw new Error('ANTHROPIC_API_KEY is not configured, so the matrix cannot be built.')
   }
-  const facts = factSheet(entries)
-  if (!facts.trim()) return []
 
   const client = new Anthropic({ maxRetries: 2 })
 
-  return mapWithLimit(claims, CLAIM_CONCURRENCY, async claim => {
+  const read = async (claim: Claim): Promise<ClaimFinding> => {
     let response
     try {
       response = await client.messages
@@ -307,7 +322,26 @@ export async function buildMatrix(
     // The model is told to use the claim's own id; make certain of it, because
     // everything downstream joins on it.
     return { ...parsed, claimId: claim.id }
+  }
+
+  const failed: Matrix['failed'] = []
+  const out = await mapWithLimit(claims, CLAIM_CONCURRENCY, async claim => {
+    // One more attempt before giving up on a claim. The SDK already retries
+    // transport failures; what this catches is the other kind — a returned
+    // value the output schema rejects, which is intermittent and which cost a
+    // whole ten-claim run the first time it happened.
+    try {
+      return await read(claim)
+    } catch (first) {
+      try {
+        return await read(claim)
+      } catch (second) {
+        failed.push({ claimId: claim.id, why: (second as Error).message || String(first) })
+        return null
+      }
+    }
   })
+  return { findings: out.filter((f): f is ClaimFinding => f !== null), failed }
 }
 
 /** Claims worth a lawyer's attention first. */

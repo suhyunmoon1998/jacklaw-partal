@@ -37,5 +37,5 @@ export function plainly(err: unknown, what: string): Error {
   // "Invalid option: expected one of ..." and the part that says WHICH field
   // and WHAT it got comes after that — truncating short hid the only useful
   // half and left a failure nobody could act on.
-  return new Error(`The ${what} reading failed: ${said.slice(0, 1200)}`)
+  return new Error(`The ${what} reading failed: ${said.slice(0, 4000)}`)
 }

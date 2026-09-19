@@ -123,13 +123,44 @@ describe('handing a claim to the matrix', () => {
     const open = briefForTest(rest)
     expect(open).toContain('an IWC Wage Order, not yet settled')
     expect(open).toContain('AUTHORITY NOT ON FILE')
-    expect(open).not.toMatch(/minutes net rest time/i)
+    // Assert on the Order's own heading, not on a phrase from its text: the
+    // Brinker holding quotes and discusses the same language, so a loose match
+    // finds it whether the Order was quoted or not.
+    expect(open).not.toContain('=== IWC Wage Order')
 
     const settled = briefForTest(rest, '5')
-    expect(settled).toContain('IWC Wage Order 5, § 12')
-    expect(settled).toMatch(/minutes net rest time/i)
-    // The duty element is answered now. The Augustus element still is not.
+    expect(settled).toContain('=== IWC Wage Order 5, § 12 ===')
+    expect(settled).toMatch(/ten \(10\)\s*\n?\s*minutes net rest time/i)
     expect(settled).not.toContain('not yet settled')
-    expect(settled).toContain('Augustus')
+    expect(settled).not.toContain('AUTHORITY NOT ON FILE')
+  })
+
+  it('hands over the cases that decide an element, with their edges', async () => {
+    const { briefForTest } = await import('@/lib/claimMatrix')
+    const rest = briefForTest(claimById('rest-periods')!, '5')
+    expect(rest).toContain('=== THE CASES THAT DECIDE THESE ELEMENTS ===')
+    expect(rest).toContain('Augustus v. ABM Security Services, Inc. (2016) 2 Cal.5th 257')
+    expect(rest).toContain('WHAT IT DOES NOT DECIDE')
+
+    const meal = briefForTest(claimById('meal-periods')!, '5')
+    expect(meal).toContain('Brinker Restaurant Corp. v. Superior Court')
+    // The sentence the meal-period element actually turns on.
+    expect(meal).toMatch(/relieve the employee of all duty for the designated period/i)
+  })
+})
+
+describe('a matrix run that loses a claim', () => {
+  it('reports which one rather than returning a shorter list', async () => {
+    // Ten claims run together. The first time one of them came back with a
+    // value the output schema rejected, the rejection propagated and destroyed
+    // the other nine — a hundred seconds and the cost of ten readings, gone,
+    // for one flake. Worse, a bare array of nine findings looks exactly like a
+    // complete matrix for a case with nine claims in it.
+    const { buildMatrix } = await import('@/lib/claimMatrix')
+    const shape = await buildMatrix([], [])
+    expect(shape).toHaveProperty('findings')
+    expect(shape).toHaveProperty('failed')
+    expect(shape.findings).toEqual([])
+    expect(shape.failed).toEqual([])
   })
 })
