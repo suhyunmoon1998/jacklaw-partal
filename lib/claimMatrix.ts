@@ -306,7 +306,21 @@ export async function buildMatrix(
           messages: [
             {
               role: 'user',
-              content: `${brief(claim, opts.wageOrder)}\n\n=== FACTS ON FILE ===\n\n${facts}`,
+              // The facts come first and the claim second, which is the reverse
+              // of how a person would write it, for one reason: all ten claims
+              // are read against the same ledger, so the ledger is the only
+              // part that can be cached. On this client it runs to 52,000
+              // characters — 84% of each call's input, and it was being sent
+              // ten times. As a prefix it is sent once. Nothing about the
+              // content changes, only the order and the cache marker.
+              content: [
+                {
+                  type: 'text',
+                  text: `=== FACTS ON FILE ===\n\n${facts}`,
+                  cache_control: { type: 'ephemeral' },
+                },
+                { type: 'text', text: brief(claim, opts.wageOrder) },
+              ],
             },
           ],
         })
