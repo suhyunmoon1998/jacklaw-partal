@@ -4,6 +4,9 @@ import { isAdmin } from '@/lib/adminAuth'
 import { Lang } from '@/lib/langs'
 import { readLedger } from '@/lib/factStore'
 import { standing } from '@/lib/factLedger'
+import { allClaims } from '@/lib/caseReadingShape'
+import { readingFingerprint } from '@/lib/caseReading'
+import { readReading } from '@/lib/caseReadingStore'
 import { askFollowUps, vetAll } from '@/lib/followUp'
 import { markReviewed, readPlans, savePlan } from '@/lib/followUpStore'
 import { ClaimFinding } from '@/lib/claimMatrix'
@@ -23,23 +26,25 @@ export const maxDuration = 300
 /** What the round is written against. Everything here is already on file. */
 async function gather(clientId: string) {
   const db = getSupabase()
-  const [entries, { data: client }, { data: analysis }] = await Promise.all([
+  const [entries, { data: client }] = await Promise.all([
     readLedger(clientId),
     db.from('clients').select('id, name, portal_lang').eq('id', clientId).maybeSingle(),
-    db.from('case_analyses').select('result').eq('client_id', clientId).maybeSingle(),
   ])
   if (!client) return null
 
-  // The matrix and the spine are optional. A client whose facts are read but
-  // whose claims have not been mapped still has open loops, contradictions and
-  // undated events worth asking about, and a round built from those alone is
-  // better than no round — so their absence is a thinner reading, not an error.
-  const stored = (analysis?.result ?? {}) as { matrix?: { findings?: ClaimFinding[] }; spine?: SpineReading }
+  // The matrix and the spine are optional, and a stale one is not used. A
+  // client whose facts are read but whose claims have not been mapped still
+  // has open loops and contradictions worth asking about, so their absence
+  // makes the round thinner rather than making it an error — and the plan
+  // records which it was, so the panel can say so.
+  const row = await readReading(clientId, readingFingerprint(entries))
+  const reading = row && !row.stale ? row.reading : null
+
   return {
     entries,
     lang: (client.portal_lang as Lang) ?? 'en',
-    findings: stored.matrix?.findings ?? [],
-    spine: stored.spine ?? null,
+    findings: allClaims<ClaimFinding>(reading),
+    spine: (reading?.spine as SpineReading | undefined) ?? null,
   }
 }
 

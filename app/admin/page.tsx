@@ -22,6 +22,7 @@ import {
 } from '@/lib/auth'
 import { MOCK_ADMIN_PASSWORD } from '@/lib/mockData'
 import CaseAnalysis from '@/components/admin/CaseAnalysis'
+import CaseReading from '@/components/admin/CaseReading'
 import FollowUps from '@/components/admin/FollowUps'
 
 /** The client window's tabs. Analyse opens the window straight at 'analysis'. */
@@ -284,6 +285,7 @@ function ClientDetailModal({
           {tab === 'analysis' && (
             <>
               <CaseAnalysis clientId={client.id} clientName={client.name} />
+              <CaseReading clientId={client.id} />
               {/* The same tab, because it is the same job: read the case, then
                   decide what to ask next. A sixth tab would also have broken
                   the row onto two lines on a phone. */}
