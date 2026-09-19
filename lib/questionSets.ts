@@ -76,6 +76,14 @@ export function normalizeQuestion(raw: unknown, index: number): Question | null 
   const showIf = q.showIf as Record<string, unknown> | undefined
   if (showIf && typeof showIf.questionId === 'string' && typeof showIf.value === 'string' && showIf.questionId.trim()) {
     question.showIf = { questionId: showIf.questionId.trim(), value: showIf.value }
+    // "Yes or Sometimes". The renderer has always understood these; this
+    // function quietly dropped them, so a gate with two revealing answers came
+    // back as a gate with one and the question stayed hidden from everyone who
+    // picked the second.
+    const orValues = Array.isArray(showIf.orValues)
+      ? showIf.orValues.map(v => String(v)).filter(v => v.trim())
+      : []
+    if (orValues.length) question.showIf.orValues = orValues
   }
 
   // Translations, where the admin (or a bank) supplied them. Options are
