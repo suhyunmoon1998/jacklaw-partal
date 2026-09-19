@@ -18,5 +18,4 @@ npm-debug.log*
 .vercel
 
 # Scratch bundles from validating a layer against a real ledger.
-.matrix.mjs
-.spine.mjs
+.*.mjs

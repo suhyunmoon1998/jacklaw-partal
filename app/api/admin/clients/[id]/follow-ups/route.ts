@@ -94,6 +94,11 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       set,
       factCount: standing(input.entries).length,
       createdBy: 'admin',
+      builtFrom: {
+        ledger: standing(input.entries).length,
+        matrix: input.findings.length,
+        spine: input.spine !== null,
+      },
     })
     return NextResponse.json({ plan, questions: set.questions, problems: vetAll(set) })
   } catch (err) {

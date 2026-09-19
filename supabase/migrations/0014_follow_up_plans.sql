@@ -96,3 +96,16 @@ grant references, trigger, truncate
   on table public.follow_up_plans to anon, authenticated;
 grant references, trigger, truncate
   on table public.follow_up_questions to anon, authenticated;
+
+-- Added after the first round was written, because the round was built from
+-- the fact ledger alone and nothing in the record said so. The claim matrix
+-- and the evidence spine exist as readings but are not yet wired into the app,
+-- so a round generated today draws on open loops and unsettled facts and not
+-- on the contradictions, silences and unreachable elements the other layers
+-- find. That is a thinner round, and the office should be able to see it
+-- rather than infer it from the questions.
+alter table public.follow_up_plans
+  add column if not exists built_from jsonb not null default '{}'::jsonb;
+
+comment on column public.follow_up_plans.built_from is
+  'Which readings were on file when the round was written — the fact ledger always, the claim matrix and evidence spine only if they had been run.';

@@ -37,6 +37,21 @@ export interface FollowUpPlan {
   assignmentId: string
   factCount: number
   model: string
+  /**
+   * Which readings existed when the round was written.
+   *
+   * A round built from the ledger alone asks about open loops and facts that
+   * disagree. One built with the matrix and the spine also asks about elements
+   * nobody can reach, stretches of the employment nothing is known about, and
+   * dates that do not line up — which is most of what a second round is for.
+   * The difference is large enough that it belongs in the record.
+   *
+   * Null for a round written before anything recorded this. Null is not the
+   * same as none: saying "the matrix was not on file" about a round nobody
+   * wrote that down for is asserting something we do not know, and the panel
+   * would print it in a warning box.
+   */
+  builtFrom: { ledger: number; matrix: number; spine: boolean } | null
   leftOut: { gap: string; why: string }[]
   vetProblems: { id: string; problems: string[] }[]
   createdAt: string
@@ -100,6 +115,8 @@ export interface SavePlanInput {
   factCount: number
   /** Who pressed the button, for the plan's own record. */
   createdBy?: string
+  /** Which readings were on file. */
+  builtFrom: FollowUpPlan['builtFrom']
 }
 
 /**
@@ -161,6 +178,7 @@ export async function savePlan(input: SavePlanInput): Promise<FollowUpPlan> {
       model: FOLLOWUP_MODEL,
       left_out: input.set.leftOut,
       vet_problems: vetProblems,
+      built_from: input.builtFrom,
     })
     .select('id, created_at')
     .single()
@@ -185,6 +203,7 @@ export async function savePlan(input: SavePlanInput): Promise<FollowUpPlan> {
     assignmentId: assignment.id,
     factCount: input.factCount,
     model: FOLLOWUP_MODEL,
+    builtFrom: input.builtFrom,
     leftOut: input.set.leftOut,
     vetProblems,
     createdAt: plan.created_at,
@@ -206,7 +225,7 @@ export async function readPlans(clientId: string): Promise<FollowUpPlan[]> {
   const { data, error } = await supabase
     .from('follow_up_plans')
     .select(
-      'id, client_id, question_set_id, assignment_id, fact_count, model, left_out, vet_problems, created_at, reviewed_at, reviewed_by, follow_up_questions(question_key, rung, resolves_kind, resolves_ref, why_it_matters, sort_order)'
+      'id, client_id, question_set_id, assignment_id, fact_count, model, built_from, left_out, vet_problems, created_at, reviewed_at, reviewed_by, follow_up_questions(question_key, rung, resolves_kind, resolves_ref, why_it_matters, sort_order)'
     )
     .eq('client_id', clientId)
     .order('created_at', { ascending: false })
@@ -219,6 +238,7 @@ export async function readPlans(clientId: string): Promise<FollowUpPlan[]> {
     assignment_id: string
     fact_count: number
     model: string
+    built_from: FollowUpPlan['builtFrom'] | null
     left_out: FollowUpPlan['leftOut']
     vet_problems: FollowUpPlan['vetProblems']
     created_at: string
@@ -241,6 +261,11 @@ export async function readPlans(clientId: string): Promise<FollowUpPlan[]> {
     assignmentId: r.assignment_id,
     factCount: r.fact_count,
     model: r.model,
+    // The column defaults to an empty object, which is truthy, so `??` would
+    // let it through and the panel would read undefined off it. A row with no
+    // ledger count predates the column and is reported as unrecorded.
+    builtFrom:
+      r.built_from && typeof r.built_from.ledger === 'number' ? r.built_from : null,
     leftOut: r.left_out ?? [],
     vetProblems: r.vet_problems ?? [],
     createdAt: r.created_at,
