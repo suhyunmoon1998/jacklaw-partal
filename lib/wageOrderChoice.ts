@@ -251,7 +251,14 @@ export async function proposeWageOrder(entries: LedgerEntry[]): Promise<WageOrde
         messages: [
           {
             role: 'user',
-            content: `${orders}\n\n=== FACTS ON FILE ===\n\n${factSheet(entries)}`,
+            // Seventeen Orders' applicability and definitions, about 21,000
+            // tokens, and identical for every client this firm will ever have
+            // — the best cache prefix in the system. It was being sent whole
+            // on every reading. The facts, which differ per client, follow it.
+            content: [
+              { type: 'text', text: orders, cache_control: { type: 'ephemeral' } },
+              { type: 'text', text: `=== FACTS ON FILE ===\n\n${factSheet(entries)}` },
+            ],
           },
         ],
       })

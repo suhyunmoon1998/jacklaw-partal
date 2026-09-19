@@ -361,7 +361,20 @@ async function read<T extends z.ZodTypeAny>(
         system: SYSTEM,
         thinking: { type: 'adaptive' },
         output_config: { effort: 'medium', format: zodOutputFormat(shape) },
-        messages: [{ role: 'user', content: `${instruction}\n\n${preamble(facts)}` }],
+        messages: [
+          {
+            role: 'user',
+            // The facts first and the instruction second, which reads
+            // backwards, for one reason: all three passes run over the same
+            // ledger, so the ledger is the only part that can be cached. On a
+            // 204-fact file it is 18,600 tokens, and it was being sent three
+            // times. Nothing about the content changes.
+            content: [
+              { type: 'text', text: preamble(facts), cache_control: { type: 'ephemeral' } },
+              { type: 'text', text: instruction },
+            ],
+          },
+        ],
       })
       .finalMessage()
   } catch (err) {
