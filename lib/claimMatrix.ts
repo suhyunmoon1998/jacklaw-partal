@@ -27,6 +27,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod'
 import { z } from 'zod'
 import { CLAIMS, Claim } from '@/lib/authority/claims'
+import { Holding, holdingsFor, render } from '@/lib/authority/cases'
 import { cite, quote } from '@/lib/authority'
 import { LedgerEntry, standing } from '@/lib/factLedger'
 import { plainly } from '@/lib/modelErrors'
@@ -119,12 +120,18 @@ RULES
    it goes in 'adverse' — not omitted, not softened. The corpus requires the strongest defence
    to be stated before opposing counsel states it.
 
-6. A WAGE ORDER YOU WERE GIVEN IS THE ONE THAT APPLIES. Where an Order's text is quoted to
+6. A CASE IS ONLY WHAT ITS QUOTED WORDS SAY. Where a decided case is given to you, you are
+   given the passage the office relies on, what it does not decide, and how the office reads it.
+   Reason from those words. Do not add what you remember of the case, do not extend it past the
+   quoted language, and where the passage does not reach the facts, say that instead of
+   stretching it. The line marked WHAT IT DOES NOT DECIDE is binding on you.
+
+7. A WAGE ORDER YOU WERE GIVEN IS THE ONE THAT APPLIES. Where an Order's text is quoted to
    you, the office has settled that it governs this employer and you read the duty out of it.
    Where an element instead says the Order is not yet settled, that is the 'needs authority'
    state — do not reason about which Order it would be.
 
-7. NEVER SUPPLY A FIGURE. Rates, caps, penalty amounts and minimum wages are read off the
+8. NEVER SUPPLY A FIGURE. Rates, caps, penalty amounts and minimum wages are read off the
    statute or they are not stated. If the section in front of you gives a figure, you may use
    it. If it does not, say the figure has to be read off the provision.
 
@@ -160,20 +167,39 @@ function brief(claim: Claim, wageOrder?: string): string {
   const quoted = quote(
     refs.filter(r => !unsettled(r, wageOrder)).map(r => refOf(resolve(r, wageOrder)))
   )
+  const held: Holding[] = []
   const elements = claim.elements
     .map(e => {
       const waiting = unsettled(e.from, wageOrder)
       const ref = refOf(resolve(e.from, wageOrder))
-      // An element whose authority is a Wage Order stops needing one the moment
-      // the Order is settled. An element whose authority is a case the office
-      // does not hold still needs it, whatever the Order.
-      const missing = e.from.includes('{order}') ? (waiting ? e.needsAuthority : undefined) : e.needsAuthority
+      const cases = holdingsFor(`${claim.id}:${e.key}`)
+      held.push(...cases)
+      // Three ways an element stops needing authority, and they are different.
+      // A Wage Order duty is answered once the Order is settled. An element
+      // that turns on a decided case is answered once that case is on file and
+      // the passage is in front of the model. Anything else keeps its note.
+      const missing = e.from.includes('{order}')
+        ? waiting
+          ? e.needsAuthority
+          : undefined
+        : cases.length
+          ? undefined
+          : e.needsAuthority
       return (
         `- key: ${e.key}\n  must be true: ${e.says}\n  read from: ${
           waiting ? 'an IWC Wage Order, not yet settled' : cite(ref.law, ref.num)
-        }` + (missing ? `\n  AUTHORITY NOT ON FILE: ${missing}` : '')
+        }` +
+        (cases.length ? `\n  decided by: ${cases.map(h => h.id).join(', ')}` : '') +
+        (missing ? `\n  AUTHORITY NOT ON FILE: ${missing}` : '')
       )
     })
+    .join('\n\n')
+
+  // Each passage once, however many elements it settles.
+  const seen = new Set<string>()
+  const cases = held
+    .filter(h => (seen.has(h.id) ? false : (seen.add(h.id), true)))
+    .map(render)
     .join('\n\n')
 
   return `CLAIM: ${claim.name}
@@ -186,7 +212,7 @@ ${elements}
 
 === THE SECTIONS, IN FULL ===
 
-${quoted}`
+${quoted}${cases ? `\n\n=== THE CASES THAT DECIDE THESE ELEMENTS ===\n\n${cases}` : ''}`
 }
 
 /** The ledger as the model sees it: id, status, proposition, and where it came from. */
