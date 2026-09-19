@@ -29,15 +29,20 @@ import { AnswerValue } from '@/types'
 
 export const EXTRACTION_MODEL = 'claude-opus-5'
 
-const Extracted = z.object({
-  facts: z.array(FactNugget),
-  /**
-   * Places the client's own answers disagree with each other.
-   *
-   * Not a side note. A contradiction inside an intake is the thing the other
-   * side finds first, and it costs the client credibility rather than a number
-   * — so it is extracted deliberately rather than left to be noticed.
-   */
+/** What one section of the questionnaire yields. */
+const SectionFacts = z.object({ facts: z.array(FactNugget) })
+
+/**
+ * Places the client's own answers disagree with each other.
+ *
+ * A separate pass, over the facts rather than the answers, because a
+ * contradiction is rarely inside one section — the hours she states and the
+ * shift times she lists are three screens apart, and a pass that can only see
+ * one section cannot notice. It is also the finding that matters most: a gap is
+ * a number nobody has yet, but a client whose own answers disagree is a
+ * credibility problem, and the other side finds it first.
+ */
+const Contradictions = z.object({
   contradictions: z.array(
     z.object({
       about: z.string(),
@@ -48,7 +53,7 @@ const Extracted = z.object({
     })
   ),
 })
-export type Extracted = z.infer<typeof Extracted>
+export type Contradiction = z.infer<typeof Contradictions>['contradictions'][number]
 
 const SYSTEM = `You build the factual record for a California employment law office.
 
@@ -116,86 +121,170 @@ export interface ExtractionInput {
 const shown = (v: AnswerValue | undefined): string =>
   Array.isArray(v) ? v.join('; ') : String(v ?? '').trim()
 
-/** The answers as question-and-answer pairs, with the ids the facts will cite. */
-export function sourceText(input: ExtractionInput): { text: string; answered: number } {
-  const { sections, filed } = answersForReading(input.answers)
-  const out: string[] = []
-  let answered = 0
-  for (const section of sections) {
+/**
+ * The answers, split the way the questionnaire itself is.
+ *
+ * One call over a full questionnaire ran out of room partway through the JSON
+ * and the whole extraction was lost — 184 answers, each becoming a fact with
+ * its verbatim and its provenance, is more than one response can hold. The
+ * sections are the natural seam: the facts inside one are about the same
+ * subject and belong together, and they run at the same time.
+ */
+export function sections(input: ExtractionInput): { title: string; text: string; answered: number }[] {
+  const reading = answersForReading(input.answers)
+  const out: { title: string; text: string; answered: number }[] = []
+  for (const section of reading.sections) {
     const rows: string[] = []
     for (const q of section.questions) {
-      const value = shown(filed[q.id])
+      const value = shown(reading.filed[q.id])
       if (!value) continue
-      answered++
       rows.push(`[${q.id}] ${q.label}\n  ANSWER: ${value}`)
     }
-    if (rows.length) out.push(`## ${section.title}\n${rows.join('\n')}`)
+    if (rows.length) out.push({ title: section.title, text: rows.join('\n'), answered: rows.length })
   }
-  return { text: out.join('\n\n'), answered }
+  return out
+}
+
+/** The whole questionnaire as one transcript, for anything that needs it all. */
+export function sourceText(input: ExtractionInput): { text: string; answered: number } {
+  const parts = sections(input)
+  return {
+    text: parts.map(p => `## ${p.title}\n${p.text}`).join('\n\n'),
+    answered: parts.reduce((n, p) => n + p.answered, 0),
+  }
+}
+
+/** Runs `run` over every item, `limit` at a time, keeping input order. */
+async function mapWithLimit<T, R>(items: T[], limit: number, run: (item: T) => Promise<R>): Promise<R[]> {
+  const results = new Array<R>(items.length)
+  let next = 0
+  const worker = async () => {
+    for (;;) {
+      const i = next++
+      if (i >= items.length) return
+      results[i] = await run(items[i])
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker))
+  return results
+}
+
+/**
+ * Enough that a long questionnaire goes through in one wave rather than a
+ * queue, and not so many that a rate limit takes the whole extraction down.
+ */
+const SECTION_CONCURRENCY = 5
+
+async function ask<T>(
+  client: Anthropic,
+  what: string,
+  schema: z.ZodType<T>,
+  system: string,
+  user: string
+): Promise<T> {
+  let response
+  try {
+    response = await client.messages
+      .stream({
+        model: EXTRACTION_MODEL,
+        max_tokens: 24000,
+        system,
+        thinking: { type: 'adaptive' },
+        // Extraction against strict rules rather than open reasoning, and every
+        // answer has to be covered — the budget goes on finishing.
+        output_config: { effort: 'medium', format: zodOutputFormat(schema) },
+        messages: [{ role: 'user', content: user }],
+      })
+      .finalMessage()
+  } catch (err) {
+    throw plainly(err, what)
+  }
+  if (response.stop_reason === 'max_tokens') {
+    throw new Error(`The ${what} ran out of room before it finished. Run it again.`)
+  }
+  const parsed = response.parsed_output
+  if (!parsed) throw new Error(`The ${what} came back in a form we could not read.`)
+  return parsed
 }
 
 /**
  * Reads one client's answers into facts.
  *
- * Returns ledger entries ready to store: ids namespaced to the client so a fact
- * can be cited from anywhere, and nothing superseded yet — reconciling against
- * what is already on file is a separate step, because it is a different
- * judgement and it needs the existing ledger in front of it.
+ * Sections at the same time, then one pass over what came back to find where
+ * the client's own answers disagree — that one needs to see everything, and it
+ * can, because facts are small where answers are not.
+ *
+ * Returns entries ready to store, none superseded: reconciling against a ledger
+ * already on file is a separate judgement and needs that ledger in front of it.
  */
 export async function extractFacts(input: ExtractionInput): Promise<{
   entries: LedgerEntry[]
-  contradictions: Extracted['contradictions']
+  contradictions: Contradiction[]
   answered: number
 }> {
   if (!process.env.ANTHROPIC_API_KEY) {
     throw new Error('ANTHROPIC_API_KEY is not configured, so facts cannot be extracted.')
   }
 
-  const { text, answered } = sourceText(input)
-  if (!answered) {
-    return { entries: [], contradictions: [], answered: 0 }
-  }
+  const parts = sections(input)
+  const answered = parts.reduce((n, p) => n + p.answered, 0)
+  if (!answered) return { entries: [], contradictions: [], answered: 0 }
 
   const client = new Anthropic({ maxRetries: 2 })
-  let response
-  try {
-    response = await client.messages
-      .stream({
-        model: EXTRACTION_MODEL,
-        max_tokens: 32000,
-        system: SYSTEM,
-        thinking: { type: 'adaptive' },
-        // Extraction with strict rules rather than open reasoning, and the
-        // whole questionnaire has to be covered — so the budget goes on
-        // finishing rather than on thinking harder about any one answer.
-        output_config: { effort: 'medium', format: zodOutputFormat(Extracted) },
-        messages: [
-          {
-            role: 'user',
-            content: `CLIENT: ${input.clientName}\n\n=== ANSWERS (${answered}) ===\n\n${text}`,
-          },
-        ],
-      })
-      .finalMessage()
-  } catch (err) {
-    throw plainly(err, 'fact extraction')
-  }
+  const header = `CLIENT: ${input.clientName}`
 
-  if (response.stop_reason === 'max_tokens') {
-    throw new Error('The extraction ran out of room. Run it again.')
-  }
-  const parsed = response.parsed_output
-  if (!parsed) throw new Error('The facts came back in a form we could not read.')
+  const found = await mapWithLimit(parts, SECTION_CONCURRENCY, part =>
+    ask(
+      client,
+      `"${part.title}" extraction`,
+      SectionFacts,
+      `${SYSTEM}
 
-  const entries: LedgerEntry[] = parsed.facts.map((f, i) => ({
+You are given ONE section of the questionnaire. Extract the facts it contains and nothing
+else — other sections are being read at the same time, and a fact produced twice is a fact
+counted twice. Do not reach for context you were not given; if an answer here only makes
+sense alongside something elsewhere, say so in the fact's openLoop rather than guessing.`,
+      `${header}\n\n=== SECTION: ${part.title} (${part.answered} answered) ===\n\n${part.text}`
+    ).then(r => r.facts)
+  )
+
+  const facts = found.flat()
+  const entries: LedgerEntry[] = facts.map((f, i) => ({
     ...f,
-    // Namespaced and positional, so a fact is citable and two clients' ledgers
-    // can never collide on an id the model happened to choose twice.
+    // Namespaced and positional, so a fact is citable from anywhere and two
+    // clients' ledgers cannot collide on an id the model happened to reuse.
     id: `${input.clientId}:f${String(i + 1).padStart(3, '0')}`,
     addedBy: EXTRACTION_MODEL,
     supersededBy: null,
     supersededWhy: null,
   }))
 
-  return { entries, contradictions: parsed.contradictions, answered }
+  if (!entries.length) return { entries, contradictions: [], answered }
+
+  const brief = entries
+    .map(e => `${e.id} [${e.status}] ${e.proposition}  (from ${e.provenance.pinpoint})`)
+    .join('\n')
+
+  const { contradictions } = await ask(
+    client,
+    'contradiction check',
+    Contradictions,
+    `${SYSTEM}
+
+This pass does not extract. The facts below were taken from one client's answers, section by
+section. Find where they cannot all be true.
+
+A real contradiction is two propositions that cannot both hold — she states 6.5 hours a day
+and lists shifts that run 7.5; her final pay date falls before her last day; she says nothing
+is owed while describing months of unpaid work. Quote the actual propositions.
+
+What is NOT a contradiction: a gap, an estimate that differs from a precise figure by a
+sensible margin, or two facts about different periods. Do not manufacture one. If the answers
+are consistent, return an empty list — that is a real and useful answer.
+
+For each, say why it matters and the single question that would resolve it.`,
+    `${header}\n\n=== FACTS (${entries.length}) ===\n\n${brief}`
+  )
+
+  return { entries, contradictions, answered }
 }

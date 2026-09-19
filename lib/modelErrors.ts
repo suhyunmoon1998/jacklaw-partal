@@ -33,5 +33,9 @@ export function plainly(err: unknown, what: string): Error {
   if (/api key|authentication|401/i.test(said)) {
     return new Error('ANTHROPIC_API_KEY is missing or rejected, so no reading can be run.')
   }
-  return new Error(`The ${what} reading failed: ${said.slice(0, 300)}`)
+  // Long enough to reach the offending value. A schema rejection reads
+  // "Invalid option: expected one of ..." and the part that says WHICH field
+  // and WHAT it got comes after that — truncating short hid the only useful
+  // half and left a failure nobody could act on.
+  return new Error(`The ${what} reading failed: ${said.slice(0, 1200)}`)
 }

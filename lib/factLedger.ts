@@ -44,15 +44,17 @@ export const FactStatus = z.enum([
 ])
 export type FactStatus = z.infer<typeof FactStatus>
 
-/** Where a proposition's confidence comes from. */
-export const ConfidenceBasis = z.enum([
-  'exact record',
-  'client memory',
-  'estimate',
-  'reconstructed range',
-  'third-party corroboration',
-  'inference',
-])
+/**
+ * Where a proposition's confidence comes from.
+ *
+ * Free text, not an enum. The corpus lists six kinds — exact record, client
+ * memory, estimate, reconstructed range, third-party corroboration, inference —
+ * but the useful sentence is usually more specific than any of them: "computed
+ * from the five shift times she listed" tells the reader something the word
+ * "estimate" does not. status carries what logic depends on; this carries what
+ * the reader needs, and an enum here only threw away the better answer.
+ */
+export const ConfidenceBasis = z.string()
 
 /**
  * Where a fact came from, precisely enough to go back to.
