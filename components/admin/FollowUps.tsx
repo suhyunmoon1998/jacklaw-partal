@@ -8,6 +8,7 @@ import { MOCK_ADMIN_PASSWORD } from '@/lib/mockData'
 import { LADDER } from '@/lib/followUpShape'
 import type { FollowUp } from '@/lib/followUpShape'
 import type { FollowUpPlan } from '@/lib/followUpStore'
+import type { Question } from '@/types'
 
 /**
  * The next questions to put to a client, laid out for the person who has to
@@ -80,63 +81,95 @@ function Elapsed() {
   return <>{m ? `${m}m ` : ''}{seconds % 60}s</>
 }
 
-function QuestionRow({ q, why }: { q: FollowUp; why: string }) {
+/** What the client will actually see, plus what it is for and whether it goes. */
+function QuestionRow({
+  q,
+  meta,
+  keep,
+  onToggle,
+  locked,
+}: {
+  q: Question
+  meta?: FollowUpPlan['questions'][number]
+  keep: boolean
+  onToggle: () => void
+  locked: boolean
+}) {
+  const theirs = q.ko ?? q.es ?? q.zh
   return (
-    <li className="rounded-xl border border-gray-200 overflow-hidden">
+    <li className={`rounded-xl border overflow-hidden ${keep ? 'border-gray-200' : 'border-gray-200 bg-gray-50 opacity-55'}`}>
       <div className="px-4 py-3">
-        <div className="flex items-center gap-2 flex-wrap mb-2">
-          <span
-            title={`Rung ${q.rung} of the question ladder`}
-            className={`text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded ${RUNG_STYLE[q.rung] ?? 'bg-gray-100 text-gray-600'}`}
-          >
-            {RUNG_LABEL.get(q.rung) ?? `rung ${q.rung}`}
-          </span>
-          <span
-            title={KIND_TITLE[q.resolves.kind] ?? 'What this closes'}
-            className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-gray-50 text-gray-500 border border-gray-200"
-          >
-            {q.resolves.kind}
-          </span>
-          <span className="text-[10px] text-gray-300 font-mono truncate">{q.resolves.ref}</span>
-          {q.askOnlyIf && (
-            <span className="text-[10px] text-gray-400 ml-auto">
-              only after {q.askOnlyIf.questionId}
-            </span>
-          )}
-        </div>
-
-        {/* What she reads, first and largest. The English is the check on it. */}
-        {q.inTheirLanguage ? (
-          <>
-            <p className="text-[15px] text-gray-900 leading-relaxed">{q.inTheirLanguage.label}</p>
-            <p className="text-sm text-gray-500 mt-1.5 leading-relaxed">{q.label}</p>
-          </>
-        ) : (
-          <p className="text-[15px] text-gray-900 leading-relaxed">{q.label}</p>
-        )}
-
-        {q.options.length > 0 && (
-          <ul className="mt-2.5 space-y-1">
-            {q.options.map((o, i) => (
-              <li key={i} className="text-xs text-gray-600 flex gap-2">
-                <span className="text-gray-300 shrink-0">○</span>
-                <span>
-                  {q.inTheirLanguage?.options?.[i] ?? o}
-                  {q.inTheirLanguage?.options?.[i] && (
-                    <span className="text-gray-400"> · {o}</span>
-                  )}
+        <div className="flex items-start gap-3">
+          <input
+            type="checkbox"
+            checked={keep}
+            disabled={locked}
+            onChange={onToggle}
+            aria-label={keep ? 'Struck from this round' : 'Put back in this round'}
+            className="mt-1 shrink-0 w-4 h-4 accent-black disabled:opacity-40"
+          />
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 flex-wrap mb-2">
+              {meta && (
+                <span
+                  title={`Rung ${meta.rung} of the question ladder`}
+                  className={`text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded ${RUNG_STYLE[meta.rung] ?? 'bg-gray-100 text-gray-600'}`}
+                >
+                  {RUNG_LABEL.get(meta.rung) ?? `rung ${meta.rung}`}
                 </span>
-              </li>
-            ))}
-          </ul>
-        )}
+              )}
+              {meta && (
+                <span
+                  title={KIND_TITLE[meta.resolvesKind] ?? 'What this closes'}
+                  className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-gray-50 text-gray-500 border border-gray-200"
+                >
+                  {meta.resolvesKind}
+                </span>
+              )}
+              {q.showIf && (
+                <span className="text-[10px] text-gray-400 ml-auto">
+                  only after {q.showIf.questionId}
+                </span>
+              )}
+              {!keep && (
+                <span className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-red-50 text-red-600 border border-red-200">
+                  struck
+                </span>
+              )}
+            </div>
 
-        {why && (
-          <p className="text-xs text-gray-500 mt-2.5 pt-2.5 border-t border-gray-100">
-            <span className="font-semibold text-gray-600">Why: </span>
-            {why}
-          </p>
-        )}
+            {/* What she reads, first and largest. The English is the check on it. */}
+            {theirs?.label ? (
+              <>
+                <p className="text-[15px] text-gray-900 leading-relaxed">{theirs.label}</p>
+                <p className="text-sm text-gray-500 mt-1.5 leading-relaxed">{q.label}</p>
+              </>
+            ) : (
+              <p className="text-[15px] text-gray-900 leading-relaxed">{q.label}</p>
+            )}
+
+            {q.options && q.options.length > 0 && (
+              <ul className="mt-2.5 space-y-1">
+                {q.options.map((o, i) => (
+                  <li key={i} className="text-xs text-gray-600 flex gap-2">
+                    <span className="text-gray-300 shrink-0">\u25cb</span>
+                    <span>
+                      {theirs?.options?.[i] ?? o}
+                      {theirs?.options?.[i] && <span className="text-gray-400"> \u00b7 {o}</span>}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {meta?.whyItMatters && (
+              <p className="text-xs text-gray-500 mt-2.5 pt-2.5 border-t border-gray-100">
+                <span className="font-semibold text-gray-600">Why: </span>
+                {meta.whyItMatters}
+              </p>
+            )}
+          </div>
+        </div>
       </div>
     </li>
   )
@@ -175,9 +208,13 @@ function BuiltFrom({ from, factCount }: { from: FollowUpPlan['builtFrom']; factC
 
 export default function FollowUps({ clientId }: { clientId: string }) {
   const [plans, setPlans] = useState<FollowUpPlan[] | null>(null)
-  const [questions, setQuestions] = useState<FollowUp[] | null>(null)
+  const [questions, setQuestions] = useState<Question[]>([])
+  /** Question ids still in the round. Everything else is struck. */
+  const [keep, setKeep] = useState<Set<string>>(new Set())
   const [running, setRunning] = useState(false)
+  const [busy, setBusy] = useState('')
   const [error, setError] = useState('')
+  const [note, setNote] = useState('')
   const [limit, setLimit] = useState(20)
 
   const load = useCallback(async () => {
@@ -185,7 +222,10 @@ export default function FollowUps({ clientId }: { clientId: string }) {
       const res = await fetch(`/api/admin/clients/${clientId}/follow-ups`, { headers })
       const body = await res.json()
       if (!res.ok) throw new Error(body?.error || 'Could not load the rounds.')
+      const qs: Question[] = body.questions ?? []
       setPlans(body.plans ?? [])
+      setQuestions(qs)
+      setKeep(new Set(qs.map(q => q.id)))
     } catch (err) {
       setError((err as Error).message)
       setPlans([])
@@ -199,6 +239,7 @@ export default function FollowUps({ clientId }: { clientId: string }) {
   const write = async () => {
     setRunning(true)
     setError('')
+    setNote('')
     try {
       const res = await fetch(`/api/admin/clients/${clientId}/follow-ups`, {
         method: 'POST',
@@ -207,7 +248,6 @@ export default function FollowUps({ clientId }: { clientId: string }) {
       })
       const body = await res.json()
       if (!res.ok) throw new Error(body?.error || 'The questions could not be written.')
-      setQuestions(body.questions ?? [])
       await load()
     } catch (err) {
       setError((err as Error).message)
@@ -216,21 +256,61 @@ export default function FollowUps({ clientId }: { clientId: string }) {
     }
   }
 
-  const review = async (planId: string) => {
+  const latest = plans?.[0]
+  const metaFor = (id: string) => latest?.questions.find(m => m.questionKey === id)
+  const struck = questions.filter(q => !keep.has(q.id))
+
+  const approve = async () => {
+    if (!latest) return
+    setBusy('approving')
+    setError('')
     try {
       const res = await fetch(`/api/admin/clients/${clientId}/follow-ups`, {
         method: 'PATCH',
         headers,
-        body: JSON.stringify({ planId, by: 'admin' }),
+        body: JSON.stringify({ planId: latest.id, keep: Array.from(keep), by: 'admin' }),
       })
-      if (!res.ok) throw new Error((await res.json())?.error || 'Could not record the review.')
+      const body = await res.json()
+      if (!res.ok) throw new Error(body?.error || 'Could not record the review.')
+      setNote(
+        body.dropped?.length
+          ? `Approved ${body.kept}. Struck ${body.dropped.length}.`
+          : `Approved all ${body.kept}.`
+      )
       await load()
     } catch (err) {
       setError((err as Error).message)
+    } finally {
+      setBusy('')
     }
   }
 
-  const latest = plans?.[0]
+  const send = async () => {
+    if (!latest) return
+    setBusy('sending')
+    setError('')
+    try {
+      const res = await fetch(`/api/admin/assignments/${latest.assignmentId}/send`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({}),
+      })
+      const body = await res.json()
+      if (!res.ok) throw new Error(body?.error || 'Could not send it.')
+      setNote(
+        [body.sms ? `Texted ${body.sms}` : null, body.email ? `emailed ${body.email}` : null]
+          .filter(Boolean)
+          .join(', ') || 'Sent.'
+      )
+      await load()
+    } catch (err) {
+      setError((err as Error).message)
+    } finally {
+      setBusy('')
+    }
+  }
+
+  const reviewed = Boolean(latest?.reviewedAt)
 
   return (
     <section className="px-5 py-4 border-t border-gray-100">
@@ -252,10 +332,10 @@ export default function FollowUps({ clientId }: { clientId: string }) {
           </label>
           <button
             onClick={write}
-            disabled={running}
+            disabled={running || Boolean(busy)}
             className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-black text-white disabled:opacity-40 hover:bg-gray-800 transition-colors"
           >
-            {running ? 'Writing…' : 'Write the next questions'}
+            {running ? 'Writing\u2026' : 'Write the next questions'}
           </button>
         </div>
       </div>
@@ -265,17 +345,22 @@ export default function FollowUps({ clientId }: { clientId: string }) {
           {error}
         </p>
       )}
+      {note && !error && (
+        <p className="text-xs text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2 mb-3">
+          {note}
+        </p>
+      )}
 
       {running && (
         <div className="flex items-center gap-3 px-3 py-3 rounded-lg bg-gold/5 border border-gold/20 mb-3">
           <div className="w-4 h-4 shrink-0 rounded-full border-2 border-gold border-t-transparent animate-spin" />
           <p className="text-[11px] text-gray-500 tabular-nums">
-            <Elapsed /> · reading the whole file before it writes anything
+            <Elapsed /> \u00b7 reading the whole file before it writes anything
           </p>
         </div>
       )}
 
-      {plans === null && !running && <p className="text-xs text-gray-400">Loading…</p>}
+      {plans === null && !running && <p className="text-xs text-gray-400">Loading\u2026</p>}
 
       {plans !== null && plans.length === 0 && !running && (
         <p className="text-sm text-gray-500">
@@ -288,20 +373,18 @@ export default function FollowUps({ clientId }: { clientId: string }) {
         <div className="space-y-3">
           <div className="flex items-center gap-2 flex-wrap text-xs">
             <span className="text-gray-500">
-              {latest.questions.length} questions · {new Date(latest.createdAt).toLocaleDateString()}
+              {questions.length} questions \u00b7 {new Date(latest.createdAt).toLocaleDateString()}
             </span>
-            {latest.reviewedAt ? (
+            {reviewed ? (
               <span className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-green-50 text-green-700 border border-green-200">
-                read by {latest.reviewedBy}
+                approved by {latest.reviewedBy}
               </span>
             ) : (
               <span className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200">
-                not reviewed
+                not approved \u2014 cannot be sent
               </span>
             )}
-            {plans.length > 1 && (
-              <span className="text-gray-400">· {plans.length - 1} earlier</span>
-            )}
+            {plans.length > 1 && <span className="text-gray-400">\u00b7 {plans.length - 1} earlier</span>}
           </div>
 
           <BuiltFrom from={latest.builtFrom} factCount={latest.factCount} />
@@ -314,44 +397,38 @@ export default function FollowUps({ clientId }: { clientId: string }) {
               </p>
               <ul className="space-y-0.5">
                 {latest.vetProblems.map(p =>
-                  p.problems.map((x, i) => (
-                    <li key={`${p.id}-${i}`}>• {x}</li>
-                  ))
+                  p.problems.map((x, i) => <li key={`${p.id}-${i}`}>\u2022 {x}</li>)
                 )}
               </ul>
             </div>
           )}
 
-          {questions && questions.length > 0 && (
-            <ul className="space-y-2">
-              {questions.map(q => (
-                <QuestionRow
-                  key={q.id}
-                  q={q}
-                  why={latest.questions.find(m => m.questionKey === q.id)?.whyItMatters ?? q.whyItMatters}
-                />
-              ))}
-            </ul>
+          {!reviewed && questions.length > 0 && (
+            <p className="text-[11px] text-gray-500">
+              Read every question as the client will see it. Untick any that should not be asked \u2014
+              a struck question is deleted, not hidden. Approving is what lets this be sent.
+            </p>
           )}
 
-          {!questions && (
-            <ul className="space-y-1.5">
-              {latest.questions.map(m => (
-                <li key={m.questionKey} className="text-xs text-gray-600 flex gap-2">
-                  <span
-                    className={`text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded shrink-0 ${RUNG_STYLE[m.rung] ?? 'bg-gray-100 text-gray-600'}`}
-                  >
-                    {RUNG_LABEL.get(m.rung) ?? m.rung}
-                  </span>
-                  <span>{m.whyItMatters}</span>
-                </li>
-              ))}
-              <li className="text-[11px] text-gray-400 pt-1">
-                The questions themselves are in the Question Sets tab, under this client&rsquo;s draft
-                assignment.
-              </li>
-            </ul>
-          )}
+          <ul className="space-y-2">
+            {questions.map(q => (
+              <QuestionRow
+                key={q.id}
+                q={q}
+                meta={metaFor(q.id)}
+                keep={keep.has(q.id)}
+                locked={reviewed || Boolean(busy)}
+                onToggle={() =>
+                  setKeep(prev => {
+                    const next = new Set(prev)
+                    if (next.has(q.id)) next.delete(q.id)
+                    else next.add(q.id)
+                    return next
+                  })
+                }
+              />
+            ))}
+          </ul>
 
           {latest.leftOut.length > 0 && (
             <details className="rounded-xl border border-gray-200">
@@ -370,18 +447,33 @@ export default function FollowUps({ clientId }: { clientId: string }) {
           )}
 
           <div className="flex items-center gap-3 flex-wrap pt-1">
-            {!latest.reviewedAt && (
+            {!reviewed ? (
               <button
-                onClick={() => review(latest.id)}
-                className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors"
+                onClick={approve}
+                disabled={Boolean(busy) || keep.size === 0}
+                className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-black text-white disabled:opacity-40 hover:bg-gray-800 transition-colors"
               >
-                I have read every question
+                {busy === 'approving'
+                  ? 'Approving\u2026'
+                  : struck.length
+                    ? `Approve ${keep.size}, strike ${struck.length}`
+                    : `Approve all ${keep.size}`}
+              </button>
+            ) : (
+              <button
+                onClick={send}
+                disabled={Boolean(busy)}
+                className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-gold text-white disabled:opacity-40 hover:opacity-90 transition-opacity"
+              >
+                {busy === 'sending' ? 'Sending\u2026' : 'Send to the client'}
               </button>
             )}
             <p className="text-[11px] text-gray-400">
-              {latest.reviewedAt
-                ? 'Send it from the Question Sets tab, where it is waiting as a draft.'
-                : 'It is a draft. The client cannot see it and nothing here sends it.'}
+              {reviewed
+                ? 'Texted first, emailed as well where there is an address. The reminder ladder chases it from here.'
+                : keep.size === 0
+                  ? 'Nothing left to send.'
+                  : 'Nothing is sent until this is approved.'}
             </p>
           </div>
         </div>

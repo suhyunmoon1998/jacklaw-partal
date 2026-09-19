@@ -27,7 +27,8 @@
 import { getSupabase } from '@/lib/supabase'
 import { Lang } from '@/lib/langs'
 import { FollowUp, FollowUpSet, FOLLOWUP_MODEL, toQuestion, vetAll } from '@/lib/followUp'
-import { replaceQuestions } from '@/lib/questionSets'
+import { getQuestionSetDetail, replaceQuestions } from '@/lib/questionSets'
+import { Question } from '@/types'
 
 /** What a stored round looks like to the office. */
 export interface FollowUpPlan {
@@ -283,14 +284,93 @@ export async function readPlans(clientId: string): Promise<FollowUpPlan[]> {
   }))
 }
 
-/** A person has read every question in this round. */
-export async function markReviewed(planId: string, by: string): Promise<void> {
+/**
+ * The questions themselves, as the client would see them.
+ *
+ * The panel that approves a round has to render every question in the
+ * language it will be read in, with the English beside it. Reading a summary
+ * of why a question was asked is not reviewing the question.
+ */
+export async function planQuestions(questionSetId: string): Promise<Question[]> {
+  const set = await getQuestionSetDetail(questionSetId)
+  return set?.questions ?? []
+}
+
+/**
+ * A person has read every question, and said which ones may go.
+ *
+ * `keep` is the whole approved round. Anything not in it is deleted — from the
+ * question set the client would open and from the record of why it was asked —
+ * because a question struck at review should not be sitting in the database
+ * waiting for somebody to wonder whether it was sent.
+ *
+ * Striking one is the point of reviewing. vet() catches jargon, compound
+ * questions and a missing "I don't know"; it cannot catch a question that is
+ * clear, clean and leading, and that is the one a person has to remove.
+ */
+export async function reviewPlan(
+  planId: string,
+  keep: string[],
+  by: string
+): Promise<{ kept: number; dropped: string[] }> {
   const supabase = getSupabase()
+  const { data: plan, error: readErr } = await supabase
+    .from('follow_up_plans')
+    .select('question_set_id, follow_up_questions(question_key, sort_order)')
+    .eq('id', planId)
+    .single()
+  if (readErr || !plan) throw new Error(readErr?.message || 'That round is not on file.')
+
+  const meta = plan as unknown as {
+    question_set_id: string
+    follow_up_questions: { question_key: string; sort_order: number }[]
+  }
+  const wanted = new Set(keep)
+  const dropped = meta.follow_up_questions.map(q => q.question_key).filter(k => !wanted.has(k))
+
+  if (!keep.length) throw new Error('A round with no questions in it cannot be sent.')
+
+  if (dropped.length) {
+    const questions = await planQuestions(meta.question_set_id)
+    // Rewritten wholesale, which also drops any gate pointing at a struck
+    // question — normalizeQuestions does that, and a follow-up hidden behind a
+    // question nobody will be asked is a follow-up nobody would ever see.
+    await replaceQuestions(
+      meta.question_set_id,
+      questions.filter(q => wanted.has(q.id))
+    )
+    const { error: delErr } = await supabase
+      .from('follow_up_questions')
+      .delete()
+      .eq('plan_id', planId)
+      .in('question_key', dropped)
+    if (delErr) throw new Error(delErr.message || 'Could not remove the struck questions.')
+  }
+
   const { error } = await supabase
     .from('follow_up_plans')
     .update({ reviewed_at: new Date().toISOString(), reviewed_by: by })
     .eq('id', planId)
   if (error) throw new Error(error.message || 'Could not record the review.')
+
+  return { kept: keep.length, dropped }
+}
+
+/**
+ * Whether this assignment is a generated round nobody has read yet.
+ *
+ * Asked by the send route. A round reaches a client only after a person has
+ * opened it — the draft status hides it, but nothing stopped an admin sending
+ * it from the Question Sets tab without ever seeing the questions.
+ */
+export async function unreviewedRound(assignmentId: string): Promise<{ planId: string } | null> {
+  const { data } = await getSupabase()
+    .from('follow_up_plans')
+    .select('id, reviewed_at')
+    .eq('assignment_id', assignmentId)
+    .maybeSingle()
+  if (!data || data.reviewed_at) return null
+  return { planId: data.id as string }
 }
 
 /**

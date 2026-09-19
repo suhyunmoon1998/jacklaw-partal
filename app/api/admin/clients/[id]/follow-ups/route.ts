@@ -8,7 +8,7 @@ import { allClaims } from '@/lib/caseReadingShape'
 import { readingFingerprint } from '@/lib/caseReading'
 import { readReading } from '@/lib/caseReadingStore'
 import { askFollowUps, vetAll } from '@/lib/followUp'
-import { markReviewed, readPlans, savePlan } from '@/lib/followUpStore'
+import { planQuestions, readPlans, reviewPlan, savePlan } from '@/lib/followUpStore'
 import { ClaimFinding } from '@/lib/claimMatrix'
 import { SpineReading } from '@/lib/evidenceSpine'
 
@@ -51,7 +51,12 @@ async function gather(clientId: string) {
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   if (!isAdmin(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   try {
-    return NextResponse.json({ plans: await readPlans(params.id) })
+    const plans = await readPlans(params.id)
+    // The newest round comes with its questions, because that is the one
+    // somebody is about to approve, and approving a round means reading the
+    // questions rather than a summary of why they were asked.
+    const questions = plans[0] ? await planQuestions(plans[0].questionSetId) : []
+    return NextResponse.json({ plans, questions })
   } catch (err) {
     return NextResponse.json({ error: (err as Error).message }, { status: 500 })
   }
@@ -111,7 +116,14 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   }
 }
 
-/** Recording that a person has read the round. It still has to be sent by hand. */
+/**
+ * Approving a round: which questions may go, and that a person read them.
+ *
+ * `keep` is the whole approved set. Anything left out is struck and deleted —
+ * striking one is the point of reviewing, because vet() catches jargon and
+ * compound questions but cannot catch a question that is clear, clean and
+ * leading. This still sends nothing; the round stays a draft until sent.
+ */
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   if (!isAdmin(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const body = await req.json().catch(() => ({}))
@@ -119,13 +131,24 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   if (!planId) return NextResponse.json({ error: 'Which round?' }, { status: 400 })
 
   const plans = await readPlans(params.id)
-  if (!plans.some(p => p.id === planId)) {
-    return NextResponse.json({ error: 'That round is not this client’s.' }, { status: 404 })
+  const plan = plans.find(p => p.id === planId)
+  if (!plan) {
+    return NextResponse.json({ error: 'That round is not this client\u2019s.' }, { status: 404 })
   }
+
+  const keep: string[] = Array.isArray(body?.keep)
+    ? body.keep.map(String)
+    : plan.questions.map(q => q.questionKey)
+  const known = new Set(plan.questions.map(q => q.questionKey))
+  const unknown = keep.filter(k => !known.has(k))
+  if (unknown.length) {
+    return NextResponse.json({ error: `Not in this round: ${unknown.join(', ')}` }, { status: 400 })
+  }
+
   try {
-    await markReviewed(planId, String(body?.by ?? 'admin'))
-    return NextResponse.json({ ok: true })
+    const result = await reviewPlan(planId, keep, String(body?.by ?? 'admin'))
+    return NextResponse.json({ ok: true, ...result })
   } catch (err) {
-    return NextResponse.json({ error: (err as Error).message }, { status: 500 })
+    return NextResponse.json({ error: (err as Error).message }, { status: 400 })
   }
 }

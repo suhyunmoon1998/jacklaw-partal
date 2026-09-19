@@ -3,6 +3,7 @@ import { getSupabase } from '@/lib/supabase'
 import { isAdmin } from '@/lib/adminAuth'
 import { advancesTo, assignmentLink, getAssignmentDetail } from '@/lib/questionSets'
 import { isConfigured, sendSms } from '@/lib/twilio'
+import { unreviewedRound } from '@/lib/followUpStore'
 import { invitationSms, lookupClientPhone, origin } from '@/lib/assignmentInvite'
 import { Lang, isLang } from '@/lib/langs'
 import { localizeName } from '@/lib/questionLogic'
@@ -43,6 +44,23 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   // forClient: the count in the email has to match the questionnaire they open.
   const assignment = await getAssignmentDetail(params.id, { forClient: true })
   if (!assignment) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+  // A generated round of follow-up questions reaches a client only after
+  // somebody has opened it and read what it says. The draft status hides it
+  // from the client; this is what stops it being sent from the Question Sets
+  // tab by an admin who never saw the questions.
+  const unread = await unreviewedRound(params.id)
+  if (unread) {
+    return NextResponse.json(
+      {
+        error:
+          'These questions were written by the follow-up reader and nobody has approved them yet. ' +
+          'Open the client, read them under Analysis, and approve the round first.',
+        needsReview: unread.planId,
+      },
+      { status: 409 }
+    )
+  }
 
   const body = await req.json().catch(() => ({}))
   const to = String(body?.email ?? '').trim() || (await lookupClientEmail(assignment.clientId))
