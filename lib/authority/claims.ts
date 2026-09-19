@@ -36,7 +36,14 @@ export interface Element {
   key: string
   /** What must be true, in the statute's own terms. */
   says: string
-  /** The section this is read out of, as "LAB 512". */
+  /**
+   * The provision this is read out of, as "LAB 512".
+   *
+   * May carry the placeholder {order}, as "IWC {order} sec 12": a Wage Order
+   * duty whose Order depends on the employer's industry. The matrix resolves
+   * it from the Order settled for the case, and where none is settled the
+   * element reports as needing authority rather than picking one.
+   */
   from: string
   /**
    * Set when the element cannot be settled from the statutes on file — a Wage
@@ -65,7 +72,7 @@ export const CLAIMS: Claim[] = [
   {
     id: 'meal-periods',
     name: 'Meal periods',
-    sections: ['LAB 512', 'LAB 226.7'],
+    sections: ['LAB 512', 'LAB 226.7', 'IWC {order} sec 11'],
     caci: '2766',
     elements: [
       {
@@ -108,15 +115,15 @@ export const CLAIMS: Claim[] = [
   {
     id: 'rest-periods',
     name: 'Rest periods',
-    sections: ['LAB 226.7'],
+    sections: ['LAB 226.7', 'IWC {order} sec 12'],
     caci: '2761',
     elements: [
       {
         key: 'duty-owed',
         says: 'A rest period was mandated for the shifts the employee worked.',
-        from: 'LAB 226.7',
+        from: 'IWC {order} sec 12',
         needsAuthority:
-          'IWC Wage Order sec. 12 — NOT ON FILE. Section 226.7 supplies only the remedy and points at the Order for the duty. The number of rest periods a shift earns cannot be stated from the Labor Code alone.',
+          'The governing IWC Wage Order has not been settled for this employer. All seventeen are on file; which one applies turns on the industry, and that is a legal classification this system proposes but does not decide. Section 226.7 supplies only the remedy and points at the Order for the duty.',
       },
       {
         key: 'not-provided',

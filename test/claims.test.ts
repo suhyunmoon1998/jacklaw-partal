@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { CLAIMS, claimById, sectionsUsed } from '@/lib/authority/claims'
-import { section } from '@/lib/authority'
+import { ORDERS } from '@/lib/wageOrderChoice'
+import { parseKey, section } from '@/lib/authority'
 
 describe('the claims the matrix is allowed to reason about', () => {
   it('cites only sections the portal actually holds', () => {
@@ -9,8 +10,23 @@ describe('the claims the matrix is allowed to reason about', () => {
     // trust anyone's memory of it. A section that is not on file is a claim
     // that cannot be grounded, and the build should say so.
     for (const key of sectionsUsed()) {
-      const [law, num] = key.split(' ')
+      if (key.includes('{order}')) continue // checked below, against every Order
+      const { law, num } = parseKey(key)
       expect(section(law, num), `${key} is cited by a claim but is not on file`).toBeTruthy()
+    }
+  })
+
+  it('holds every Wage Order a claim template could resolve to', () => {
+    // A duty written as 'IWC {order} sec 12' is only groundable if the section
+    // exists in whichever Order the case turns out to be under. Any one of the
+    // seventeen is reachable, so all seventeen have to carry it.
+    const templates = sectionsUsed().filter(k => k.includes('{order}'))
+    expect(templates.length).toBeGreaterThan(0)
+    for (const t of templates) {
+      for (const order of ORDERS) {
+        const { law, num } = parseKey(t.replace('{order}', order))
+        expect(section(law, num), `${t} does not resolve for Order ${order}`).toBeTruthy()
+      }
     }
   })
 
@@ -37,15 +53,21 @@ describe('the claims the matrix is allowed to reason about', () => {
     expect(wait.elements.find(e => e.key === 'willful')!.from).toBe('LAB 203')
   })
 
-  it('says when an element cannot be settled from what is on file', () => {
-    // Rest periods are the clearest case: section 226.7 gives the remedy and
-    // points at the Wage Order for the duty. The Orders are not on file, so the
-    // duty element must announce that rather than state a rule from memory.
-    const rest = claimById('rest-periods')!
-    const duty = rest.elements.find(e => e.key === 'duty-owed')!
+  it('reads the rest-period duty out of the Order, not the Labor Code', () => {
+    // Section 226.7 gives the remedy and points at the Wage Order for the duty
+    // — "mandated pursuant to an applicable statute, or applicable regulation,
+    // standard, or order of the Industrial Welfare Commission". The duty
+    // element has to be read from the Order, and the Order has to say it.
+    const duty = claimById('rest-periods')!.elements.find(e => e.key === 'duty-owed')!
+    expect(duty.from).toBe('IWC {order} sec 12')
+    expect(section('IWC', '5 sec 12')).toMatch(/ten \(10\)\s*\n?\s*minutes net rest time/i)
+
+    // Until an Order is settled for the employer, the element still announces
+    // what is missing rather than picking one — which Order applies is a legal
+    // classification, and holding all seventeen does not make it.
     expect(duty.needsAuthority).toBeTruthy()
     expect(duty.needsAuthority).toMatch(/Wage Order/i)
-    expect(duty.needsAuthority).toMatch(/NOT ON FILE/i)
+    expect(duty.needsAuthority).toMatch(/not been settled/i)
 
     // And the remedy it does carry is the one the statute actually states.
     expect(section('LAB', '226.7')).toMatch(/one additional hour of pay/i)
@@ -86,5 +108,28 @@ describe('the claims the matrix is allowed to reason about', () => {
       expect(c.remedy.length, `${c.id}`).toBeGreaterThan(30)
       expect(c.elements.length, `${c.id}`).toBeGreaterThan(1)
     }
+  })
+})
+
+describe('handing a claim to the matrix', () => {
+  it('quotes the Order once one is settled, and says it is missing until then', async () => {
+    // The bug this covers: with an Order supplied the element kept its
+    // "AUTHORITY NOT ON FILE" line anyway, so the model went on reporting the
+    // duty as unsettled while the text of Order 5 section 12 sat in front of
+    // it. Nothing in the output looked wrong — it just never improved.
+    const { briefForTest } = await import('@/lib/claimMatrix')
+    const rest = claimById('rest-periods')!
+
+    const open = briefForTest(rest)
+    expect(open).toContain('an IWC Wage Order, not yet settled')
+    expect(open).toContain('AUTHORITY NOT ON FILE')
+    expect(open).not.toMatch(/minutes net rest time/i)
+
+    const settled = briefForTest(rest, '5')
+    expect(settled).toContain('IWC Wage Order 5, § 12')
+    expect(settled).toMatch(/minutes net rest time/i)
+    // The duty element is answered now. The Augustus element still is not.
+    expect(settled).not.toContain('not yet settled')
+    expect(settled).toContain('Augustus')
   })
 })

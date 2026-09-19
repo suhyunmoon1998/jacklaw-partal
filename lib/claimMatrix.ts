@@ -119,29 +119,61 @@ RULES
    it goes in 'adverse' — not omitted, not softened. The corpus requires the strongest defence
    to be stated before opposing counsel states it.
 
-6. NEVER SUPPLY A FIGURE. Rates, caps, penalty amounts and minimum wages are read off the
+6. A WAGE ORDER YOU WERE GIVEN IS THE ONE THAT APPLIES. Where an Order's text is quoted to
+   you, the office has settled that it governs this employer and you read the duty out of it.
+   Where an element instead says the Order is not yet settled, that is the 'needs authority'
+   state — do not reason about which Order it would be.
+
+7. NEVER SUPPLY A FIGURE. Rates, caps, penalty amounts and minimum wages are read off the
    statute or they are not stated. If the section in front of you gives a figure, you may use
    it. If it does not, say the figure has to be read off the provision.
 
 You are producing internal work product for a lawyer. Be direct and specific. No hedging
 language, no reassurance, and nothing that reads as advice to a client.`
 
-/** One claim's elements and the sections behind them, ready to hand to the model. */
-function brief(claim: Claim): string {
-  const sections = Array.from(new Set([...claim.sections, ...claim.elements.map(e => e.from)]))
+/** Is this a Wage Order duty whose Order has not been settled for the case? */
+function unsettled(ref: string, wageOrder?: string): boolean {
+  return ref.includes('{order}') && !wageOrder
+}
+
+/** 'IWC {order} sec 12' against Order 5 becomes 'IWC 5 sec 12'. */
+function resolve(ref: string, wageOrder?: string): string {
+  return wageOrder ? ref.replace('{order}', wageOrder) : ref
+}
+
+/** Splits a reference into the body and the rest: 'IWC 5 sec 12' is not two words. */
+function refOf(ref: string): { law: string; num: string } {
+  const at = ref.indexOf(' ')
+  return { law: ref.slice(0, at), num: ref.slice(at + 1) }
+}
+
+/**
+ * One claim's elements and the provisions behind them, ready to hand to the model.
+ *
+ * A Wage Order duty is quoted only once the case has an Order. Until then the
+ * reference stays a placeholder and the element carries its own explanation of
+ * what is missing — quoting seventeen Orders and inviting the model to pick
+ * would be handing it the legal classification the office reserves.
+ */
+function brief(claim: Claim, wageOrder?: string): string {
+  const refs = Array.from(new Set([...claim.sections, ...claim.elements.map(e => e.from)]))
   const quoted = quote(
-    sections.map(s => {
-      const [law, num] = s.split(' ')
-      return { law, num }
-    })
+    refs.filter(r => !unsettled(r, wageOrder)).map(r => refOf(resolve(r, wageOrder)))
   )
   const elements = claim.elements
-    .map(
-      e =>
-        `- key: ${e.key}\n  must be true: ${e.says}\n  read from: ${cite(
-          ...(e.from.split(' ') as [string, string])
-        )}` + (e.needsAuthority ? `\n  AUTHORITY NOT ON FILE: ${e.needsAuthority}` : '')
-    )
+    .map(e => {
+      const waiting = unsettled(e.from, wageOrder)
+      const ref = refOf(resolve(e.from, wageOrder))
+      // An element whose authority is a Wage Order stops needing one the moment
+      // the Order is settled. An element whose authority is a case the office
+      // does not hold still needs it, whatever the Order.
+      const missing = e.from.includes('{order}') ? (waiting ? e.needsAuthority : undefined) : e.needsAuthority
+      return (
+        `- key: ${e.key}\n  must be true: ${e.says}\n  read from: ${
+          waiting ? 'an IWC Wage Order, not yet settled' : cite(ref.law, ref.num)
+        }` + (missing ? `\n  AUTHORITY NOT ON FILE: ${missing}` : '')
+      )
+    })
     .join('\n\n')
 
   return `CLAIM: ${claim.name}
@@ -195,9 +227,22 @@ const CLAIM_CONCURRENCY = 5
  * statute text would spend most of its budget on law the claim in hand does not
  * need.
  */
+export interface MatrixOptions {
+  /**
+   * The Wage Order settled for this employer, as '5'.
+   *
+   * Proposed by lib/wageOrderChoice.ts and confirmed by an attorney. Passing
+   * it resolves the Wage Order duties; leaving it out makes them report as
+   * needing authority, which is the honest state of a case whose industry
+   * nobody has classified yet.
+   */
+  wageOrder?: string
+}
+
 export async function buildMatrix(
   entries: LedgerEntry[],
-  claims: Claim[] = CLAIMS
+  claims: Claim[] = CLAIMS,
+  opts: MatrixOptions = {}
 ): Promise<ClaimFinding[]> {
   if (!process.env.ANTHROPIC_API_KEY) {
     throw new Error('ANTHROPIC_API_KEY is not configured, so the matrix cannot be built.')
@@ -220,7 +265,7 @@ export async function buildMatrix(
           messages: [
             {
               role: 'user',
-              content: `${brief(claim)}\n\n=== FACTS ON FILE ===\n\n${facts}`,
+              content: `${brief(claim, opts.wageOrder)}\n\n=== FACTS ON FILE ===\n\n${facts}`,
             },
           ],
         })
@@ -258,3 +303,6 @@ export function unresolved(findings: ClaimFinding[]) {
       .map(e => ({ claimId: f.claimId, element: e.key, state: e.state, need: e.wouldSettleIt }))
   )
 }
+
+/** The prompt a claim produces, so a test can see what the model is actually handed. */
+export const briefForTest = brief
