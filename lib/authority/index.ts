@@ -1,31 +1,51 @@
 /**
- * The statutes the office's readings are allowed to cite.
+ * The authorities the office's readings are allowed to cite.
  *
- * Full text, fetched from the Legislature's own site rather than retyped from
- * memory or quoted out of a treatise. That distinction is the corpus's, and it
- * is the difference between an analysis a lawyer can file behind and one they
- * have to check line by line: "no material legal conclusion should rely only on
- * an old brief, AI output, summary, or secondary source without checking the
- * current controlling authority."
+ * Full text, fetched from the issuing body rather than retyped from memory or
+ * quoted out of a treatise. That distinction is the corpus's, and it is the
+ * difference between an analysis a lawyer can file behind and one they have to
+ * check line by line: "no material legal conclusion should rely only on an old
+ * brief, AI output, summary, or secondary source without checking the current
+ * controlling authority."
  *
- * Kept as a file in the repository so a citation is traceable to a version that
+ * Four bodies of authority are on file, and they answer different questions:
+ *
+ *   STATUTES (Lab. Code, Bus. & Prof. Code, Code Civ. Proc.) — what is owed,
+ *   what the remedy is, and how long there is to sue. From the Legislature.
+ *
+ *   WAGE ORDERS — the duties the Labor Code points at without stating. Rest
+ *   periods are section 12 of an Order, not a section of the Code, and section
+ *   226.7 supplies only the premium. From the Department of Industrial
+ *   Relations. Which Order applies depends on the employer's industry, which
+ *   is a legal classification and is not decided here.
+ *
+ *   CACI — the Judicial Council's statement of what a jury must find, with the
+ *   controlling cases collected under each instruction. Not itself authority:
+ *   it is the office's index into the cases, and the "Sources and Authority"
+ *   notes are why it is worth holding.
+ *
+ * Kept as files in the repository so a citation is traceable to a version that
  * can be read and diffed, and so a reading is reproducible — the same answers
- * against the same statute text give the same result next month.
+ * against the same text give the same result next month.
  *
- * Statute text is not eternal. FETCHED_ON is when this was pulled; anything
- * material should still be checked against the current section before it goes
- * into a filing, which is what the corpus's verification log is for.
+ * None of it is eternal. FETCHED_ON records when each body was pulled, and
+ * anything material should still be checked against the current text before it
+ * goes into a filing, which is what the corpus's verification log is for.
  */
 
-import data from './statutes.json'
+import statuteData from './statutes.json'
+import wageOrderData from './wageOrders.json'
+import caciData from './caci.json'
 
-/** When the text below was pulled from leginfo.legislature.ca.gov. */
-export const FETCHED_ON = '2026-09-19'
-export const SOURCE = 'leginfo.legislature.ca.gov — California Legislative Information'
+/** When each body of authority was pulled, and from where. */
+export const FETCHED_ON: Record<string, { on: string; from: string }> = {
+  statutes: { on: '2026-09-19', from: 'leginfo.legislature.ca.gov — California Legislative Information' },
+  wageOrders: { on: '2026-09-18', from: 'dir.ca.gov — Industrial Welfare Commission Wage Orders' },
+  caci: { on: '2026-09-18', from: "Judicial Council of California Civil Jury Instructions 2026 — the firm's own copy" },
+}
 
-type Statutes = {
-  /** Keyed "LAB 226.7", "BPC 17200". */
-  sections: Record<string, string>
+type Keyed = { sections: Record<string, string> }
+type Statutes = Keyed & {
   chapters: Record<
     string,
     { law: string; label: string; path: Record<string, string>; count: number; range: string[] }
@@ -33,35 +53,70 @@ type Statutes = {
 }
 
 // The JSON is inferred with literal keys; the shape is what matters here.
-const STATUTES = data as unknown as Statutes
+const STATUTES = statuteData as unknown as Statutes
+const WAGE_ORDERS = wageOrderData as unknown as Keyed
+const CACI = caciData as unknown as Keyed
 
 export const LAW_NAME: Record<string, string> = {
   LAB: 'Lab. Code',
   BPC: 'Bus. & Prof. Code',
+  CCP: 'Code Civ. Proc.',
+  IWC: 'IWC Wage Order',
+  CACI: 'CACI No.',
+}
+
+/** Which file holds a given body of authority. */
+function shelf(law: string): Keyed {
+  if (law === 'IWC') return WAGE_ORDERS
+  if (law === 'CACI') return CACI
+  return STATUTES
 }
 
 /**
- * One section's text, or null.
+ * One provision's text, or null.
  *
  * Null rather than a throw, and never a guess: a reading that cannot find the
- * section it wants must say the authority is missing, not proceed on what it
- * remembers the section to say.
+ * provision it wants must say the authority is missing, not proceed on what it
+ * remembers the provision to say.
+ *
+ * `num` is what follows the body's name in the key — '226.7' for a statute,
+ * '5 sec 12' for section 12 of Wage Order 5, '2766A' for an instruction.
  */
 export function section(law: string, num: string): string | null {
-  return STATUTES.sections[`${law} ${num}`] ?? null
+  return shelf(law).sections[`${law} ${num}`] ?? null
 }
 
 /** How the office cites it. */
 export function cite(law: string, num: string): string {
+  if (law === 'IWC') {
+    const [order, , sec] = num.split(' ')
+    return sec ? `IWC Wage Order ${order}, § ${sec}` : `IWC Wage Order ${order}`
+  }
+  if (law === 'CACI') return `CACI No. ${num}`
   return `${LAW_NAME[law] ?? law} § ${num}`
 }
 
-/** Every section on file, for a reading that needs to know what it may rely on. */
+/** Splits a key like 'IWC 5 sec 12' into the body and the rest. */
+export function parseKey(key: string): { law: string; num: string } {
+  const at = key.indexOf(' ')
+  return at < 0 ? { law: key, num: '' } : { law: key.slice(0, at), num: key.slice(at + 1) }
+}
+
+/** Every provision on file, for a reading that needs to know what it may rely on. */
 export function available(): { law: string; num: string; cite: string }[] {
-  return Object.keys(STATUTES.sections).map(k => {
-    const [law, num] = k.split(' ')
-    return { law, num, cite: cite(law, num) }
-  })
+  return [STATUTES, WAGE_ORDERS, CACI].flatMap(s =>
+    Object.keys(s.sections).map(k => {
+      const { law, num } = parseKey(k)
+      return { law, num, cite: cite(law, num) }
+    })
+  )
+}
+
+/** The wage orders on file, by number. Which one applies is not decided here. */
+export function wageOrders(): string[] {
+  const seen: Record<string, true> = {}
+  for (const k of Object.keys(WAGE_ORDERS.sections)) seen[parseKey(k).num.split(' ')[0]] = true
+  return Object.keys(seen)
 }
 
 /** The chapters that were pulled, for the verification log. */
@@ -70,18 +125,18 @@ export function chapters() {
 }
 
 /**
- * The sections a reading is handed, with their text.
+ * The provisions a reading is handed, with their text.
  *
- * Only what was asked for. The whole corpus is eight hundred thousand
- * characters and sending it would cost more than it is worth on every call —
- * the claim decides which provisions are in play, and those are quoted in full.
+ * Only what was asked for. The library is over two million characters and
+ * sending it would cost more than it is worth on every call — the claim decides
+ * which provisions are in play, and those are quoted in full.
  */
 export function quote(wanted: { law: string; num: string }[]): string {
   const parts: string[] = []
   for (const { law, num } of wanted) {
     const text = section(law, num)
     if (!text) {
-      parts.push(`${cite(law, num)} — NOT ON FILE. Do not state what this section says.`)
+      parts.push(`${cite(law, num)} — NOT ON FILE. Do not state what this provision says.`)
       continue
     }
     parts.push(`=== ${cite(law, num)} ===\n${text}`)

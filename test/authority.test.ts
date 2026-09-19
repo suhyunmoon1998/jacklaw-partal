@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { available, chapters, cite, FETCHED_ON, quote, section } from '@/lib/authority'
+import { available, chapters, cite, FETCHED_ON, parseKey, quote, section, wageOrders } from '@/lib/authority'
 
 describe('the statutes a reading may cite', () => {
   it('holds the provisions a California wage case actually runs on', () => {
@@ -59,7 +59,7 @@ describe('the statutes a reading may cite', () => {
     expect(section('LAB', '99999')).toBeNull()
     const quoted = quote([{ law: 'LAB', num: '99999' }])
     expect(quoted).toContain('NOT ON FILE')
-    expect(quoted).toContain('Do not state what this section says')
+    expect(quoted).toContain('Do not state what this provision says')
   })
 
   it('quotes in the form the office cites in', () => {
@@ -68,10 +68,66 @@ describe('the statutes a reading may cite', () => {
     expect(quote([{ law: 'LAB', num: '203' }])).toContain('=== Lab. Code § 203 ===')
   })
 
-  it('records where and when it came from, so currency can be checked', () => {
-    expect(FETCHED_ON).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+  it('records where and when each body came from, so currency can be checked', () => {
+    for (const [body, from] of Object.entries(FETCHED_ON)) {
+      expect(from.on, body).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+      expect(from.from.length, body).toBeGreaterThan(10)
+    }
     expect(chapters().length).toBeGreaterThan(5)
     expect(chapters().every(c => c.count > 0)).toBe(true)
-    expect(available().length).toBeGreaterThan(300)
+    expect(available().length).toBeGreaterThan(800)
+  })
+
+  it('holds the limitations statutes, which nothing may state from memory', () => {
+    // A filing deadline is the one error in this system that cannot be
+    // recovered from, and an earlier reading got one wrong by two years.
+    expect(section('CCP', '337')).toMatch(/four years/i)
+    expect(section('CCP', '338')).toMatch(/three years/i)
+    expect(section('CCP', '339')).toMatch(/two years/i)
+    expect(section('CCP', '340')).toMatch(/one year/i)
+    expect(section('CCP', '343')).toBeTruthy()
+    expect(cite('CCP', '338')).toBe('Code Civ. Proc. § 338')
+  })
+})
+
+describe('the wage orders', () => {
+  it('supplies the rest-period duty the Labor Code does not state', () => {
+    // Section 226.7 gives the premium and points at "an applicable ... order of
+    // the Industrial Welfare Commission" for the duty. This is that order.
+    const rest = section('IWC', '5 sec 12')
+    expect(rest).toMatch(/authorize and permit/i)
+    expect(rest).toMatch(/ten \(10\)\s*\n?\s*minutes net rest time per four \(4\) hours/i)
+  })
+
+  it('holds every order, so the applicable one can be chosen rather than assumed', () => {
+    // Which order governs turns on the employer's industry. That is a legal
+    // classification; holding all of them is what lets it be made deliberately.
+    const orders = wageOrders()
+    expect(orders.length).toBeGreaterThanOrEqual(17)
+    expect(orders).toContain('5')
+    expect(orders).toContain('7')
+    expect(section('IWC', '7 sec 12')).toBeTruthy()
+  })
+
+  it('cites an order the way a brief does', () => {
+    expect(cite('IWC', '5 sec 12')).toBe('IWC Wage Order 5, § 12')
+    expect(parseKey('IWC 5 sec 12')).toEqual({ law: 'IWC', num: '5 sec 12' })
+  })
+})
+
+describe('the jury instructions', () => {
+  it('holds the wage-and-hour instructions, with the cases collected under them', () => {
+    const meal = section('CACI', '2766A')
+    expect(meal).toBeTruthy()
+    // The value of CACI here is not the element text but the notes beneath it,
+    // which are the office's index into the controlling cases.
+    expect(meal).toMatch(/Sources and Authority/i)
+    expect(section('CACI', '2702')).toBeTruthy()
+    expect(cite('CACI', '2702')).toBe('CACI No. 2702')
+  })
+
+  it('holds the whistleblower instruction for section 1102.5', () => {
+    const found = ['4603', '4600', '4601', '4602'].filter(n => section('CACI', n))
+    expect(found.length).toBeGreaterThan(0)
   })
 })

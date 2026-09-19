@@ -16,3 +16,7 @@ npm-debug.log*
 # OS
 .DS_Store
 .vercel
+
+# Scratch bundles from validating a layer against a real ledger.
+.matrix.mjs
+.spine.mjs
