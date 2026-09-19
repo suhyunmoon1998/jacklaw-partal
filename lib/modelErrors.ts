@@ -16,7 +16,14 @@
  */
 export function plainly(err: unknown, what: string): Error {
   const raw = err instanceof Error ? err.message : String(err)
-  const said = /"message"\s*:\s*"([^"]+)"/.exec(raw)?.[1] ?? raw
+  // The capture has to survive escaped quotes. It did not, and that cost two
+  // runs: a schema rejection reads
+  //   Invalid option: expected one of \"text\"|\"textarea\"|...
+  // and a [^"]+ capture stops dead at the first backslash, so the message
+  // reaching the office was "Invalid option: expected one of \" — the half
+  // that says which field and what it got, cut off every time.
+  const found = /"message"\s*:\s*"((?:[^"\\]|\\.)*)"/.exec(raw)?.[1]
+  const said = found ? found.replace(/\\(.)/g, '$1') : raw
 
   if (/credit balance is too low/i.test(said)) {
     return new Error(
