@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
+import { unreviewedRound } from '@/lib/followUpStore'
 import { isAdmin } from '@/lib/adminAuth'
 import { advancesTo, getAssignmentDetail, STATUS_TIMESTAMP } from '@/lib/questionSets'
 import { AssignmentStatus } from '@/types'
@@ -33,6 +34,26 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   const current = row.status as AssignmentStatus
+
+  // Leaving draft is what makes an assignment visible to the client, and for a
+  // generated round of follow-up questions that is the thing a person has to
+  // approve first. The send route already refused; this is the other door —
+  // "Release to client" moves the status directly, so without this check the
+  // gate could be walked around without anybody meaning to.
+  if (current === 'draft' && next !== 'draft') {
+    const unread = await unreviewedRound(params.id)
+    if (unread) {
+      return NextResponse.json(
+        {
+          error:
+            'These questions were written by the follow-up reader and nobody has approved them yet. ' +
+            'Open the client, read them under Analysis, and approve the round first.',
+          needsReview: unread.planId,
+        },
+        { status: 409 }
+      )
+    }
+  }
   const patch: Record<string, unknown> = { updated_at: new Date().toISOString() }
   const now = new Date().toISOString()
 

@@ -237,12 +237,19 @@ export default function ClientAssignments({
 
   const release = async (assignment: Assignment) => {
     setBusy(assignment.id)
-    await fetch(`/api/admin/assignments/${assignment.id}`, {
+    const res = await fetch(`/api/admin/assignments/${assignment.id}`, {
       method: 'PATCH',
       headers: adminHeaders,
       body: JSON.stringify({ status: 'assigned' }),
     })
     setBusy(null)
+    // A generated round nobody has approved is refused here, and the reason
+    // has to reach the screen — the button used to look like it worked.
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      setNotice(body?.error || 'That could not be released.')
+      return
+    }
     load()
   }
 
@@ -463,21 +470,22 @@ export default function ClientAssignments({
                 >
                   Copy Link
                 </button>
+                {/* Always. "Release to client" sat next to no way of seeing what
+                    would be released, which is the one thing a person about to
+                    press it needs. */}
+                <button
+                  onClick={() => view(a)}
+                  className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-700 hover:text-white transition-colors"
+                >
+                  {a.answeredCount > 0 ? 'View Answers' : 'See the questions'}
+                </button>
                 {(a.answeredCount > 0 || a.status === 'in_progress' || a.status === 'completed') && (
-                  <>
-                    <button
-                      onClick={() => view(a)}
-                      className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-700 hover:text-white transition-colors"
-                    >
-                      View Answers
-                    </button>
-                    <button
-                      onClick={() => download(a)}
-                      className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-700 hover:text-white transition-colors"
-                    >
-                      Download
-                    </button>
-                  </>
+                  <button
+                    onClick={() => download(a)}
+                    className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-700 hover:text-white transition-colors"
+                  >
+                    Download
+                  </button>
                 )}
                 {a.status === 'assigned' && (
                   <button
@@ -647,7 +655,10 @@ export default function ClientAssignments({
               <div>
                 <h3 className="text-white font-bold">{viewing.questionSetName}</h3>
                 <p className="text-white/40 text-xs mt-0.5">
-                  {viewing.clientName} · {viewing.answeredCount}/{viewing.questionCount} answered
+                  {viewing.clientName} ·{' '}
+                  {viewing.answeredCount
+                    ? `${viewing.answeredCount}/${viewing.questionCount} answered`
+                    : `${viewing.questionCount} questions, nothing answered yet`}
                 </p>
               </div>
               <button onClick={() => { setViewing(null); setViewTranslated(null) }} className="text-white/40 hover:text-white">
@@ -677,6 +688,36 @@ export default function ClientAssignments({
             <div className="flex-1 min-h-0 overflow-y-auto divide-y divide-gray-50">
               {viewing.questions.map(q => {
                 const val = viewing.answers[q.id]
+                // Nothing answered yet: this is a questionnaire being checked
+                // before it goes out, so show the question the way the client
+                // will read it, with the English underneath for the reviewer.
+                if (!viewing.answeredCount) {
+                  const theirs = q.ko ?? q.es ?? q.zh
+                  return (
+                    <div key={q.id} className="px-5 py-3">
+                      <p className="text-[15px] text-gray-900 leading-relaxed">
+                        {theirs?.label ?? q.label}
+                      </p>
+                      {theirs?.label && (
+                        <p className="text-xs text-gray-500 mt-1 leading-relaxed">{q.label}</p>
+                      )}
+                      {q.options && q.options.length > 0 && (
+                        <ul className="mt-2 space-y-0.5">
+                          {q.options.map((o, i) => (
+                            <li key={i} className="text-xs text-gray-500">
+                              &#9675; {theirs?.options?.[i] ?? o}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                      {q.showIf && (
+                        <p className="text-[11px] text-gray-400 mt-1.5">
+                          only shown after {q.showIf.questionId}
+                        </p>
+                      )}
+                    </div>
+                  )
+                }
                 // The translated text is already flattened, so a multiselect
                 // loses its bullets — worth it to read the file in English.
                 // An empty translation falls through to the original rather
