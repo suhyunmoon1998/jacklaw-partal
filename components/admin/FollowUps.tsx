@@ -9,6 +9,7 @@ import { LADDER } from '@/lib/followUpShape'
 import type { FollowUp } from '@/lib/followUpShape'
 import type { FollowUpPlan } from '@/lib/followUpStore'
 import type { Question } from '@/types'
+import { roundAsText } from '@/lib/roundAsText'
 
 /**
  * The next questions to put to a client, laid out for the person who has to
@@ -206,7 +207,13 @@ function BuiltFrom({ from, factCount }: { from: FollowUpPlan['builtFrom']; factC
   )
 }
 
-export default function FollowUps({ clientId }: { clientId: string }) {
+export default function FollowUps({
+  clientId,
+  clientName = '',
+}: {
+  clientId: string
+  clientName?: string
+}) {
   const [plans, setPlans] = useState<FollowUpPlan[] | null>(null)
   const [questions, setQuestions] = useState<Question[]>([])
   /** Question ids still in the round. Everything else is struck. */
@@ -259,6 +266,34 @@ export default function FollowUps({ clientId }: { clientId: string }) {
   const latest = plans?.[0]
   const metaFor = (id: string) => latest?.questions.find(m => m.questionKey === id)
   const struck = questions.filter(q => !keep.has(q.id))
+
+  /**
+   * The whole round on the clipboard, both languages.
+   *
+   * A round that can only be read inside this modal is a round that gets
+   * approved without a second opinion — and the second opinion is what a
+   * person reading it is for.
+   */
+  const copy = async () => {
+    if (!latest) return
+    try {
+      await navigator.clipboard.writeText(
+        roundAsText({
+          clientName,
+          questions,
+          meta: latest.questions,
+          leftOut: latest.leftOut,
+          builtFrom: latest.builtFrom,
+          factCount: latest.factCount,
+          reviewedBy: latest.reviewedAt ? latest.reviewedBy : null,
+        })
+      )
+      setNote('Copied — both languages, with why each one is asked.')
+      setError('')
+    } catch {
+      setError('The browser would not let this page copy. Select the questions and copy them.')
+    }
+  }
 
   const approve = async () => {
     if (!latest) return
@@ -385,6 +420,12 @@ export default function FollowUps({ clientId }: { clientId: string }) {
               </span>
             )}
             {plans.length > 1 && <span className="text-gray-400">\u00b7 {plans.length - 1} earlier</span>}
+            <button
+              onClick={copy}
+              className="ml-auto text-[11px] font-semibold text-gray-500 hover:text-gray-900 underline underline-offset-2"
+            >
+              Copy all {questions.length}
+            </button>
           </div>
 
           <BuiltFrom from={latest.builtFrom} factCount={latest.factCount} />

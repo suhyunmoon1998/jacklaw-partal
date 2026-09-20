@@ -289,7 +289,7 @@ function ClientDetailModal({
               {/* The same tab, because it is the same job: read the case, then
                   decide what to ask next. A sixth tab would also have broken
                   the row onto two lines on a phone. */}
-              <FollowUps clientId={client.id} />
+              <FollowUps clientId={client.id} clientName={client.name} />
             </>
           )}
 
