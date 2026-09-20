@@ -293,7 +293,10 @@ export default function CaseFoldersPanel<C extends PanelClient>({
         </div>
       )}
 
-      <div className="space-y-2">
+      {/* Three across on a desktop, two on a tablet, one on a phone. The office
+          scans this list to find a case by name, and a single column put eleven
+          of them below the fold on a laptop. */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         {folders.map(folder => (
           <FolderRow
             key={folder.id}
@@ -328,7 +331,16 @@ export default function CaseFoldersPanel<C extends PanelClient>({
   )
 }
 
-// ─── One folder in the list ───────────────────────────────────────────────────
+// ─── One folder in the grid ──────────────────────────────────────────────────
+/**
+ * A case as a card rather than a row.
+ *
+ * It was a row: icon, name, then three icon buttons pushed to the right edge.
+ * At a third of the width those buttons and the name fight for the same space
+ * and the tags wrap into the gap. So the name and count own the card, and the
+ * two things you rarely do — rename, delete — sit small at the top, out of the
+ * way of the thing you always do, which is open it.
+ */
 function FolderRow({
   folder, count, onOpen, onRename, onDelete,
 }: {
@@ -341,40 +353,14 @@ function FolderRow({
   const [editing, setEditing] = useState(false)
 
   return (
-    <div className="flex items-center gap-3 bg-white rounded-2xl border border-gray-100 p-4 shadow-sm hover:border-gold/40 transition-colors">
-      <span className="text-xl">📁</span>
-
-      <div className="flex-1 min-w-0">
-        {editing ? (
-          <NameInput
-            value={folder.name}
-            onCancel={() => setEditing(false)}
-            onSave={name => { setEditing(false); if (name !== folder.name) onRename(folder.id, name) }}
-          />
-        ) : (
-          <button onClick={onOpen} className="block w-full text-left">
-            <span className="block font-semibold text-black truncate">{folder.name}</span>
-            <span className="flex flex-wrap items-center gap-1.5 mt-1">
-              <span className="text-xs text-gray-400">
-                {count} client{count === 1 ? '' : 's'}
-              </span>
-              {folder.tags.map(tag => (
-                <span key={tag} className="text-[10px] font-semibold text-gold bg-gold/10 border border-gold/20 rounded px-1.5 py-0.5">
-                  {tag}
-                </span>
-              ))}
-            </span>
-          </button>
-        )}
-      </div>
-
+    <div className="relative bg-white rounded-2xl border border-gray-100 p-4 shadow-sm hover:border-gold/40 transition-colors">
       {!editing && (
-        <>
+        <div className="absolute top-2.5 right-2.5 flex items-center gap-0.5">
           <button
             onClick={() => setEditing(true)}
             title="Rename this case"
             aria-label={`Rename ${folder.name}`}
-            className="p-2 rounded-lg text-gray-400 hover:text-gold hover:bg-gold/10 transition-colors"
+            className="p-1.5 rounded-lg text-gray-300 hover:text-gold hover:bg-gold/10 transition-colors"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -385,19 +371,45 @@ function FolderRow({
             onClick={onDelete}
             title="Delete this case"
             aria-label={`Delete ${folder.name}`}
-            className="p-2 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+            className="p-1.5 rounded-lg text-gray-300 hover:text-red-600 hover:bg-red-50 transition-colors"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                 d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M1 7h22" />
             </svg>
           </button>
-          <button onClick={onOpen} aria-label={`Open ${folder.name}`} className="p-2 text-gray-300 hover:text-gray-500">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
-          </button>
-        </>
+        </div>
+      )}
+
+      <span className="text-xl block mb-2">📁</span>
+
+      {editing ? (
+        <NameInput
+          value={folder.name}
+          onCancel={() => setEditing(false)}
+          onSave={name => { setEditing(false); if (name !== folder.name) onRename(folder.id, name) }}
+        />
+      ) : (
+        <button onClick={onOpen} className="block w-full text-left">
+          {/* Two lines, then an ellipsis. A long case name must not push the
+              card taller than the ones beside it. */}
+          <span className="block font-semibold text-black leading-snug line-clamp-2 pr-2">
+            {folder.name}
+          </span>
+          <span className="block text-xs text-gray-400 mt-1">
+            {count} client{count === 1 ? '' : 's'}
+          </span>
+        </button>
+      )}
+
+      {!editing && folder.tags.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5 mt-2">
+          {folder.tags.map(tag => (
+            <span key={tag} className="text-[10px] font-semibold text-gold bg-gold/10 border border-gold/20 rounded px-1.5 py-0.5">
+              {tag}
+            </span>
+          ))}
+        </div>
       )}
     </div>
   )
