@@ -284,3 +284,70 @@ export async function proposeWageOrder(entries: LedgerEntry[]): Promise<WageOrde
         : 'No Wage Order proposed. The rest-period duty cannot be stated until one is settled.',
   }
 }
+
+/**
+ * Whether a proposal can be relied on, checked in code.
+ *
+ * This exists because of a real one. On a restaurant worker's file the model
+ * reasoned entirely to Order 5 — quoted section 2(R)(1), which names
+ * restaurants; listed Order 7 among the orders it was REJECTING; and the
+ * Labor Commissioner's index agreed with 5 — and then put "7" in the order
+ * field. Five claims were read under the wrong Order before anybody looked.
+ *
+ * Every check below is mechanical. The model's prose said what it meant; the
+ * field did not match it, and matching them is not a judgement call.
+ */
+export interface ChoiceProblem {
+  /** 'blocking' means the proposal contradicts itself and cannot be used. */
+  severity: 'blocking' | 'warning'
+  says: string
+}
+
+export function checkChoice(choice: WageOrderChoice): ChoiceProblem[] {
+  const { proposal } = choice
+  const found: ChoiceProblem[] = []
+  if (!proposal.order) return found
+
+  // The provision it relied on names an Order. If that is a different Order,
+  // the field and the reasoning disagree and one of them is wrong.
+  const named = Array.from(proposal.reliedOn.matchAll(/Order\s+(\d{1,2})\b/gi)).map(m => m[1])
+  if (named.length && !named.includes(proposal.order)) {
+    found.push({
+      severity: 'blocking',
+      says: `It proposes Order ${proposal.order} but the provision it relied on is Order ${named.join(' / ')}.`,
+    })
+  }
+
+  // An Order cannot be both the answer and one of the answers ruled out.
+  if (proposal.rejected.some(r => r.order === proposal.order)) {
+    found.push({
+      severity: 'blocking',
+      says: `Order ${proposal.order} is proposed and is also in the list of Orders it ruled out.`,
+    })
+  }
+
+  // 'industry' is a name, not an argument. A sentence there means the model was
+  // still reasoning when it filled the field.
+  if (proposal.industry.split(/\s+/).length > 8) {
+    found.push({
+      severity: 'blocking',
+      says: `The industry reads as a sentence rather than a name: "${proposal.industry.slice(0, 80)}…"`,
+    })
+  }
+
+  // Secondary, so it warns rather than blocks — but it is the check that
+  // caught the one above, and it is not to be passed over.
+  if (choice.dlse && !choice.dlse.agrees) {
+    found.push({
+      severity: 'warning',
+      says: `The Labor Commissioner's index puts "${choice.dlse.entry}" under Order ${choice.dlse.orders}, not ${proposal.order}.`,
+    })
+  }
+
+  return found
+}
+
+/** Whether the claims may be read under this proposal at all. */
+export function isUsable(choice: WageOrderChoice): boolean {
+  return Boolean(choice.proposal.order) && !checkChoice(choice).some(p => p.severity === 'blocking')
+}

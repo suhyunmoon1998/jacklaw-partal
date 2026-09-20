@@ -128,3 +128,55 @@ export async function clearLedger(clientId: string): Promise<void> {
   const { error } = await getSupabase().from('case_facts').delete().eq('client_id', clientId)
   if (error) throw new Error(`Could not clear the ledger: ${error.message}`)
 }
+
+/**
+ * Where the client's own answers disagree, kept alongside the ledger.
+ *
+ * The facts on both sides of a contradiction are marked DISPUTED, which says
+ * that something is contested. This says WHAT the two answers were and how to
+ * settle it — which the extraction pass works out by reading the whole file at
+ * once, and which cannot be recovered from the facts afterwards.
+ */
+export async function saveContradictions(
+  clientId: string,
+  found: { about: string; oneAnswer: string; otherAnswer: string; whyItMatters: string; howToResolve: string }[]
+): Promise<number> {
+  if (!found.length) return 0
+  const { error } = await getSupabase().from('case_fact_contradictions').insert(
+    found.map(c => ({
+      client_id: clientId,
+      about: c.about,
+      one_answer: c.oneAnswer,
+      other_answer: c.otherAnswer,
+      why_it_matters: c.whyItMatters,
+      how_to_resolve: c.howToResolve,
+    }))
+  )
+  if (error) throw new Error(`Could not store the contradictions: ${error.message}`)
+  return found.length
+}
+
+export async function readContradictions(clientId: string) {
+  const { data, error } = await getSupabase()
+    .from('case_fact_contradictions')
+    .select('about, one_answer, other_answer, why_it_matters, how_to_resolve')
+    .eq('client_id', clientId)
+    .order('created_at', { ascending: true })
+  if (error) throw new Error(`Could not read the contradictions: ${error.message}`)
+  return (data ?? []).map(r => ({
+    about: r.about as string,
+    oneAnswer: r.one_answer as string,
+    otherAnswer: r.other_answer as string,
+    whyItMatters: r.why_it_matters as string,
+    howToResolve: r.how_to_resolve as string,
+  }))
+}
+
+/** Clears the contradictions too, so a re-extraction does not double them. */
+export async function clearContradictions(clientId: string): Promise<void> {
+  const { error } = await getSupabase()
+    .from('case_fact_contradictions')
+    .delete()
+    .eq('client_id', clientId)
+  if (error) throw new Error(`Could not clear the contradictions: ${error.message}`)
+}

@@ -5,6 +5,7 @@ import { standing } from '@/lib/factLedger'
 import { STAGES, Stage, nextStage, staleStages } from '@/lib/caseReadingShape'
 import { readingFingerprint, runStage, stampsNow } from '@/lib/caseReading'
 import { clearReading, readReading, saveStage } from '@/lib/caseReadingStore'
+import { WageOrderChoice, checkChoice, isUsable } from '@/lib/wageOrderChoice'
 
 /**
  * One stage of a case reading.
@@ -69,6 +70,25 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     )
   }
 
+  // A proposal that contradicts itself must not become the law ten claims are
+  // read under. This is not hypothetical: one proposed Order 7 while quoting
+  // the provision that names restaurants in Order 5, and five claims were read
+  // under the wrong Order before anybody looked at the prose.
+  if (stage === 'claims 1' || stage === 'claims 2') {
+    const choice = stored.wageOrder as WageOrderChoice
+    if (!isUsable(choice)) {
+      return NextResponse.json(
+        {
+          error:
+            'The Wage Order proposal contradicts itself, so the claims cannot be read under it. ' +
+            'Work out the Wage Order again.',
+          problems: checkChoice(choice),
+        },
+        { status: 409 }
+      )
+    }
+  }
+
   let patch
   try {
     patch = await runStage(stage, entries, stage === 'wage order' ? {} : stored)
@@ -83,10 +103,12 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     // the claims stages go stale on their own stamp and are run again.
     const merged = await saveStage(params.id, fingerprint, { ...stored, ...patch })
     const now = stampsNow(entries, merged)
+    const problems = merged.wageOrder ? checkChoice(merged.wageOrder as WageOrderChoice) : []
     return NextResponse.json({
       reading: merged,
-      next: nextStage(merged, now),
+      next: problems.some(p => p.severity === 'blocking') ? 'wage order' : nextStage(merged, now),
       staleStages: staleStages(merged, now),
+      wageOrderProblems: problems,
       stale: false,
     })
   } catch (err) {
