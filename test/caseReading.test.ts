@@ -8,8 +8,9 @@ import {
   describe as describeReading,
   isComplete,
   nextStage,
+  staleStages,
 } from '@/lib/caseReadingShape'
-import { claimsFor, readingFingerprint } from '@/lib/caseReading'
+import { claimsFor, readingFingerprint, stampFor, stampsNow } from '@/lib/caseReading'
 import { CLAIMS } from '@/lib/authority/claims'
 import { LedgerEntry } from '@/lib/factLedger'
 
@@ -106,5 +107,56 @@ describe('knowing when a reading has gone stale', () => {
     const one = readingFingerprint([fact({ id: 'c1:f001' })])
     const two = readingFingerprint([fact({ id: 'c1:f001' }), fact({ id: 'c1:f002' })])
     expect(one).not.toBe(two)
+  })
+})
+
+describe('staleness, one stage at a time', () => {
+  const ledger = [fact()]
+  const read = (over: Partial<StoredReading> = {}): StoredReading => {
+    const base: StoredReading = { wageOrder: { proposal: { order: '5' } }, claims1: [], claims2: [], spine: {}, ...over }
+    return { ...base, stamps: Object.fromEntries(STAGES.map(s => [s, stampFor(ledger, s, base)])) }
+  }
+
+  it('leaves the claims alone when only the Wage Order model moves', () => {
+    // This is why per-stage exists. Moving the Wage Order to a cheaper model
+    // invalidated ten claims and a chronology that are still read by the model
+    // that still reads them, and offered a four-minute re-read nobody needed.
+    const stored = read()
+    const after = { ...stampsNow(ledger, stored), 'wage order': 'a-different-model-hash' }
+    expect(staleStages(stored, after)).toEqual(['wage order'])
+    expect(nextStage(stored, after)).toBe('wage order')
+  })
+
+  it('re-reads the claims when the Order they were read under changes', () => {
+    // The rest-period duty is read out of section 12 of an Order, so a
+    // different Order is a different reading — unlike a different model that
+    // settled on the same Order.
+    const underFive = read()
+    const nowUnderSeven = stampsNow(ledger, { ...underFive, wageOrder: { proposal: { order: '7' } } })
+    expect(staleStages(underFive, nowUnderSeven)).toEqual(['claims 1', 'claims 2'])
+  })
+
+  it('does not re-read the claims when a different model settles the same Order', () => {
+    const stored = read()
+    expect(staleStages(stored, stampsNow(ledger, stored))).toEqual([])
+  })
+
+  it('treats a stage read before stamps existed as stale rather than current', () => {
+    // Saying a reading is up to date when nothing recorded what it was read
+    // under is a claim nobody can check.
+    const old: StoredReading = { wageOrder: { proposal: { order: '5' } }, claims1: [], claims2: [], spine: {} }
+    expect(staleStages(old, stampsNow(ledger, old))).toEqual([...STAGES])
+  })
+
+  it('still asks for a stage that was never read', () => {
+    const half = read({ spine: undefined })
+    expect(nextStage(half, stampsNow(ledger, half))).toBe('spine')
+  })
+
+  it('is complete only when nothing is missing and nothing has moved', () => {
+    const stored = read()
+    const now = stampsNow(ledger, stored)
+    expect(isComplete(stored, now)).toBe(true)
+    expect(isComplete(stored, { ...now, spine: 'moved' })).toBe(false)
   })
 })

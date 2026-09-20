@@ -149,6 +149,9 @@ function ClaimCard({ f }: { f: Finding }) {
 export default function CaseReading({ clientId }: { clientId: string }) {
   const [reading, setReading] = useState<StoredReading | null>(null)
   const [stale, setStale] = useState(false)
+  /** What the API says still has to run. The screen cannot hash a ledger. */
+  const [next, setNext] = useState<Stage | null>(null)
+  const [outdated, setOutdated] = useState<Stage[]>([])
   const [facts, setFacts] = useState(0)
   const [running, setRunning] = useState<Stage | null>(null)
   const [error, setError] = useState('')
@@ -161,6 +164,8 @@ export default function CaseReading({ clientId }: { clientId: string }) {
       if (!res.ok) throw new Error(body?.error || 'Could not load the reading.')
       setReading(body.reading)
       setStale(Boolean(body.stale))
+      setOutdated(body.staleStages ?? [])
+      setNext((body.next as Stage | null) ?? null)
       setFacts(body.facts ?? 0)
     } catch (err) {
       setError((err as Error).message)
@@ -190,7 +195,9 @@ export default function CaseReading({ clientId }: { clientId: string }) {
         if (!res.ok) throw new Error(body?.error || `The ${stage} stage failed.`)
         setReading(body.reading)
         setStale(false)
+        setOutdated(body.staleStages ?? [])
         stage = body.next as Stage | null
+        setNext(stage)
       } catch (err) {
         setError((err as Error).message)
         break
@@ -203,6 +210,9 @@ export default function CaseReading({ clientId }: { clientId: string }) {
   const start = async () => {
     // A stale reading is read again from the beginning: stages read against
     // different ledgers must not be stitched into one reading true of neither.
+    // Only a change in the FACTS starts over. A stage gone stale because its
+    // own model moved is simply run again, and the stages that did not move
+    // are kept — they are still read by the model that still reads them.
     if (stale && reading) {
       await fetch(`/api/admin/clients/${clientId}/reading`, { method: 'DELETE', headers })
       setReading(null)
@@ -210,12 +220,11 @@ export default function CaseReading({ clientId }: { clientId: string }) {
       await walk('wage order')
       return
     }
-    await walk(nextStage(reading))
+    await walk(next)
   }
 
   const choice = reading?.wageOrder as Choice | undefined
   const findings = allClaims<Finding>(reading)
-  const next = nextStage(reading)
   const spine = reading?.spine as { events?: unknown[]; anomalies?: unknown[]; records?: unknown[] } | undefined
 
   return (
@@ -225,7 +234,10 @@ export default function CaseReading({ clientId }: { clientId: string }) {
           Claims &amp; evidence
         </h4>
         <span className="text-[11px] text-gray-400">
-          {loaded ? `${describeReading(reading)} ${facts} facts on file.` : 'Loading…'}
+          {loaded
+            ? `${describeReading(reading)} ${facts} facts on file.` +
+              (outdated.length && !stale ? ` ${outdated.length} to re-read.` : '')
+            : 'Loading…'}
         </span>
         <button
           onClick={start}
@@ -246,6 +258,13 @@ export default function CaseReading({ clientId }: { clientId: string }) {
         <p className="text-xs rounded-lg px-3 py-2 mb-3 bg-amber-50 border border-amber-200 text-amber-800">
           The facts have changed since this was read. What is below was true of the facts it was read
           against — reading again starts from the Wage Order.
+        </p>
+      )}
+
+      {!stale && outdated.length > 0 && !running && (
+        <p className="text-xs rounded-lg px-3 py-2 mb-3 bg-blue-50 border border-blue-200 text-blue-800">
+          {outdated.join(' and ')} would be read differently now — the model changed, or the Wage
+          Order they were read under did. Everything else stands and will not be run again.
         </p>
       )}
 

@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { isAdmin } from '@/lib/adminAuth'
 import { readLedger } from '@/lib/factStore'
 import { standing } from '@/lib/factLedger'
-import { STAGES, Stage, nextStage } from '@/lib/caseReadingShape'
-import { readingFingerprint, runStage } from '@/lib/caseReading'
+import { STAGES, Stage, nextStage, staleStages } from '@/lib/caseReadingShape'
+import { readingFingerprint, runStage, stampsNow } from '@/lib/caseReading'
 import { clearReading, readReading, saveStage } from '@/lib/caseReadingStore'
 
 /**
@@ -23,12 +23,16 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     const entries = await readLedger(params.id)
     const fingerprint = readingFingerprint(entries)
     const row = await readReading(params.id, fingerprint)
+    const stored = row && !row.stale ? row.reading : null
+    // Worked out here because the screen has no ledger to hash.
+    const now = stampsNow(entries, stored ?? {})
     return NextResponse.json({
       reading: row?.reading ?? null,
       stale: row?.stale ?? false,
+      staleStages: row?.stale ? STAGES.slice() : staleStages(stored, now),
       updatedAt: row?.updatedAt ?? null,
       facts: standing(entries).length,
-      next: nextStage(row && !row.stale ? row.reading : null),
+      next: nextStage(stored, now),
     })
   } catch (err) {
     return NextResponse.json({ error: (err as Error).message }, { status: 500 })
@@ -73,8 +77,18 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   }
 
   try {
-    const merged = await saveStage(params.id, fingerprint, stage === 'wage order' ? patch : { ...stored, ...patch })
-    return NextResponse.json({ reading: merged, next: nextStage(merged), stale: false })
+    // The Wage Order stage keeps whatever else is on file rather than wiping
+    // it: a re-read because its model moved must not throw away ten claims and
+    // a chronology that are still current. If the Order it settles differs,
+    // the claims stages go stale on their own stamp and are run again.
+    const merged = await saveStage(params.id, fingerprint, { ...stored, ...patch })
+    const now = stampsNow(entries, merged)
+    return NextResponse.json({
+      reading: merged,
+      next: nextStage(merged, now),
+      staleStages: staleStages(merged, now),
+      stale: false,
+    })
   } catch (err) {
     // A stage that ran and could not be stored has been paid for and lost, so
     // it fails loudly rather than letting the walk carry on to the next one.

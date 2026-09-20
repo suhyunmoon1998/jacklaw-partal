@@ -52,6 +52,17 @@ export const CLAIMS_PER_STAGE = 5
 
 /** What is on file so far. */
 export interface StoredReading {
+  /**
+   * What each stage was read under, so staleness can be per stage.
+   *
+   * One hash for the whole reading was too blunt: moving the Wage Order stage
+   * from Opus to Sonnet invalidated ten claims and a chronology that were
+   * still read by the model they are still read by, and offered the office a
+   * four-minute re-read it did not need. A stage is stale when ITS OWN inputs
+   * moved — which for the claims includes the Order that was settled, because
+   * the rest-period duty is read out of it, but not the model that chose it.
+   */
+  stamps?: Partial<Record<Stage, string>>
   /** The Order proposed for this employer. Never confirmed by this system. */
   wageOrder?: unknown
   claims1?: unknown[]
@@ -63,18 +74,51 @@ export interface StoredReading {
   took?: Partial<Record<Stage, number>>
 }
 
-/** The stage to run next, or null when there is nothing left. */
-export function nextStage(stored: StoredReading | null | undefined): Stage | null {
-  if (!stored?.wageOrder) return 'wage order'
-  if (!stored.claims1) return 'claims 1'
-  if (!stored.claims2) return 'claims 2'
-  if (!stored.spine) return 'spine'
-  return null
+/** Whether a stage has a result at all. */
+export function isRead(stored: StoredReading | null | undefined, stage: Stage): boolean {
+  if (!stored) return false
+  if (stage === 'wage order') return Boolean(stored.wageOrder)
+  if (stage === 'claims 1') return Boolean(stored.claims1)
+  if (stage === 'claims 2') return Boolean(stored.claims2)
+  return Boolean(stored.spine)
 }
 
-/** Whether every stage has been read. */
-export function isComplete(stored: StoredReading | null | undefined): boolean {
-  return nextStage(stored) === null
+/**
+ * Stages that have to run again, given what each would be read under now.
+ *
+ * A stage with no stamp was read before stamps existed. It is reported as
+ * stale rather than assumed current: saying a reading is up to date when
+ * nothing recorded what it was read under is a claim nobody can check.
+ */
+export function staleStages(
+  stored: StoredReading | null | undefined,
+  now: Partial<Record<Stage, string>>
+): Stage[] {
+  if (!stored) return []
+  return STAGES.filter(s => isRead(stored, s) && stored.stamps?.[s] !== now[s])
+}
+
+/**
+ * The stage to run next, or null when there is nothing left.
+ *
+ * `now` is what each stage would be read under today. Pass it and a stage
+ * whose inputs have moved is run again; leave it out and only the unread
+ * stages are asked for, which is what a screen with no ledger in hand can do.
+ */
+export function nextStage(
+  stored: StoredReading | null | undefined,
+  now?: Partial<Record<Stage, string>>
+): Stage | null {
+  const stale = now ? new Set(staleStages(stored, now)) : new Set<Stage>()
+  return STAGES.find(s => !isRead(stored, s) || stale.has(s)) ?? null
+}
+
+/** Whether every stage has been read, and is still read under today's inputs. */
+export function isComplete(
+  stored: StoredReading | null | undefined,
+  now?: Partial<Record<Stage, string>>
+): boolean {
+  return nextStage(stored, now) === null
 }
 
 /** Every claim read so far, in the order the claims are defined. */

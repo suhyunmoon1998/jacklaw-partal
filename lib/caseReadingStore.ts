@@ -17,13 +17,21 @@
  */
 
 import { getSupabase } from '@/lib/supabase'
-import { StoredReading } from '@/lib/caseReadingShape'
+import { Stage, StoredReading, staleStages } from '@/lib/caseReadingShape'
 
 export interface ReadingRow {
   reading: StoredReading
   fingerprint: string
-  /** True when the ledger has moved since this was read. */
+  /**
+   * True when the FACTS have moved since this was read.
+   *
+   * Different from a stale stage. A fact added or superseded makes every stage
+   * stale, because every stage read a ledger that no longer exists. A model
+   * moved for one stage makes only that stage stale — see `staleStages`.
+   */
   stale: boolean
+  /** Stages whose own inputs have moved, given what they would be read under now. */
+  staleStages?: Stage[]
   updatedAt: string
 }
 
@@ -73,6 +81,24 @@ export async function saveStage(
     )
   if (error) throw new Error(`Could not store the reading: ${error.message}`)
   return merged
+}
+
+/**
+ * The reading, with each stage judged against what it would be read under now.
+ *
+ * A convenience over readReading for callers that have the ledger in hand:
+ * facts moved makes everything stale, otherwise only the stages whose own
+ * inputs moved.
+ */
+export function withStageStaleness(
+  row: ReadingRow | null,
+  now: Partial<Record<Stage, string>>
+): ReadingRow | null {
+  if (!row) return null
+  return {
+    ...row,
+    staleStages: row.stale ? (Object.keys(now) as Stage[]) : staleStages(row.reading, now),
+  }
 }
 
 /** Throws the reading away, so the next run starts from nothing. */

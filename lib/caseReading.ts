@@ -38,7 +38,7 @@ import { CLAIMS } from '@/lib/authority/claims'
 import { MATRIX_MODEL, buildMatrix } from '@/lib/claimMatrix'
 import { SPINE_MODEL, buildSpine } from '@/lib/evidenceSpine'
 import { CHOICE_MODEL, WageOrderChoice, proposeWageOrder } from '@/lib/wageOrderChoice'
-import { CLAIMS_PER_STAGE, READING_SHAPE_VERSION, Stage, StoredReading } from '@/lib/caseReadingShape'
+import { CLAIMS_PER_STAGE, READING_SHAPE_VERSION, STAGES, Stage, StoredReading } from '@/lib/caseReadingShape'
 
 /**
  * What the reading was run against.
@@ -48,10 +48,17 @@ import { CLAIMS_PER_STAGE, READING_SHAPE_VERSION, Stage, StoredReading } from '@
  * and a reading that predates the change is stale even though the ledger is
  * the same length.
  */
+/**
+ * The facts a reading was run against.
+ *
+ * The propositions and statuses, not just the ids: a fact whose status moves
+ * from REPORTED to DISPUTED is a different fact for every purpose above this,
+ * and a reading that predates the change is stale even though the ledger is
+ * the same length.
+ */
 export function readingFingerprint(entries: LedgerEntry[]): string {
   const h = createHash('sha256')
   h.update(String(READING_SHAPE_VERSION))
-  h.update(`${MATRIX_MODEL}|${SPINE_MODEL}|${CHOICE_MODEL}`)
   for (const e of standing(entries).slice().sort((a, b) => (a.id < b.id ? -1 : 1))) {
     h.update(e.id)
     h.update(e.status)
@@ -59,6 +66,35 @@ export function readingFingerprint(entries: LedgerEntry[]): string {
     h.update(e.supersededBy ?? '')
   }
   return h.digest('hex').slice(0, 32)
+}
+
+/**
+ * What one stage would be read under today.
+ *
+ * The facts, plus only what that stage actually depends on. The claims depend
+ * on the Wage Order that was SETTLED and not on the model that chose it — the
+ * rest-period duty is read out of section 12 of an Order, so a different Order
+ * invalidates them and a different model choosing the same Order does not.
+ */
+export function stampFor(entries: LedgerEntry[], stage: Stage, stored: StoredReading): string {
+  const h = createHash('sha256')
+  h.update(readingFingerprint(entries))
+  h.update(stage)
+  if (stage === 'wage order') h.update(CHOICE_MODEL)
+  else if (stage === 'spine') h.update(SPINE_MODEL)
+  else {
+    h.update(MATRIX_MODEL)
+    h.update(settledOrder(stored) ?? 'no order settled')
+  }
+  return h.digest('hex').slice(0, 32)
+}
+
+/** Every stage's stamp, for comparing against what is on file. */
+export function stampsNow(
+  entries: LedgerEntry[],
+  stored: StoredReading
+): Partial<Record<Stage, string>> {
+  return Object.fromEntries(STAGES.map(s => [s, stampFor(entries, s, stored)]))
 }
 
 /** The claims read at each of the two claim stages. */
@@ -76,7 +112,7 @@ export function claimsFor(stage: 'claims 1' | 'claims 2') {
  * authority instead — which is the true state of a case whose industry nobody
  * has classified.
  */
-function settledOrder(stored: StoredReading): string | undefined {
+export function settledOrder(stored: StoredReading): string | undefined {
   const choice = stored.wageOrder as WageOrderChoice | undefined
   return choice?.proposal?.order || undefined
 }
@@ -97,6 +133,12 @@ export async function runStage(
   const took = (patch: StoredReading): StoredReading => ({
     ...patch,
     took: { ...(stored.took ?? {}), [stage]: Math.round((Date.now() - began) / 1000) },
+    // Stamped against the reading INCLUDING this stage's own result, so the
+    // Wage Order a claims stage was read under is the one in the patch.
+    stamps: {
+      ...(stored.stamps ?? {}),
+      [stage]: stampFor(entries, stage, { ...stored, ...patch }),
+    },
   })
 
   if (stage === 'wage order') {
