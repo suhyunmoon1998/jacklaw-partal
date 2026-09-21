@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
 import { isAdmin } from '@/lib/adminAuth'
 import { Lang } from '@/lib/langs'
-import { readLedger } from '@/lib/factStore'
+import { Meter, describeSpend } from '@/lib/spend'
+import { readContradictions, readLedger } from '@/lib/factStore'
 import { standing } from '@/lib/factLedger'
 import { allClaims } from '@/lib/caseReadingShape'
 import { readingFingerprint } from '@/lib/caseReading'
@@ -26,8 +27,13 @@ export const maxDuration = 300
 /** What the round is written against. Everything here is already on file. */
 async function gather(clientId: string) {
   const db = getSupabase()
-  const [entries, { data: client }] = await Promise.all([
+  const [entries, contradictions, { data: client }] = await Promise.all([
     readLedger(clientId),
+    // Found by the extraction pass over the whole file and stored with the
+    // ledger. They were being left out of the round entirely, which on a file
+    // read without the matrix or the spine is most of what there is to ask
+    // about — six of twenty questions on the first client tried this way.
+    readContradictions(clientId),
     db.from('clients').select('id, name, portal_lang').eq('id', clientId).maybeSingle(),
   ])
   if (!client) return null
@@ -42,6 +48,7 @@ async function gather(clientId: string) {
 
   return {
     entries,
+    contradictions,
     lang: (client.portal_lang as Lang) ?? 'en',
     findings: allClaims<ClaimFinding>(reading),
     spine: (reading?.spine as SpineReading | undefined) ?? null,
@@ -77,14 +84,17 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     )
   }
 
+  const meter = new Meter()
   let set
   try {
     set = await askFollowUps({
       entries: input.entries,
       findings: input.findings,
       spine: input.spine,
+      contradictions: input.contradictions,
       lang: input.lang,
       limit,
+      meter,
     })
   } catch (err) {
     return NextResponse.json({ error: (err as Error).message }, { status: 502 })
@@ -110,7 +120,13 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         spine: input.spine !== null,
       },
     })
-    return NextResponse.json({ plan, questions: set.questions, problems: vetAll(set) })
+    return NextResponse.json({
+      plan,
+      questions: set.questions,
+      problems: vetAll(set),
+      spent: meter.spent,
+      spentSaid: describeSpend(meter.spent),
+    })
   } catch (err) {
     return NextResponse.json({ error: (err as Error).message }, { status: 500 })
   }

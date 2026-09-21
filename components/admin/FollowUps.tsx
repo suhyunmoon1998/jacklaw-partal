@@ -176,9 +176,18 @@ function QuestionRow({
   )
 }
 
+/**
+ * What the round was written against.
+ *
+ * This used to warn when the claim matrix and the chronology were not on file.
+ * It no longer does, because writing a round from the ledger alone is a choice
+ * the office makes deliberately: on a measured file it cost 30 cents against
+ * $2.85 and produced twenty questions rather than none. What the fuller
+ * reading adds is real — questions about elements nobody can reach and gaps in
+ * the timeline — and so is its price, and which to pay is a decision about
+ * this case rather than a defect to be flagged.
+ */
 function BuiltFrom({ from, factCount }: { from: FollowUpPlan['builtFrom']; factCount: number }) {
-  // Three states, and the third is not the second. A round nobody recorded the
-  // inputs for is not a round we know was written from the ledger alone.
   if (!from) {
     return (
       <div className="text-[11px] rounded-lg px-3 py-2 border bg-gray-50 border-gray-200 text-gray-500">
@@ -188,19 +197,15 @@ function BuiltFrom({ from, factCount }: { from: FollowUpPlan['builtFrom']; factC
   }
   const thin = !from.matrix && !from.spine
   return (
-    <div
-      className={`text-[11px] rounded-lg px-3 py-2 border ${
-        thin ? 'bg-amber-50 border-amber-200 text-amber-800' : 'bg-gray-50 border-gray-200 text-gray-500'
-      }`}
-    >
+    <div className="text-[11px] rounded-lg px-3 py-2 border bg-gray-50 border-gray-200 text-gray-500">
       Written against {from.ledger} facts
       {from.matrix ? `, ${from.matrix} claims` : ''}
       {from.spine ? ', and the evidence spine' : ''}.
       {thin && (
         <>
           {' '}
-          The claim matrix and evidence spine were not on file, so this round could not ask about
-          elements nobody can reach, gaps in the timeline, or dates that do not line up.
+          Reading the case first would also let it ask about elements nobody can reach and gaps in
+          the timeline.
         </>
       )}
     </div>

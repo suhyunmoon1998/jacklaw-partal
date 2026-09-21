@@ -42,6 +42,7 @@ import { section } from '@/lib/authority'
 import { LedgerEntry } from '@/lib/factLedger'
 import { factSheet } from '@/lib/claimMatrix'
 import { plainly } from '@/lib/modelErrors'
+import { Meter } from '@/lib/spend'
 
 import { CHOICE_MODEL } from '@/lib/models'
 
@@ -234,7 +235,7 @@ export function dlseGuide(): { text: string; standing: string; source: string } 
  * fit", which is the wrong question — choosing between them is the work, and
  * a model that cannot see Order 7 cannot explain why Order 5 beats it.
  */
-export async function proposeWageOrder(entries: LedgerEntry[]): Promise<WageOrderChoice> {
+export async function proposeWageOrder(entries: LedgerEntry[], meter?: Meter): Promise<WageOrderChoice> {
   if (!process.env.ANTHROPIC_API_KEY) {
     throw new Error('ANTHROPIC_API_KEY is not configured, so the Wage Order cannot be proposed.')
   }
@@ -268,6 +269,7 @@ export async function proposeWageOrder(entries: LedgerEntry[]): Promise<WageOrde
   } catch (err) {
     throw plainly(err, 'Wage Order reading')
   }
+  meter?.add(response.usage)
   if (response.stop_reason === 'max_tokens') {
     throw new Error('The Wage Order reading ran out of room. Run it again.')
   }

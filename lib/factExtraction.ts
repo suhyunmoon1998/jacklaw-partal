@@ -25,6 +25,7 @@ import { z } from 'zod'
 import { answersForReading } from '@/lib/modules'
 import { FactNugget, LedgerEntry } from '@/lib/factLedger'
 import { plainly } from '@/lib/modelErrors'
+import { Meter } from '@/lib/spend'
 import { AnswerValue } from '@/types'
 
 import { EXTRACTION_MODEL } from '@/lib/models'
@@ -118,6 +119,8 @@ export interface ExtractionInput {
   clientId: string
   clientName: string
   answers: Record<string, AnswerValue>
+  /** Counts what the run used, when the caller wants to know. */
+  meter?: Meter
 }
 
 const shown = (v: AnswerValue | undefined): string =>
@@ -182,7 +185,8 @@ async function ask<T>(
   what: string,
   schema: z.ZodType<T>,
   system: string,
-  user: string
+  user: string,
+  meter?: Meter
 ): Promise<T> {
   let response
   try {
@@ -201,6 +205,7 @@ async function ask<T>(
   } catch (err) {
     throw plainly(err, what)
   }
+  meter?.add(response.usage)
   if (response.stop_reason === 'max_tokens') {
     throw new Error(`The ${what} ran out of room before it finished. Run it again.`)
   }
@@ -246,7 +251,8 @@ You are given ONE section of the questionnaire. Extract the facts it contains an
 else — other sections are being read at the same time, and a fact produced twice is a fact
 counted twice. Do not reach for context you were not given; if an answer here only makes
 sense alongside something elsewhere, say so in the fact's openLoop rather than guessing.`,
-      `${header}\n\n=== SECTION: ${part.title} (${part.answered} answered) ===\n\n${part.text}`
+      `${header}\n\n=== SECTION: ${part.title} (${part.answered} answered) ===\n\n${part.text}`,
+      input.meter
     ).then(r => r.facts)
   )
 
@@ -285,7 +291,8 @@ sensible margin, or two facts about different periods. Do not manufacture one. I
 are consistent, return an empty list — that is a real and useful answer.
 
 For each, say why it matters and the single question that would resolve it.`,
-    `${header}\n\n=== FACTS (${entries.length}) ===\n\n${brief}`
+    `${header}\n\n=== FACTS (${entries.length}) ===\n\n${brief}`,
+    input.meter
   )
 
   return { entries, contradictions, answered }

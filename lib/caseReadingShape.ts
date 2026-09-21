@@ -20,6 +20,7 @@
  */
 
 import { z } from 'zod'
+import { Spend } from '@/lib/spend'
 
 export const STAGES = ['wage order', 'claims 1', 'claims 2', 'spine'] as const
 export type Stage = (typeof STAGES)[number]
@@ -72,6 +73,15 @@ export interface StoredReading {
   spine?: unknown
   /** Seconds each stage took, so the office can see what it is paying for. */
   took?: Partial<Record<Stage, number>>
+  /**
+   * Tokens each stage used, counted from what the provider reported.
+   *
+   * Beside the seconds because the two answer different questions: seconds say
+   * whether a stage fits in a request, tokens say what it costs to run it
+   * eleven more times. Everything said about cost in this project before this
+   * was estimated from character counts.
+   */
+  spent?: Partial<Record<Stage, Spend>>
 }
 
 /** Whether a stage has a result at all. */

@@ -39,6 +39,7 @@ import { ClaimFinding, unresolved } from '@/lib/claimMatrix'
 import { SpineReading, toObtain, undated } from '@/lib/evidenceSpine'
 import { Contradiction } from '@/lib/factExtraction'
 import { plainly } from '@/lib/modelErrors'
+import { Meter } from '@/lib/spend'
 import { FollowUpSet, FollowUpSetShape } from '@/lib/followUpShape'
 
 export * from '@/lib/followUpShape'
@@ -191,6 +192,8 @@ export interface FollowUpRequest {
   lang: Lang
   /** The most questions to produce. The corpus asks for the smallest useful set. */
   limit?: number
+  /** Counts what the run used, when the caller wants to know. */
+  meter?: Meter
 }
 
 function brief(g: Gaps, entries: LedgerEntry[], lang: Lang, limit: number): string {
@@ -258,6 +261,7 @@ export async function askFollowUps(req: FollowUpRequest): Promise<FollowUpSet> {
   } catch (err) {
     throw plainly(err, 'follow-up questions')
   }
+  req.meter?.add(response.usage)
   if (response.stop_reason === 'max_tokens') {
     throw new Error('The follow-up questions ran out of room. Ask for fewer.')
   }

@@ -6,6 +6,7 @@ import { STAGES, Stage, nextStage, staleStages } from '@/lib/caseReadingShape'
 import { readingFingerprint, runStage, stampsNow } from '@/lib/caseReading'
 import { clearReading, readReading, saveStage } from '@/lib/caseReadingStore'
 import { WageOrderChoice, checkChoice, isUsable } from '@/lib/wageOrderChoice'
+import { describeSpend, totalSpend } from '@/lib/spend'
 
 /**
  * One stage of a case reading.
@@ -34,6 +35,8 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
       updatedAt: row?.updatedAt ?? null,
       facts: standing(entries).length,
       next: nextStage(stored, now),
+      spent: totalSpend(row?.reading.spent ?? {}),
+      spentSaid: describeSpend(totalSpend(row?.reading.spent ?? {})),
     })
   } catch (err) {
     return NextResponse.json({ error: (err as Error).message }, { status: 500 })
@@ -109,6 +112,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       next: problems.some(p => p.severity === 'blocking') ? 'wage order' : nextStage(merged, now),
       staleStages: staleStages(merged, now),
       wageOrderProblems: problems,
+      spent: totalSpend(merged.spent ?? {}),
+      spentSaid: describeSpend(totalSpend(merged.spent ?? {})),
       stale: false,
     })
   } catch (err) {

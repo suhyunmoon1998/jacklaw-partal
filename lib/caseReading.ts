@@ -39,6 +39,7 @@ import { MATRIX_MODEL, buildMatrix } from '@/lib/claimMatrix'
 import { SPINE_MODEL, buildSpine } from '@/lib/evidenceSpine'
 import { CHOICE_MODEL, WageOrderChoice, proposeWageOrder } from '@/lib/wageOrderChoice'
 import { CLAIMS_PER_STAGE, READING_SHAPE_VERSION, STAGES, Stage, StoredReading } from '@/lib/caseReadingShape'
+import { Meter } from '@/lib/spend'
 
 /**
  * What the reading was run against.
@@ -130,9 +131,11 @@ export async function runStage(
   stored: StoredReading
 ): Promise<StoredReading> {
   const began = Date.now()
+  const meter = new Meter()
   const took = (patch: StoredReading): StoredReading => ({
     ...patch,
     took: { ...(stored.took ?? {}), [stage]: Math.round((Date.now() - began) / 1000) },
+    spent: { ...(stored.spent ?? {}), [stage]: meter.spent },
     // Stamped against the reading INCLUDING this stage's own result, so the
     // Wage Order a claims stage was read under is the one in the patch.
     stamps: {
@@ -142,14 +145,14 @@ export async function runStage(
   })
 
   if (stage === 'wage order') {
-    return took({ wageOrder: await proposeWageOrder(entries) })
+    return took({ wageOrder: await proposeWageOrder(entries, meter) })
   }
 
   if (stage === 'claims 1' || stage === 'claims 2') {
-    const matrix = await buildMatrix(entries, claimsFor(stage), { wageOrder: settledOrder(stored) })
+    const matrix = await buildMatrix(entries, claimsFor(stage), { wageOrder: settledOrder(stored), meter })
     const failed = [...(stored.failed ?? []), ...matrix.failed]
     return took(stage === 'claims 1' ? { claims1: matrix.findings, failed } : { claims2: matrix.findings, failed })
   }
 
-  return took({ spine: await buildSpine(entries) })
+  return took({ spine: await buildSpine(entries, meter) })
 }

@@ -13,6 +13,7 @@ import {
 import { standing, unsettled } from '@/lib/factLedger'
 import { clearReading } from '@/lib/caseReadingStore'
 import { AnswerValue } from '@/types'
+import { Meter, describeSpend } from '@/lib/spend'
 
 /**
  * Turning one client's answers into the fact ledger everything else stands on.
@@ -92,8 +93,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   let read
   const began = Date.now()
+  const meter = new Meter()
   try {
-    read = await extractFacts(input)
+    read = await extractFacts({ ...input, meter })
   } catch (err) {
     return NextResponse.json({ error: (err as Error).message }, { status: 502 })
   }
@@ -126,6 +128,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     contradictions: read.contradictions,
     replaced: existing.length,
     seconds: Math.round((Date.now() - began) / 1000),
+    spent: meter.spent,
+    spentSaid: describeSpend(meter.spent),
   })
 }
 

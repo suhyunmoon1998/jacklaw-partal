@@ -31,6 +31,7 @@ import { Holding, holdingsFor, render } from '@/lib/authority/cases'
 import { cite, quote } from '@/lib/authority'
 import { LedgerEntry, standing } from '@/lib/factLedger'
 import { plainly } from '@/lib/modelErrors'
+import { Meter } from '@/lib/spend'
 
 import { MATRIX_MODEL } from '@/lib/models'
 
@@ -256,6 +257,9 @@ const CLAIM_CONCURRENCY = 5
  * need.
  */
 export interface MatrixOptions {
+  /** Counts what the run used, when the caller wants to know. */
+  meter?: Meter
+
   /**
    * The Wage Order settled for this employer, as '5'.
    *
@@ -330,6 +334,7 @@ export async function buildMatrix(
     } catch (err) {
       throw plainly(err, `${claim.name} matrix`)
     }
+    opts.meter?.add(response.usage)
     if (response.stop_reason === 'max_tokens') {
       throw new Error(`The ${claim.name} matrix ran out of room. Run it again.`)
     }

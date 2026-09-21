@@ -41,6 +41,7 @@ import { CLAIMS } from '@/lib/authority/claims'
 import { LedgerEntry } from '@/lib/factLedger'
 import { factSheet } from '@/lib/claimMatrix'
 import { plainly } from '@/lib/modelErrors'
+import { Meter } from '@/lib/spend'
 
 import { SPINE_MODEL } from '@/lib/models'
 
@@ -352,7 +353,8 @@ async function read<T extends z.ZodTypeAny>(
   what: string,
   shape: T,
   instruction: string,
-  facts: string
+  facts: string,
+  meter?: Meter
 ): Promise<z.infer<T>> {
   let response
   try {
@@ -382,6 +384,7 @@ async function read<T extends z.ZodTypeAny>(
   } catch (err) {
     throw plainly(err, `${what} reading`)
   }
+  meter?.add(response.usage)
   if (response.stop_reason === 'max_tokens') {
     throw new Error(`The ${what} reading ran out of room. Run it again.`)
   }
@@ -433,7 +436,7 @@ Then, plainly: where does this case presently rest on the client's word and noth
  * failure mode that made the earlier single-pass reading shorten its way into
  * an error (see lib/caseAnalysis.ts).
  */
-export async function buildSpine(entries: LedgerEntry[]): Promise<SpineReading> {
+export async function buildSpine(entries: LedgerEntry[], meter?: Meter): Promise<SpineReading> {
   if (!process.env.ANTHROPIC_API_KEY) {
     throw new Error('ANTHROPIC_API_KEY is not configured, so the spine cannot be built.')
   }
@@ -447,9 +450,9 @@ export async function buildSpine(entries: LedgerEntry[]): Promise<SpineReading> 
 
   const client = new Anthropic({ maxRetries: 2 })
   const [chronology, anomalies, spine] = await Promise.all([
-    read(client, 'chronology', Chronology, CHRONOLOGY_TASK, facts),
-    read(client, 'anomaly', Anomalies, ANOMALY_TASK, facts),
-    read(client, 'spine', Spine, SPINE_TASK, facts),
+    read(client, 'chronology', Chronology, CHRONOLOGY_TASK, facts, meter),
+    read(client, 'anomaly', Anomalies, ANOMALY_TASK, facts, meter),
+    read(client, 'spine', Spine, SPINE_TASK, facts, meter),
   ])
   return { ...chronology, ...anomalies, ...spine }
 }
