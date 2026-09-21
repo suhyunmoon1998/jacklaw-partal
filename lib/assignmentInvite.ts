@@ -61,3 +61,42 @@ export async function lookupClientPhone(clientId: string): Promise<string> {
   const phone = String(data.phone ?? '')
   return phone.replace(/\D/g, '').length >= 10 ? phone : ''
 }
+
+/**
+ * The text that hands a client one of the numbered steps.
+ *
+ * Separate copy from the question-set invitation above, and the difference
+ * matters. A question set is a handful of follow-ups; Step 1 is
+ * seventy-seven questions about their job, their pay and their hours. Telling
+ * someone there are "a few things to ask" and then opening that is how a
+ * client starts, stops, and is never heard from again — which is the exact
+ * failure this message exists to prevent. So it says which step, and roughly
+ * how long, before they tap.
+ */
+const STEP_INVITE: Record<Lang, (name: string, step: string, mins: string, link: string) => string> = {
+  // The step's name is its own clause, not a noun dropped into a sentence.
+  // "Step 1 · Your intake questions for your case is ready" reads as a
+  // mistake, and in Korean an interpolated name picks the wrong particle —
+  // "문진표이" instead of "문진표가". A colon avoids both and survives a step
+  // being renamed.
+  en: (n, step, m, l) =>
+    `${FIRM}: Hi ${n} — ${step}. It takes about ${m} minutes and you can stop and come back: ${l}\nReply STOP to stop these texts.`,
+  es: (n, step, m, l) =>
+    `${FIRM}: Hola ${n} — ${step}. Toma unos ${m} minutos y puede parar y continuar después: ${l}\nResponda STOP para no recibir más mensajes.`,
+  zh: (n, step, m, l) =>
+    `${FIRM}：您好 ${n} — ${step}。大约需要${m}分钟，可以中途保存稍后继续：${l}\n回复 STOP 可停止接收短信。`,
+  ko: (n, step, m, l) =>
+    `${FIRM}: ${n}님 — ${step}, 준비되었습니다. ${m}분 정도 걸리고 중간에 멈췄다 이어서 하실 수 있습니다: ${l}\n수신을 원하지 않으시면 STOP 이라고 답장해 주세요.`,
+}
+
+export function stepInviteSms(
+  lang: Lang,
+  name: string,
+  step: { name: string; minutes: [number, number] },
+  at: string
+): string {
+  const write = STEP_INVITE[lang] ?? STEP_INVITE.en
+  // The high end of the range. A client told fifteen minutes who spends
+  // twenty-five feels misled; one told twenty-five who spends fifteen does not.
+  return write(firstName(name), step.name, String(step.minutes[1]), `${at.replace(/\/$/, '')}/client`)
+}

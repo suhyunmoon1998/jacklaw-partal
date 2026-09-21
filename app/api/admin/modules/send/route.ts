@@ -5,6 +5,8 @@ import { Lang, isLang } from '@/lib/langs'
 import { ModuleId, moduleById, moduleQuestionCount, stepName } from '@/lib/modules'
 import { lookupClientEmail, lookupClientLanguage, sendAssignmentEmail } from '@/lib/sendAssignmentEmail'
 import { readSteps } from '@/lib/clientSteps'
+import { isConfigured, sendSms } from '@/lib/twilio'
+import { lookupClientPhone, origin, stepInviteSms } from '@/lib/assignmentInvite'
 
 const asModule = (value: unknown): ModuleId | null =>
   value === 'module1' || value === 'module2' || value === 'module3' ? value : null
@@ -123,9 +125,21 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Could not record the send.', link }, { status: 500 })
   }
 
+  // Text first, email second. This office's reminder ladder is two texts and a
+  // telephone call because that is how its clients are actually reached, and
+  // the send that starts the ladder was reaching them by email alone — so a
+  // client with no email address got a module they were never told about.
+  const phone = body?.sms === false ? '' : await lookupClientPhone(clientId)
+  const texted = phone && isConfigured() ? await sendSms(
+          phone,
+          stepInviteSms(lang, client.name ?? '', { name: stepName(definition, lang), minutes: definition.minutes }, origin(req))
+        ) : null
+
   if (!to.includes('@')) {
     return NextResponse.json({
-      sent: false,
+      sent: Boolean(texted?.ok),
+      sms: texted?.ok ? phone : null,
+      smsError: texted && !texted.ok ? texted.error : undefined,
       recorded: true,
       link,
       lang,
@@ -134,9 +148,11 @@ export async function POST(req: NextRequest) {
       // locked, or the office is told to hand over a link that will refuse the
       // client — and told it by the same screen that just warned them.
       error:
-        blockedBy === null
-          ? 'No email address on file, so nothing was emailed. The step is open to them — copy the link and send it yourself.'
-          : `No email address on file, so nothing was emailed. The step is recorded, but stays locked until Step ${blockedBy} is submitted; the link goes to their step list.`,
+        texted?.ok
+          ? undefined
+          : blockedBy === null
+            ? 'No email address on file and no text could be sent. The step is open to them — copy the link and send it yourself.'
+            : `No email address on file and no text could be sent. The step is recorded, but stays locked until Step ${blockedBy} is submitted; the link goes to their step list.`,
     })
   }
 
@@ -153,17 +169,33 @@ export async function POST(req: NextRequest) {
     })
   } catch (err) {
     console.error('module send email failed:', err)
+    // The text may still have arrived, and if it did the client has the link.
     return NextResponse.json({
-      sent: false,
+      sent: Boolean(texted?.ok),
+      sms: texted?.ok ? phone : null,
       recorded: true,
       link,
       lang,
       blockedBy,
-      error: err instanceof Error ? err.message : 'Could not send the email.',
+      error: texted?.ok
+        ? undefined
+        : err instanceof Error
+          ? err.message
+          : 'Could not send the email.',
+      emailError: err instanceof Error ? err.message : 'Could not send the email.',
     })
   }
 
-  return NextResponse.json({ sent: true, recorded: true, email: to, link, lang, blockedBy })
+  return NextResponse.json({
+    sent: true,
+    recorded: true,
+    email: to,
+    sms: texted?.ok ? phone : null,
+    smsError: texted && !texted.ok ? texted.error : undefined,
+    link,
+    lang,
+    blockedBy,
+  })
 }
 
 /**
