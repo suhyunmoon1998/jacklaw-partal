@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
 import { isAdmin } from '@/lib/adminAuth'
-import { extractFacts } from '@/lib/factExtraction'
+import { ExtractionInput, extractFacts } from '@/lib/factExtraction'
+import { getAssignmentDetail } from '@/lib/questionSets'
 import {
   addFacts,
   clearContradictions,
@@ -14,6 +15,10 @@ import { standing, unsettled } from '@/lib/factLedger'
 import { clearReading } from '@/lib/caseReadingStore'
 import { AnswerValue } from '@/types'
 import { Meter, describeSpend } from '@/lib/spend'
+
+/** One answer as a line of text, arrays flattened. */
+const shown = (v: AnswerValue | undefined): string =>
+  Array.isArray(v) ? v.filter(Boolean).join('; ') : String(v ?? '').trim()
 
 /**
  * Turning one client's answers into the fact ledger everything else stands on.
@@ -39,10 +44,29 @@ async function gather(clientId: string) {
   // The raw record. extractFacts runs it through answersForReading itself, so
   // that a question the client retracted is read as retracted here too rather
   // than twice or not at all.
+  // Everything else the office has asked this client and had answered. These
+  // live in their own table, outside the questionnaire's structure, so nothing
+  // reading `answers` alone would ever see them.
+  const extra: NonNullable<ExtractionInput['extra']> = []
+  const { data: done } = await db
+    .from('client_question_set_assignments')
+    .select('id, question_set_id')
+    .eq('client_id', clientId)
+    .in('status', ['completed', 'in_progress'])
+  for (const a of done ?? []) {
+    const detail = await getAssignmentDetail(a.id as string)
+    if (!detail) continue
+    const rows = detail.questions
+      .map(q => ({ id: q.id, label: q.label, answer: shown(detail.answers[q.id]) }))
+      .filter(r => r.answer.trim())
+    if (rows.length) extra.push({ title: `Question set: ${detail.questionSetName}`, rows })
+  }
+
   return {
     clientId,
     clientName: client.name ?? '',
     answers: (state?.answers ?? {}) as Record<string, AnswerValue>,
+    extra,
   }
 }
 

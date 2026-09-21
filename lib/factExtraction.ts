@@ -119,6 +119,16 @@ export interface ExtractionInput {
   clientId: string
   clientName: string
   answers: Record<string, AnswerValue>
+  /**
+   * Answers to question sets the office assigned outside the numbered modules.
+   *
+   * These live in their own table and are not part of the questionnaire's
+   * structure, so nothing here would have found them — and two clients had
+   * answered thirty-five and thirty-six of them. A follow-up round written
+   * without them would have asked a client what she had already told us,
+   * which the corpus forbids and which reads to her as nobody listening.
+   */
+  extra?: { title: string; rows: { id: string; label: string; answer: string }[] }[]
   /** Counts what the run used, when the caller wants to know. */
   meter?: Meter
 }
@@ -146,6 +156,15 @@ export function sections(input: ExtractionInput): { title: string; text: string;
       rows.push(`[${q.id}] ${q.label}\n  ANSWER: ${value}`)
     }
     if (rows.length) out.push({ title: section.title, text: rows.join('\n'), answered: rows.length })
+  }
+
+  // Assigned question sets, as their own sections. Same shape, so a fact from
+  // one carries the same provenance as a fact from the questionnaire.
+  for (const set of input.extra ?? []) {
+    const rows = set.rows
+      .filter(r => r.answer.trim())
+      .map(r => `[${r.id}] ${r.label}\n  ANSWER: ${r.answer}`)
+    if (rows.length) out.push({ title: set.title, text: rows.join('\n'), answered: rows.length })
   }
   return out
 }
@@ -175,10 +194,23 @@ async function mapWithLimit<T, R>(items: T[], limit: number, run: (item: T) => P
 }
 
 /**
- * Enough that a long questionnaire goes through in one wave rather than a
- * queue, and not so many that a rate limit takes the whole extraction down.
+ * How many sections are read at once.
+ *
+ * All of them, in practice. The sections are independent — the prompt says so
+ * to the model — and the wall clock of a wave is the slowest section in it,
+ * not the sum. Measured on one client's file: a one-answer section finished in
+ * 5 seconds and a thirty-five-answer section in 90, an eighteen-fold spread.
+ * At five at a time a seventeen-section file ran four waves and could draw a
+ * slow section into each, so the file took four times its slowest section
+ * rather than once — and on two clients it never came back inside the request
+ * at all.
+ *
+ * Raising this costs nothing. It is the same calls, sent together instead of
+ * in queues, so the tokens are identical and only the waiting changes. The cap
+ * is a courtesy to the provider's rate limits rather than a budget.
  */
-const SECTION_CONCURRENCY = 5
+const SECTION_CONCURRENCY = 24
+
 
 async function ask<T>(
   client: Anthropic,
