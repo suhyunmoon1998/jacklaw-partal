@@ -17,6 +17,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { MOCK_ADMIN_PASSWORD } from '@/lib/mockData'
 import { ClientWork, STATUS_LABEL, clientProgressPercent, clientStatus } from '@/lib/clientProgress'
+import { alsoOn } from '@/lib/samePerson'
 import { formatPhone } from '@/lib/auth'
 import { ModuleId, moduleById } from '@/lib/modules'
 import { LANGUAGES, LANG_ENGLISH_NAME } from '@/lib/langs'
@@ -461,6 +462,14 @@ function FolderDetail<C extends PanelClient>({
   const inside = clients.filter(c =>
     isUnassigned ? !c.caseFolderId : c.caseFolderId === folder.id
   )
+  // The same person on more than one case. Two rows showing one name, one case
+  // type and one phone read as a duplicate record, and one of them is a live
+  // case — so each row says which other cases that phone is on.
+  const otherCases = alsoOn(
+    clients.map(c => ({ id: c.id, phone: c.phone, caseFolderId: c.caseFolderId })),
+    id => folders.find(f => f.id === id)?.name ?? ''
+  )
+
   const outside = clients.filter(c =>
     isUnassigned ? Boolean(c.caseFolderId) : c.caseFolderId !== folder.id
   )
@@ -600,6 +609,14 @@ function FolderDetail<C extends PanelClient>({
                   <p className="text-xs text-gray-400 mt-0.5 truncate">
                     {[c.caseType, formatPhone(c.phone)].filter(Boolean).join(' · ')}
                   </p>
+                  {otherCases.get(c.id) && (
+                    <p
+                      title="The same phone number is on another case. One person can bring more than one."
+                      className="text-[11px] text-gold mt-0.5 truncate"
+                    >
+                      also on {otherCases.get(c.id)!.join(', ')}
+                    </p>
+                  )}
                   <ModuleBars client={c} />
                 </button>
 
