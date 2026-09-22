@@ -7,12 +7,13 @@ import { standing } from '@/lib/factLedger'
 import { readContradictions, readLedger } from '@/lib/factStore'
 import { askFollowUps } from '@/lib/followUp'
 import { savePlan } from '@/lib/followUpStore'
-import { allClaims } from '@/lib/caseReadingShape'
-import { readingFingerprint } from '@/lib/caseReading'
-import { readReading } from '@/lib/caseReadingStore'
+import { StoredReading, allClaims, isComplete, nextStage } from '@/lib/caseReadingShape'
+import { WageOrderChoice, checkChoice, isUsable } from '@/lib/wageOrderChoice'
+import { readingFingerprint, runStage, stampsNow } from '@/lib/caseReading'
+import { readReading, saveStage } from '@/lib/caseReadingStore'
 import { ClaimFinding } from '@/lib/claimMatrix'
 import { SpineReading } from '@/lib/evidenceSpine'
-import { Meter, describeSpend } from '@/lib/spend'
+import { Meter, describeSpend, totalSpend } from '@/lib/spend'
 import { Waiting, whoIsWaiting } from '@/lib/followUpQueue'
 
 /**
@@ -56,12 +57,22 @@ function authorised(req: NextRequest): boolean {
 /** Who has finished Module 2 and is owed something. */
 async function waitingFor(): Promise<Waiting[]> {
   const db = getSupabase()
-  const [{ data: states }, { data: clients }, { data: plans }, { data: facts }] = await Promise.all([
-    db.from('questionnaire_states').select('client_id, m2_submitted'),
-    db.from('clients').select('id, name, portal_lang'),
-    db.from('follow_up_plans').select('client_id'),
-    db.from('case_facts').select('client_id'),
-  ])
+  const [{ data: states }, { data: clients }, { data: plans }, { data: facts }, { data: readings }] =
+    await Promise.all([
+      db.from('questionnaire_states').select('client_id, m2_submitted'),
+      db.from('clients').select('id, name, portal_lang'),
+      db.from('follow_up_plans').select('client_id'),
+      db.from('case_facts').select('client_id'),
+      db.from('case_readings').select('client_id, result'),
+    ])
+
+  // Complete means every stage is on the row. Whether those stages are still
+  // true of the facts is a question only the ledger can answer, so it is asked
+  // later, for the one client picked — hashing sixteen ledgers to choose one
+  // would cost more than the choosing is worth.
+  const finishedReading = (readings ?? [])
+    .filter(r => isComplete((r.result ?? {}) as StoredReading))
+    .map(r => r.client_id as string)
 
   return whoIsWaiting({
     clients: (clients ?? []).map(c => ({
@@ -71,6 +82,7 @@ async function waitingFor(): Promise<Waiting[]> {
     })),
     finishedModule2: (states ?? []).filter(s => s.m2_submitted).map(s => s.client_id as string),
     haveFacts: (facts ?? []).map(f => f.client_id as string),
+    haveReading: finishedReading,
     haveRound: (plans ?? []).map(p => p.client_id as string),
   })
 }
@@ -120,6 +132,55 @@ export async function GET(req: NextRequest) {
         spent: describeSpend(meter.spent),
         // Still waiting: this client is one step further along but not done,
         // so they remain in the queue for tomorrow's run.
+        stillWaiting: queue.length,
+      })
+    }
+
+    if (next.needs === 'reading') {
+      // ONE STAGE, not the whole reading. The reading was split into four
+      // requests because ten claims read against the statutes, the Wage Order
+      // and the cases took 73 minutes on a loaded afternoon; running four of
+      // them in one nightly request would hit the same 300-second ceiling the
+      // staging exists to stay under. So a reading takes four nights, or four
+      // presses of Run in the panel for anyone in a hurry.
+      const entries = await readLedger(next.clientId)
+      if (!standing(entries).length) {
+        return NextResponse.json({ ran: false, client: next.name, reason: 'No facts stand for this client.' })
+      }
+      const fingerprint = readingFingerprint(entries)
+      const row = await readReading(next.clientId, fingerprint)
+      const stored = row && !row.stale ? row.reading : {}
+      const stage = nextStage(stored, stampsNow(entries, stored))
+      if (!stage) {
+        return NextResponse.json({ ran: false, client: next.name, reason: 'The reading is already complete.' })
+      }
+
+      // A proposal that contradicts itself must not become the law ten claims
+      // are read under — one proposed Order 7 while quoting the provision that
+      // names restaurants in Order 5. The panel refuses this; so does the night.
+      if (stage === 'claims 1' || stage === 'claims 2') {
+        const choice = stored.wageOrder as WageOrderChoice
+        if (!isUsable(choice)) {
+          return NextResponse.json({
+            ran: false,
+            client: next.name,
+            reason: 'The Wage Order proposal contradicts itself, so the claims cannot be read under it.',
+            problems: checkChoice(choice),
+          })
+        }
+      }
+
+      const patch = await runStage(stage, entries, stage === 'wage order' ? {} : stored)
+      const merged = await saveStage(next.clientId, fingerprint, { ...stored, ...patch })
+      const left = nextStage(merged, stampsNow(entries, merged))
+      return NextResponse.json({
+        ran: true,
+        client: next.name,
+        did: `read the ${stage} stage`,
+        stagesLeft: left ? `${left} next` : 'the reading is complete',
+        // runStage meters itself and records it on the row, so the nightly
+        // meter above never sees these tokens. Read them back off the stage.
+        spent: describeSpend(totalSpend({ stage: merged.spent?.[stage] })),
         stillWaiting: queue.length,
       })
     }

@@ -1,0 +1,23 @@
+{
+  "name": "labor-discovery-generator",
+  "version": "1.0.0",
+  "description": "Labor law discovery interrogatory generator - supports discrimination, wage/hour, wrongful termination, harassment, and retaliation cases under California CCP §2030.210",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "server": "node server/index.js",
+    "client": "cd client && npm run dev",
+    "build": "cd client && npm run build"
+  },
+  "dependencies": {
+    "anthropic": "^0.24.0",
+    "concurrently": "^8.2.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.0.0",
+    "express": "^4.18.0",
+    "lowdb": "^7.0.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.0"
+  }
+}
