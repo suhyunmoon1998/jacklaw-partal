@@ -218,7 +218,7 @@ function ClientDetailModal({
   return (
     <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-2 sm:p-4 animate-fade-in" onClick={onClose}>
       <div
-        className="bg-white rounded-2xl w-full max-w-2xl max-h-[95vh] overflow-hidden flex flex-col shadow-2xl animate-modal-in"
+        className="bg-white rounded-2xl w-full max-w-5xl max-h-[95vh] overflow-hidden flex flex-col shadow-2xl animate-modal-in"
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
@@ -290,7 +290,7 @@ function ClientDetailModal({
                   read against the authority, and the reading decides what to
                   ask next. */}
               <FactLedger clientId={client.id} />
-              <CaseReading clientId={client.id} />
+              <CaseReading clientId={client.id} clientName={client.name} />
               {/* The same tab, because it is the same job: read the case, then
                   decide what to ask next. A sixth tab would also have broken
                   the row onto two lines on a phone. */}

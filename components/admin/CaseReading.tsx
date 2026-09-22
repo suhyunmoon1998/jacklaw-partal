@@ -11,6 +11,7 @@ import {
   describe as describeReading,
   nextStage,
 } from '@/lib/caseReadingShape'
+import ReadingDocument, { Choice, Finding } from '@/components/admin/ReadingDocument'
 
 /**
  * Reading a case against the authority: the Wage Order, the claims, the spine.
@@ -37,35 +38,6 @@ import {
 
 const headers = { 'Content-Type': 'application/json', 'x-admin-key': MOCK_ADMIN_PASSWORD }
 
-const STATE_STYLE: Record<string, string> = {
-  supported: 'bg-green-100 text-green-700',
-  'partially supported': 'bg-amber-100 text-amber-700',
-  contradicted: 'bg-red-100 text-red-700',
-  unknown: 'bg-gray-100 text-gray-500',
-  'needs authority': 'bg-blue-50 text-blue-600',
-}
-
-const STANDING_STYLE: Record<string, string> = {
-  'elements met': 'bg-green-100 text-green-700',
-  'gaps to close': 'bg-amber-100 text-amber-700',
-  blocked: 'bg-red-100 text-red-700',
-  'not raised by these facts': 'bg-gray-100 text-gray-500',
-}
-
-type Finding = {
-  claimId: string
-  standing: string
-  elements: { key: string; state: string; reasoning: string; wouldSettleIt: string }[]
-  adverse: string[]
-  defense: string
-}
-
-type Choice = {
-  proposal: { order: string; industry: string; businessIs: string; reliedOn: string; because: string }
-  dlse: { entry: string; orders: string; agrees: boolean } | null
-  caveat: string
-}
-
 function Elapsed() {
   const [seconds, setSeconds] = useState(0)
   useEffect(() => {
@@ -76,77 +48,7 @@ function Elapsed() {
   return <>{m ? `${m}m ` : ''}{seconds % 60}s</>
 }
 
-function ClaimCard({ f }: { f: Finding }) {
-  const [open, setOpen] = useState(false)
-  return (
-    <div className="rounded-xl border border-gray-200 overflow-hidden">
-      <button onClick={() => setOpen(o => !o)} className="w-full text-left px-4 py-2.5 hover:bg-gray-50">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-sm font-semibold text-gray-900">{f.claimId}</span>
-          <span
-            className={`text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded ${STANDING_STYLE[f.standing] ?? 'bg-gray-100 text-gray-500'}`}
-          >
-            {f.standing}
-          </span>
-          <span className="ml-auto text-gray-300 text-xs">{open ? '−' : '+'}</span>
-        </div>
-        <div className="flex gap-1 mt-1.5 flex-wrap">
-          {f.elements.map(e => (
-            <span
-              key={e.key}
-              title={`${e.key}: ${e.state}`}
-              className={`text-[9px] font-bold uppercase px-1 py-0.5 rounded ${STATE_STYLE[e.state] ?? 'bg-gray-100'}`}
-            >
-              {e.key}
-            </span>
-          ))}
-        </div>
-      </button>
-      {open && (
-        <div className="px-4 pb-3 pt-1 space-y-2.5 bg-gray-50/70 border-t border-gray-100">
-          {f.elements.map(e => (
-            <div key={e.key}>
-              <p className="text-[11px] font-bold text-gray-500">
-                {e.key} — <span className="font-medium">{e.state}</span>
-              </p>
-              <p className="text-xs text-gray-700 mt-0.5">{e.reasoning}</p>
-              {e.wouldSettleIt && (
-                <p className="text-[11px] text-gray-500 mt-0.5">
-                  <span className="font-semibold">Would settle it: </span>
-                  {e.wouldSettleIt}
-                </p>
-              )}
-            </div>
-          ))}
-          {f.adverse.length > 0 && (
-            <div className="pt-1 border-t border-gray-200">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-red-500 mb-1">
-                Cuts against
-              </p>
-              <ul className="space-y-1">
-                {f.adverse.map((a, i) => (
-                  <li key={i} className="text-xs text-gray-700">
-                    {a}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-          {f.defense && (
-            <div className="pt-1 border-t border-gray-200">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">
-                Defence to expect
-              </p>
-              <p className="text-xs text-gray-700">{f.defense}</p>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  )
-}
-
-export default function CaseReading({ clientId }: { clientId: string }) {
+export default function CaseReading({ clientId, clientName }: { clientId: string; clientName: string }) {
   const [reading, setReading] = useState<StoredReading | null>(null)
   const [stale, setStale] = useState(false)
   /** What the API says still has to run. The screen cannot hash a ledger. */
@@ -156,6 +58,7 @@ export default function CaseReading({ clientId }: { clientId: string }) {
   const [running, setRunning] = useState<Stage | null>(null)
   const [error, setError] = useState('')
   const [loaded, setLoaded] = useState(false)
+  const [updatedAt, setUpdatedAt] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     try {
@@ -167,6 +70,7 @@ export default function CaseReading({ clientId }: { clientId: string }) {
       setOutdated(body.staleStages ?? [])
       setNext((body.next as Stage | null) ?? null)
       setFacts(body.facts ?? 0)
+      setUpdatedAt(body.updatedAt ?? null)
     } catch (err) {
       setError((err as Error).message)
     } finally {
@@ -297,55 +201,17 @@ export default function CaseReading({ clientId }: { clientId: string }) {
         </p>
       )}
 
-      {choice?.proposal?.order && (
-        <div className="rounded-xl border border-blue-200 bg-blue-50/50 px-4 py-3 mb-3">
-          <p className="text-sm font-semibold text-gray-900">
-            IWC Wage Order {choice.proposal.order} — {choice.proposal.industry}
-          </p>
-          <p className="text-xs text-gray-600 mt-1">{choice.proposal.because}</p>
-          <p className="text-[11px] text-gray-500 mt-1.5">
-            <span className="font-semibold">Read out of: </span>
-            {choice.proposal.reliedOn}
-          </p>
-          <div className="flex items-center gap-2 flex-wrap mt-2">
-            <span className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">
-              proposed, not confirmed
-            </span>
-            {choice.dlse && (
-              <span
-                className={`text-[10px] px-1.5 py-0.5 rounded border ${
-                  choice.dlse.agrees
-                    ? 'bg-white text-gray-500 border-gray-200'
-                    : 'bg-red-50 text-red-700 border-red-200'
-                }`}
-              >
-                Labor Commissioner&rsquo;s index: {choice.dlse.entry} → Order {choice.dlse.orders}
-              </span>
-            )}
-          </div>
-        </div>
-      )}
-
-      {reading?.failed && reading.failed.length > 0 && (
-        <div className="text-xs rounded-lg px-3 py-2 mb-3 bg-red-50 border border-red-200 text-red-700">
-          <p className="font-semibold mb-0.5">
-            {reading.failed.length} claim{reading.failed.length === 1 ? '' : 's'} could not be read:
-          </p>
-          <ul>
-            {reading.failed.map(f => (
-              <li key={f.claimId}>
-                • {f.claimId} — {f.why}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
       {findings.length > 0 && (
-        <div className="space-y-2">
-          {findings.map(f => (
-            <ClaimCard key={f.claimId} f={f} />
-          ))}
+        // Out of the panel's padding and into its own sheet: the reading is a
+        // document somebody sits down with, not a field in a form.
+        <div className="-mx-5 mt-4">
+          <ReadingDocument
+            clientName={clientName}
+            findings={findings}
+            choice={choice}
+            facts={facts}
+            readOn={updatedAt}
+          />
         </div>
       )}
 
