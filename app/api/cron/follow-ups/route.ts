@@ -7,7 +7,7 @@ import { standing } from '@/lib/factLedger'
 import { readContradictions, readLedger } from '@/lib/factStore'
 import { askFollowUps } from '@/lib/followUp'
 import { savePlan } from '@/lib/followUpStore'
-import { StoredReading, allClaims, isComplete, nextStage } from '@/lib/caseReadingShape'
+import { STAGES, Stage, StoredReading, allClaims, isComplete, nextStage } from '@/lib/caseReadingShape'
 import { WageOrderChoice, checkChoice, isUsable } from '@/lib/wageOrderChoice'
 import { readingFingerprint, runStage, stampsNow } from '@/lib/caseReading'
 import { readReading, saveStage } from '@/lib/caseReadingStore'
@@ -37,6 +37,15 @@ import { Waiting, whoIsWaiting } from '@/lib/followUpQueue'
  * than one client a day to do.
  */
 export const maxDuration = 300
+
+/**
+ * Seconds into the run after which no NEW stage is begun.
+ *
+ * The longest stage ever measured is the spine at 116 seconds, so a stage
+ * started before this mark finishes inside the 300-second ceiling. Past it,
+ * whatever is left waits for tomorrow rather than being paid for and lost.
+ */
+const START_NO_STAGE_AFTER = 170
 
 function authorised(req: NextRequest): boolean {
   // Vercel's scheduler sends the secret as a bearer token. An admin can also
@@ -98,6 +107,8 @@ export async function GET(req: NextRequest) {
 
   const next = queue[0]
   const meter = new Meter()
+  // One clock for the whole run, so the reading loop knows what it has left.
+  const began = Date.now()
 
   try {
     if (next.needs === 'facts') {
@@ -137,50 +148,72 @@ export async function GET(req: NextRequest) {
     }
 
     if (next.needs === 'reading') {
-      // ONE STAGE, not the whole reading. The reading was split into four
-      // requests because ten claims read against the statutes, the Wage Order
-      // and the cases took 73 minutes on a loaded afternoon; running four of
-      // them in one nightly request would hit the same 300-second ceiling the
-      // staging exists to stay under. So a reading takes four nights, or four
-      // presses of Run in the panel for anyone in a hurry.
+      // AS MANY STAGES AS THE CLOCK ALLOWS, not one a night.
+      //
+      // The staging is not negotiable — the plan caps a request at 300 seconds
+      // and an undivided reading that overran would be lost having been paid
+      // for. But a stage SAVES when it finishes, so running them back to back
+      // risks only the stage in flight, never the ones already stored.
+      //
+      // Measured on the three readings on file: 169s, 211s and 235s for all
+      // four stages. A whole reading fits in one request with room, and the
+      // 73-minute afternoon that justified one-a-night is an outlier the
+      // resume path already handles. So: start another stage while there is
+      // time for it, and leave the rest for tomorrow when there is not.
       const entries = await readLedger(next.clientId)
       if (!standing(entries).length) {
         return NextResponse.json({ ran: false, client: next.name, reason: 'No facts stand for this client.' })
       }
       const fingerprint = readingFingerprint(entries)
       const row = await readReading(next.clientId, fingerprint)
-      const stored = row && !row.stale ? row.reading : {}
-      const stage = nextStage(stored, stampsNow(entries, stored))
-      if (!stage) {
-        return NextResponse.json({ ran: false, client: next.name, reason: 'The reading is already complete.' })
-      }
+      let stored = row && !row.stale ? row.reading : {}
+      const ran: Stage[] = []
+      let stage = nextStage(stored, stampsNow(entries, stored))
+      let stoppedFor = ''
 
-      // A proposal that contradicts itself must not become the law ten claims
-      // are read under — one proposed Order 7 while quoting the provision that
-      // names restaurants in Order 5. The panel refuses this; so does the night.
-      if (stage === 'claims 1' || stage === 'claims 2') {
-        const choice = stored.wageOrder as WageOrderChoice
-        if (!isUsable(choice)) {
-          return NextResponse.json({
-            ran: false,
-            client: next.name,
-            reason: 'The Wage Order proposal contradicts itself, so the claims cannot be read under it.',
-            problems: checkChoice(choice),
-          })
+      while (stage) {
+        // The gate is on STARTING a stage, not on finishing one. The longest
+        // stage measured is the spine at 116s, so a stage begun before this
+        // mark has the room it has ever needed; one begun later might not.
+        const elapsed = (Date.now() - began) / 1000
+        if (ran.length && elapsed > START_NO_STAGE_AFTER) {
+          stoppedFor = `out of time after ${Math.round(elapsed)}s`
+          break
         }
+
+        // A proposal that contradicts itself must not become the law ten
+        // claims are read under — one proposed Order 7 while quoting the
+        // provision naming restaurants in Order 5. The panel refuses this;
+        // so does the night.
+        if (stage === 'claims 1' || stage === 'claims 2') {
+          const choice = stored.wageOrder as WageOrderChoice
+          if (!isUsable(choice)) {
+            stoppedFor = 'the Wage Order proposal contradicts itself'
+            break
+          }
+        }
+
+        const patch = await runStage(stage, entries, stage === 'wage order' ? {} : stored)
+        stored = await saveStage(next.clientId, fingerprint, { ...stored, ...patch })
+        ran.push(stage)
+        stage = nextStage(stored, stampsNow(entries, stored))
       }
 
-      const patch = await runStage(stage, entries, stage === 'wage order' ? {} : stored)
-      const merged = await saveStage(next.clientId, fingerprint, { ...stored, ...patch })
-      const left = nextStage(merged, stampsNow(entries, merged))
+      if (!ran.length) {
+        return NextResponse.json({
+          ran: false,
+          client: next.name,
+          reason: stoppedFor || 'The reading is already complete.',
+        })
+      }
       return NextResponse.json({
         ran: true,
         client: next.name,
-        did: `read the ${stage} stage`,
-        stagesLeft: left ? `${left} next` : 'the reading is complete',
+        did: `read ${ran.length} of ${STAGES.length} stages: ${ran.join(', ')}`,
+        stagesLeft: stage ? `${stage} next — ${stoppedFor}` : 'the reading is complete',
         // runStage meters itself and records it on the row, so the nightly
-        // meter above never sees these tokens. Read them back off the stage.
-        spent: describeSpend(totalSpend({ stage: merged.spent?.[stage] })),
+        // meter never sees these tokens. Read them back off the stages run.
+        spent: describeSpend(totalSpend(stored.spent ?? {})),
         stillWaiting: queue.length,
       })
     }

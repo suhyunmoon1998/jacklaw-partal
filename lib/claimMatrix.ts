@@ -231,9 +231,22 @@ export function factSheet(entries: LedgerEntry[]): string {
     .join('\n')
 }
 
+/**
+ * Runs `items` with a concurrency limit, the FIRST ONE ALONE.
+ *
+ * Every claim carries the same fact sheet as its cached prefix. Launching the
+ * first wave together means every call in it leaves before any of them has
+ * filled the cache, so the whole wave pays full price for a prefix it shares:
+ * the reading on file wrote 32,740 cache tokens on the claims and read back
+ * none of them until the NEXT stage. Reading one claim first fills the cache
+ * for everything after it, and costs one claim's latency.
+ */
 async function mapWithLimit<T, R>(items: T[], limit: number, run: (i: T) => Promise<R>): Promise<R[]> {
   const out = new Array<R>(items.length)
-  let next = 0
+  if (!items.length) return out
+  out[0] = await run(items[0])
+
+  let next = 1
   const worker = async () => {
     for (;;) {
       const i = next++
@@ -241,7 +254,7 @@ async function mapWithLimit<T, R>(items: T[], limit: number, run: (i: T) => Prom
       out[i] = await run(items[i])
     }
   }
-  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker))
+  await Promise.all(Array.from({ length: Math.min(limit, items.length - 1) }, worker))
   return out
 }
 

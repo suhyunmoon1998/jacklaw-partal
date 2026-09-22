@@ -449,8 +449,19 @@ export async function buildSpine(entries: LedgerEntry[], meter?: Meter): Promise
   }
 
   const client = new Anthropic({ maxRetries: 2 })
-  const [chronology, anomalies, spine] = await Promise.all([
-    read(client, 'chronology', Chronology, CHRONOLOGY_TASK, facts, meter),
+
+  // ONE PASS FIRST, THEN THE OTHER TWO TOGETHER.
+  //
+  // All three read the same ledger, and the ledger is the cached prefix — on
+  // a 204-fact file, 18,600 tokens of it. Sent as Promise.all the three left
+  // together, so all three missed a cache none of them had filled yet: the
+  // reading on file wrote 21,228 cache tokens and read back exactly zero.
+  //
+  // Starting one and awaiting it puts the ledger in the cache; the two that
+  // follow read it instead of sending it again. The cost is the chronology's
+  // latency, which is the shortest of the three, and it buys two cache hits.
+  const chronology = await read(client, 'chronology', Chronology, CHRONOLOGY_TASK, facts, meter)
+  const [anomalies, spine] = await Promise.all([
     read(client, 'anomaly', Anomalies, ANOMALY_TASK, facts, meter),
     read(client, 'spine', Spine, SPINE_TASK, facts, meter),
   ])
