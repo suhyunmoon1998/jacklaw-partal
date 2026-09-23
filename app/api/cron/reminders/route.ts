@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { timingSafeEqual } from 'crypto'
 import { getSupabase } from '@/lib/supabase'
-import { Lang } from '@/lib/langs'
-import { submissionLanguage } from '@/lib/machineTranslate'
 import { ModuleId } from '@/lib/modules'
 import {
   Chasing,
