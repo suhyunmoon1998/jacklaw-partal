@@ -23,6 +23,7 @@ import { StoredReading, allClaims } from '@/lib/caseReadingShape'
 import { Finding, buildBrief } from '@/lib/caseBrief'
 import BriefDocument from '@/components/admin/BriefDocument'
 import { releaseTest } from '@/lib/releaseTest'
+import { Changes, FactSnapshot } from '@/lib/briefChanges'
 
 const headers = {}
 
@@ -40,8 +41,11 @@ export default function ReadingSheetPage() {
   /** The damages reading, null until it has been run. */
   const [analysis, setAnalysis] = useState<Parameters<typeof buildBrief>[0]['analysis']>(null)
   const [questions, setQuestions] = useState<{ text: string; why?: string }[]>([])
-  /** The ledger's ids, so an invented fact id can be told from a real one. */
+  /** The ledger's ids, so a fact not on file can be told from one that is. */
   const [factIds, setFactIds] = useState<string[]>([])
+  const [ledger, setLedger] = useState<FactSnapshot[]>([])
+  /** What moved since the last reading. Null until the comparison comes back. */
+  const [changes, setChanges] = useState<Changes | null>(null)
   const [error, setError] = useState('')
   const [loaded, setLoaded] = useState(false)
   /** null until the server has said. The cookie is what decides, not localStorage. */
@@ -81,8 +85,9 @@ export default function ReadingSheetPage() {
         setAnalysis(a ?? null)
       }
       if (lRes.ok) {
-        const { ids } = await lRes.json()
+        const { ids, snapshot } = await lRes.json()
         setFactIds(ids ?? [])
+        setLedger(snapshot ?? [])
       }
       if (fRes.ok) {
         const { questions: qs } = await fRes.json()
@@ -133,6 +138,29 @@ export default function ReadingSheetPage() {
   // document is the same test at 'external', where a gap stops it going out.
   const problems = releaseTest(brief, { factIds: new Set(factIds) }, 'internal')
 
+  /**
+   * Compare this reading against the one kept last time, and keep this one.
+   *
+   * Runs once the brief has something in it, and only once: opening the sheet
+   * is what records a reading, so the office is not asked to remember to.
+   * A failure costs a comparison next time and nothing on this screen.
+   */
+  const [compared, setCompared] = useState(false)
+  useEffect(() => {
+    if (compared || empty || !loaded) return
+    setCompared(true)
+    void fetch(`/api/admin/clients/${clientId}/brief-changes`, {
+      method: 'POST',
+      headers: { ...headers, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ brief, facts: ledger }),
+    })
+      .then(r => (r.ok ? r.json() : null))
+      .then(body => setChanges(body?.changes ?? null))
+      .catch(() => {})
+    // brief is rebuilt every render; the guard above is what makes this once.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [compared, empty, loaded, clientId])
+
   if (signedIn === false) {
     return (
       <main className="min-h-screen bg-gray-100 flex items-center justify-center p-8">
@@ -180,7 +208,7 @@ export default function ReadingSheetPage() {
         </p>
       )}
 
-      {!empty && <BriefDocument brief={brief} problems={problems} />}
+      {!empty && <BriefDocument brief={brief} problems={problems} changes={changes} />}
     </main>
   )
 }

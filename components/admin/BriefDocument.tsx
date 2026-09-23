@@ -16,6 +16,7 @@
 
 import { Brief, SECTION_ORDER, SECTION_TITLE, SectionKey } from '@/lib/caseBrief'
 import { Problem } from '@/lib/releaseTest'
+import { Changes, nothingChanged } from '@/lib/briefChanges'
 
 function Heading({ children }: { children: React.ReactNode }) {
   return (
@@ -52,8 +53,11 @@ const Bullets = ({ items }: { items: string[] }) => (
 export default function BriefDocument({
   brief,
   problems = [],
+  changes = null,
 }: {
   brief: Brief
+  /** What moved since the last reading. Null on a first reading. */
+  changes?: Changes | null
   /**
    * What the release test found. Shown on the document rather than beside it:
    * a warning on the panel behind a sheet somebody prints is a warning that
@@ -140,7 +144,11 @@ export default function BriefDocument({
           return (
             <section key={key}>
               <Heading>{SECTION_TITLE[key]}</Heading>
-              {missing ? <Absent why={missing} /> : <Body brief={brief} section={key} />}
+              {missing ? (
+                <Absent why={missing} />
+              ) : (
+                <Body brief={brief} section={key} changes={changes} />
+              )}
             </section>
           )
         })}
@@ -149,7 +157,15 @@ export default function BriefDocument({
   )
 }
 
-function Body({ brief, section }: { brief: Brief; section: SectionKey }) {
+function Body({
+  brief,
+  section,
+  changes,
+}: {
+  brief: Brief
+  section: SectionKey
+  changes: Changes | null
+}) {
   if (section === 'overview') {
     return (
       <>
@@ -368,10 +384,110 @@ function Body({ brief, section }: { brief: Brief; section: SectionKey }) {
         </ul>
       )}
       <Label>Changes from the previous reading</Label>
-      {brief.changes ? (
-        <P>{brief.changes}</P>
+      {!changes ? (
+        <Absent why="This is the first reading kept for this client, so there is nothing yet to compare it against. The next one will say what moved." />
+      ) : nothingChanged(changes) ? (
+        <Absent
+          why={`Nothing moved since ${changes.since ? new Date(changes.since).toLocaleDateString() : 'the last reading'}. The facts and every conclusion stand as they did.`}
+        />
       ) : (
-        <Absent why="Not tracked yet. A reading is replaced rather than kept when the facts move, so there is no earlier version to compare this one against." />
+        <>
+          {/* Conclusions first. "Three facts changed" is not the answer to
+              "did anything I told the client last week stop being true". */}
+          {changes.conclusions.length > 0 && (
+            <ul className="text-[15px] leading-[1.75] text-gray-800 list-disc pl-5 space-y-2 mb-4">
+              {changes.conclusions.map((c, i) => (
+                <li key={i}>
+                  <strong className="font-semibold">{c.what}</strong> — was{' '}
+                  <em>{c.from}</em>, now <em>{c.to}</em>
+                  {c.because.length > 0 && (
+                    <span className="block text-[13px] text-gray-500">
+                      because {c.because.join(', ')} moved
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {changes.facts.length > 0 && (
+            <>
+              <Label>What moved in the ledger</Label>
+              <ul className="text-[14px] leading-[1.7] text-gray-800 list-disc pl-5 space-y-2 mb-4">
+                {changes.facts.map((f, i) => (
+                  <li key={i}>
+                    <span className="font-sans text-[11px] font-bold uppercase tracking-wider text-gray-400">
+                      {f.kind} · {f.id}
+                    </span>
+                    {/* The client's own words on both sides. A change that
+                        paraphrases away what she actually said is a change
+                        nobody can check. */}
+                    {f.kind === 'superseded' && (
+                      <>
+                        <span className="block">&ldquo;{f.before.verbatim}&rdquo;</span>
+                        <span className="block text-[13px] text-gray-500">
+                          {f.why || 'No reason recorded.'}
+                          {f.by ? ` Replaced by ${f.by}.` : ' Nothing replaced it.'}
+                        </span>
+                      </>
+                    )}
+                    {(f.kind === 'status' || f.kind === 'reworded') && (
+                      <>
+                        <span className="block">&ldquo;{f.before.verbatim}&rdquo;</span>
+                        <span className="block">&rarr; &ldquo;{f.after.verbatim}&rdquo;</span>
+                        <span className="block text-[13px] text-gray-500">
+                          {f.before.status} &rarr; {f.after.status} · {f.after.provenance.pinpoint}
+                        </span>
+                      </>
+                    )}
+                    {f.kind === 'added' && (
+                      <>
+                        <span className="block">&ldquo;{f.after.verbatim}&rdquo;</span>
+                        <span className="block text-[13px] text-gray-500">
+                          {f.after.provenance.kind} · {f.after.provenance.pinpoint}
+                        </span>
+                      </>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+
+          {(changes.affected.claims.length > 0 || changes.affected.damages.length > 0) && (
+            <>
+              <Label>Read again, because it rests on a fact that moved</Label>
+              <Bullets
+                items={[...changes.affected.claims, ...changes.affected.damages]}
+              />
+            </>
+          )}
+
+          {changes.unaffected.claims.length > 0 && (
+            <>
+              <Label>Unchanged, and not read again</Label>
+              <Bullets items={changes.unaffected.claims} />
+            </>
+          )}
+
+          {changes.unresolved.length > 0 && (
+            <>
+              {/* Both sides, kept. A comparison that resolved a disagreement by
+                  taking the newer answer would destroy the thing a lawyer most
+                  needs to see. */}
+              <Label>Still unresolved</Label>
+              <ul className="text-[14px] leading-[1.7] text-gray-800 list-disc pl-5 space-y-2">
+                {changes.unresolved.map((u, i) => (
+                  <li key={i}>
+                    {u.proposition}
+                    <span className="block">&ldquo;{u.verbatim}&rdquo;</span>
+                    <span className="block text-[13px] text-gray-500">{u.note}</span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </>
       )}
     </>
   )

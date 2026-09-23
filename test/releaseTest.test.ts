@@ -5,11 +5,15 @@ import { blocked, citationsIn, factIdsIn, readsAsEstimated, releaseTest } from '
 /**
  * The office already refuses a follow-up question written in legal jargon, and
  * a test asserts it refuses one. Analysis had no equivalent: a citation to a
- * statute nobody holds, a fact id nothing in the ledger carries, or an
- * estimate written as a certainty all passed, because the schemas check shape
- * and nothing checked truth.
+ * statute whose text nobody holds, a fact id nothing in the ledger carries, or
+ * an estimate written as a certainty all passed, because the schemas check
+ * shape and nothing checked the rest.
  *
- * Every case below is something that must never reach a demand letter.
+ * The scope is narrow on purpose, and these tests are named for what is
+ * actually being asked. "On file" means the text is in lib/authority and
+ * nothing more: not that the provision is current, not that it governs this
+ * employer or this period. That is an attorney's judgement and no test here
+ * stands in for it.
  */
 const brief = (over: Partial<Brief> = {}): Brief => ({
   clientName: 'Dayeon Kim',
@@ -65,43 +69,46 @@ describe('finding citations in prose', () => {
   })
 })
 
-describe('a citation to authority nobody holds', () => {
+describe('a citation whose text the office does not hold', () => {
   it('blocks, whoever the document is for', () => {
     const problems = releaseTest(
       brief({ overview: { summary: 'Barred by Lab. Code § 99999.', baseline: [] } }),
       LEDGER
     )
-    expect(problems[0].rule).toBe('invented citation')
+    expect(problems[0].rule).toBe('citation not on file')
     // Always a block: an unverified rule must not be applied, internal or not.
     expect(problems[0].severity).toBe('block')
     expect(blocked(problems)).toBe(true)
   })
 
-  it('passes a provision that is on file', () => {
+  it('passes a provision whose text is on file — and claims nothing more', () => {
     const problems = releaseTest(
       brief({ overview: { summary: 'Meal periods under Lab. Code § 512.', baseline: [] } }),
       LEDGER
     )
-    expect(problems.filter(p => p.rule === 'invented citation')).toEqual([])
+    // Passing means the text was found. Whether § 512 is current, or governs
+    // this employer's industry and this client's period, is not tested here
+    // and is not implied by this passing.
+    expect(problems.filter(p => p.rule === 'citation not on file')).toEqual([])
   })
 })
 
-describe('a fact id nothing in the ledger holds', () => {
+describe('a fact id the ledger does not carry', () => {
   it('blocks', () => {
     const problems = releaseTest(
       brief({ chronology: { events: [], coreStory: [{ facts: ['f999'], note: 'x' }], conflicts: [] } }),
       LEDGER
     )
-    expect(problems.some(p => p.rule === 'invented fact' && p.what.includes('f999'))).toBe(true)
+    expect(problems.some(p => p.rule === 'fact not in ledger' && p.what.includes('f999'))).toBe(true)
   })
 
   it('says nothing when the ledger was never loaded', () => {
-    // An empty set means the facts are unknown, not that every id is invented.
+    // An empty set means the facts are unknown, not that no id is on file.
     const problems = releaseTest(
       brief({ chronology: { events: [], coreStory: [{ facts: ['f999'], note: 'x' }], conflicts: [] } }),
       NO_LEDGER
     )
-    expect(problems.filter(p => p.rule === 'invented fact')).toEqual([])
+    expect(problems.filter(p => p.rule === 'fact not in ledger')).toEqual([])
   })
 })
 
@@ -183,8 +190,8 @@ describe('a document that asks for nothing', () => {
   })
 })
 
-describe('a clean document', () => {
-  it('raises nothing at all', () => {
+describe('a document this test has no objection to', () => {
+  it('raises nothing — which is not a warrant that it is sound', () => {
     const b = brief({
       overview: { summary: 'Meal periods under Lab. Code § 512.', baseline: [] },
       questions: [{ text: 'When did the rotation start?' }],

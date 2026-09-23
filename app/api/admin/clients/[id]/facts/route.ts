@@ -84,10 +84,24 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
       contradictions,
       /**
        * Bare ids, so the release test can tell a fact this client actually has
-       * from one a reading invented. Ids only — the ledger itself is large and
-       * nothing checking a citation needs to read it.
+       * from one nothing in the ledger carries.
        */
       ids: entries.map(e => e.id),
+      /**
+       * Enough of each fact to compare two readings: the id, the status, the
+       * client's own words, and where they came from. Not the whole entry —
+       * a change is shown in her words, and the rest is the ledger's own
+       * screen to display.
+       */
+      snapshot: entries.map(e => ({
+        id: e.id,
+        proposition: e.proposition,
+        verbatim: e.verbatim,
+        status: e.status,
+        provenance: e.provenance,
+        supersededBy: e.supersededBy,
+        supersededWhy: e.supersededWhy,
+      })),
     })
   } catch (err) {
     return NextResponse.json({ error: (err as Error).message }, { status: 500 })

@@ -11,12 +11,20 @@
  * estimate written as a certainty all pass. This is the missing half: the
  * readings produce, and this refuses.
  *
- * It is deliberately mechanical. It cannot tell whether an argument is any
- * good, and it does not try. It asks only the questions that can be answered
- * by looking something up — does this citation exist, does this fact id exist,
- * did an adverse fact survive into the document, is a figure marked estimated
- * also written as estimated — because a check that cannot be wrong is worth
- * more than one that is usually right.
+ * WHAT IT DOES NOT DO, AND THE LIMIT MATTERS. This is a mechanical check with
+ * a deliberately narrow scope, not a warrant that a document is sound. It
+ * answers only questions that can be settled by looking something up: is this
+ * provision in the text the office holds, is this fact id in this client's
+ * ledger, did an adverse fact survive into the document, is a figure the
+ * reading marked as estimated also written as one.
+ *
+ * A citation that passes has been found in `lib/authority`. That is all it
+ * means. It does not mean the provision is current law, that it has not been
+ * amended or repealed since FETCHED_ON, that it governs this employer's
+ * industry, or that it applies to this client's period or classification.
+ * Those are legal judgements and they belong to an attorney. Passing this
+ * test is the floor, not the ceiling, and nothing here should be read as
+ * having checked a document's reasoning.
  *
  * SEVERITY. An internal working draft may identify gaps; an external document
  * may not carry them. The same problem is therefore a flag on one and a block
@@ -32,8 +40,8 @@ export type Severity = 'block' | 'flag'
 export interface Problem {
   /** Which clause of the standard this is. */
   rule:
-    | 'invented citation'
-    | 'invented fact'
+    | 'citation not on file'
+    | 'fact not in ledger'
     | 'hidden contrary evidence'
     | 'allegation as proof'
     | 'unsupported certainty'
@@ -195,24 +203,24 @@ export function releaseTest(
       if (authorities.has(key) || seenCitation.has(key)) continue
       seenCitation.add(key)
       problems.push({
-        rule: 'invented citation',
-        // Always a block. A provision the office does not hold is one nobody
-        // checked, and the standard's own words are that an unverified rule
-        // must not be applied.
+        rule: 'citation not on file',
+        // Always a block. A provision whose text the office does not hold is
+        // one nobody can check at all, and the standard's own words are that
+        // an unverified rule must not be applied.
         severity: 'block',
-        what: `"${key}" is cited but is not in the authority on file. Nothing has verified what it says.`,
+        what: `"${key}" is cited but its text is not in the authority on file, so nothing here could check what it says. Whether it is current or applies to this case is a separate question and is not tested.`,
         where,
       })
     }
 
     // Only when the ledger is known. An empty set means the facts were not
-    // loaded, and treating that as "every id is invented" would be noise.
+    // loaded, and treating that as "no id is on file" would be noise.
     if (known.factIds.size > 0) {
       for (const id of factIdsIn(text)) {
         if (known.factIds.has(id) || seenFact.has(id)) continue
         seenFact.add(id)
         problems.push({
-          rule: 'invented fact',
+          rule: 'fact not in ledger',
           severity: 'block',
           what: `Fact ${id} is referred to but is not in this client's ledger.`,
           where,
@@ -226,7 +234,7 @@ export function releaseTest(
       if (known.factIds.has(id) || seenFact.has(id)) continue
       seenFact.add(id)
       problems.push({
-        rule: 'invented fact',
+        rule: 'fact not in ledger',
         severity: 'block',
         what: `Fact ${id} is cited but is not in this client's ledger.`,
         where,
@@ -300,7 +308,13 @@ export function releaseTest(
   return problems.sort((a, b) => (a.severity === b.severity ? 0 : a.severity === 'block' ? -1 : 1))
 }
 
-/** Whether this document may go out as it stands. */
+/**
+ * Whether anything found here stops the document as it stands.
+ *
+ * False means nothing in this test's narrow scope objected. It is not a
+ * statement that the document is correct, that its law is current, or that it
+ * may be filed — an external document still goes to an attorney.
+ */
 export function blocked(problems: Problem[]): boolean {
   return problems.some(p => p.severity === 'block')
 }
