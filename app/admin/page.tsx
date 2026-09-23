@@ -1103,15 +1103,50 @@ export default function AdminPage() {
   const [submissionNotes, setSubmissionNotes] = useState('')
   const router = useRouter()
 
-  const fetchClients = async () => {
+  const fetchClients = useCallback(async () => {
     const res = await fetch('/api/admin/clients', {
       headers: { 'x-admin-key': MOCK_ADMIN_PASSWORD },
+      // Never the browser's copy. This panel is left open for days, and a
+      // cached reply is a client list from whenever the tab was first opened.
+      cache: 'no-store',
     })
     if (res.ok) {
       const { clients } = await res.json()
       setAllClients(clients ?? [])
     }
-  }
+  }, [])
+
+  /**
+   * Bring the list up to date without being asked.
+   *
+   * Everything on this screen was read once, when the tab was opened, and the
+   * office leaves this tab open for days at a time. A client finishing their
+   * questionnaire is the one event they are sitting here waiting for, and it
+   * would land in the database while the panel still said "Not Started" —
+   * against a client whose own modal, which fetches per client on open, said
+   * Submitted in the same breath. Two panes of one screen disagreeing about
+   * one client is worse than either being wrong, because it is the office's
+   * reason to stop trusting the screen.
+   *
+   * Only while the tab is actually being looked at: a panel nobody has in
+   * front of them does not need to poll a law firm's database all night.
+   */
+  useEffect(() => {
+    if (!authenticated) return
+    const refresh = () => {
+      if (document.visibilityState === 'visible') fetchClients()
+    }
+    // Coming back to the tab is the common case — they answered the phone,
+    // looked something up, and want the screen to be current when they return.
+    document.addEventListener('visibilitychange', refresh)
+    window.addEventListener('focus', refresh)
+    const id = setInterval(refresh, 60_000)
+    return () => {
+      document.removeEventListener('visibilitychange', refresh)
+      window.removeEventListener('focus', refresh)
+      clearInterval(id)
+    }
+  }, [authenticated, fetchClients])
 
   useEffect(() => {
     const isAuth = getAdminSession()
