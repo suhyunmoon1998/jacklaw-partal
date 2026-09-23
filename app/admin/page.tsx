@@ -53,7 +53,7 @@ interface AdminClient {
 }
 import { QUESTIONNAIRE_SECTIONS } from '@/lib/questionnaireData'
 import { legacyAnswerGroups, liveQuestionIds } from '@/lib/questionnaireLegacy'
-import { answersForReading } from '@/lib/modules'
+import { answersForReading, readingSectionDone } from '@/lib/modules'
 import { FLAG_LABEL, staffFlags } from '@/lib/staffFlags'
 import { AssignmentRollup, STATUS_LABEL, clientProgressPercent, clientStatus } from '@/lib/clientProgress'
 import { canonicalAnswers } from '@/lib/answerCompat'
@@ -180,6 +180,10 @@ function ClientDetailModal({
    */
   const reading = answersForReading(qState.answers)
   const readingSections = reading.sections
+  /** Where Module 1's rows end and Module 2's begin in that one numbered run. */
+  const module1Count = reading.module1Count
+  /** A record written before Module 2 existed carries no module2 at all. */
+  const module2State = qState.module2 ?? { submitted: false, completedSections: [] }
   const shownAnswers = reading.filed
   const retractedAnswers = reading.retracted
   const liveIds = liveQuestionIds(readingSections)
@@ -335,7 +339,12 @@ function ClientDetailModal({
               {/* Section checklist */}
               <div className="space-y-2">
                 {readingSections.map((section, idx) => {
-                  const isCompleted = qState.completedSections.includes(idx)
+                  const isCompleted = readingSectionDone(
+                    idx,
+                    module1Count,
+                    qState,
+                    module2State
+                  )
                   const answeredQs = section.questions.filter(q => {
                     const v = shownAnswers[q.id]
                     return v !== undefined && v !== '' && !(Array.isArray(v) && v.length === 0)
@@ -444,7 +453,12 @@ function ClientDetailModal({
                         return v !== undefined && v !== '' && !(Array.isArray(v) && v.length === 0)
                       })
                       if (!filled.length) return null
-                      const isCompleted = qState.completedSections.includes(idx)
+                      const isCompleted = readingSectionDone(
+                    idx,
+                    module1Count,
+                    qState,
+                    module2State
+                  )
                       const isOpen = expandedSection === idx
 
                       return (

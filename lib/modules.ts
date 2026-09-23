@@ -234,6 +234,44 @@ export function sectionsForReading(
   return [...questionnaireSections(lang), ...prepareSections(module2Sections(lang), live)]
 }
 
+/** How many of those rows are Module 1's — the rest are Module 2's. */
+export function module1ReadingCount(lang: Lang = 'en'): number {
+  return questionnaireSections(lang).length
+}
+
+/** A module's progress as the client's record stores it: indices from zero. */
+export interface SectionProgress {
+  submitted: boolean
+  completedSections: number[]
+}
+
+/**
+ * Whether one row of that combined reading is finished.
+ *
+ * The office reads Module 1 and Module 2 as a single numbered run, but the
+ * client's record keeps a completed-section list per module and each counts
+ * from zero. Checking a Module 2 row by its combined index — 11 through 18 —
+ * against Module 1's list of 0 through 9 never matches, so a client who had
+ * finished Module 2 was drawn "In Progress" on every one of its sections while
+ * her own record said m2_submitted and the header beside it said Submitted.
+ *
+ * A submitted module is finished whatever its index list holds. The list is
+ * indices into whichever version of the questionnaire that client answered,
+ * and a section added since carries an index no older row can have — so the
+ * submission, not the arithmetic, is what the office is shown.
+ */
+export function readingSectionDone(
+  idx: number,
+  module1Count: number,
+  module1: SectionProgress,
+  module2: SectionProgress
+): boolean {
+  const inModule1 = idx < module1Count
+  const part = inModule1 ? module1 : module2
+  const local = inModule1 ? idx : idx - module1Count
+  return part.submitted || part.completedSections.includes(local)
+}
+
 /**
  * What the office should file, and what the client took back.
  *
@@ -262,5 +300,5 @@ export function answersForReading(rawAnswers: Record<string, AnswerValue>, lang:
     else filed[id] = canonical[id]
   }
 
-  return { sections, live, filed, retracted }
+  return { sections, live, filed, retracted, module1Count: module1ReadingCount(lang) }
 }
