@@ -6,7 +6,7 @@ import { ModuleId, moduleById, moduleQuestionCount, stepName } from '@/lib/modul
 import { lookupClientEmail, lookupClientLanguage, sendAssignmentEmail } from '@/lib/sendAssignmentEmail'
 import { readSteps } from '@/lib/clientSteps'
 import { isConfigured, sendSms } from '@/lib/twilio'
-import { lookupClientPhone, origin, stepInviteSms } from '@/lib/assignmentInvite'
+import { chooseSmsTarget, lookupClientSms, origin, stepInviteSms } from '@/lib/assignmentInvite'
 
 const asModule = (value: unknown): ModuleId | null =>
   value === 'module1' || value === 'module2' || value === 'module3' ? value : null
@@ -49,16 +49,20 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Missing clientId or moduleId' }, { status: 400 })
   }
 
-  const [email, lang, blockedBy] = await Promise.all([
+  const [email, lang, blockedBy, sms] = await Promise.all([
     lookupClientEmail(clientId),
     lookupClientLanguage(clientId),
     blockedByStep(clientId, moduleId),
+    lookupClientSms(clientId),
   ])
 
   return NextResponse.json({
     link: moduleLink(req.nextUrl.origin, moduleId, blockedBy !== null),
     email,
     lang,
+    phone: sms.phone,
+    smsOptOut: sms.optedOut,
+    smsReady: isConfigured(),
     // So the office is told before the email goes out, not after the client
     // calls asking why the link does nothing.
     blockedBy,
@@ -66,7 +70,7 @@ export async function GET(req: NextRequest) {
 }
 
 /**
- * POST /api/admin/modules/send  { clientId, moduleId, email?, lang? }
+ * POST /api/admin/modules/send  { clientId, moduleId, email?, phone?, lang?, sms? }
  *
  * Records that the module was handed to this client and emails them the link.
  * The record is what the client's own portal reads to decide whether to offer
@@ -99,8 +103,36 @@ export async function POST(req: NextRequest) {
     .maybeSingle()
   if (!client) return NextResponse.json({ error: 'Client not found.' }, { status: 404 })
 
-  const to = String(body?.email ?? '').trim() || (await lookupClientEmail(clientId))
+  // Present-but-empty means the office cleared the box on purpose; absent means
+  // they were never shown one and the file should answer.
+  const to =
+    typeof body?.email === 'string' ? body.email.trim() : await lookupClientEmail(clientId)
   const lang: Lang = isLang(body?.lang) ? body.lang : await lookupClientLanguage(clientId)
+
+  const typedPhone = typeof body?.phone === 'string' ? body.phone : undefined
+  const target =
+    body?.sms === false
+      ? { phone: '', reason: 'off' as const }
+      : chooseSmsTarget(typedPhone, await lookupClientSms(clientId))
+
+  // Said before anything is recorded, because both of these are the office
+  // mistyping or forgetting — not a state the client should be put into.
+  if (target.reason === 'unusable') {
+    return NextResponse.json(
+      { error: `That does not look like a phone number: ${String(typedPhone).trim()}` },
+      { status: 400 }
+    )
+  }
+  if (target.reason === 'opted-out' && typedPhone) {
+    return NextResponse.json(
+      {
+        error:
+          `${client.name ?? 'This client'} replied STOP to our texts, so this office cannot text them. ` +
+          'Send it by email, or open it to them and pass the link on yourself.',
+      },
+      { status: 400 }
+    )
+  }
   const blockedBy = await blockedByStep(clientId, moduleId)
   const link = moduleLink(req.nextUrl.origin, moduleId, blockedBy !== null)
 
@@ -129,11 +161,15 @@ export async function POST(req: NextRequest) {
   // telephone call because that is how its clients are actually reached, and
   // the send that starts the ladder was reaching them by email alone — so a
   // client with no email address got a module they were never told about.
-  const phone = body?.sms === false ? '' : await lookupClientPhone(clientId)
-  const texted = phone && isConfigured() ? await sendSms(
+  const phone = target.phone
+  const texted = !phone
+    ? null
+    : isConfigured()
+      ? await sendSms(
           phone,
           stepInviteSms(lang, client.name ?? '', { name: stepName(definition, lang), minutes: definition.minutes }, origin(req))
-        ) : null
+        )
+      : { ok: false as const, error: 'Texting is not switched on for this portal yet.' }
 
   if (!to.includes('@')) {
     return NextResponse.json({
@@ -151,8 +187,8 @@ export async function POST(req: NextRequest) {
         texted?.ok
           ? undefined
           : blockedBy === null
-            ? 'No email address on file and no text could be sent. The step is open to them — copy the link and send it yourself.'
-            : `No email address on file and no text could be sent. The step is recorded, but stays locked until Step ${blockedBy} is submitted; the link goes to their step list.`,
+            ? 'No email address and no text could be sent. The step is open to them — copy the link and send it yourself.'
+            : `No email address and no text could be sent. The step is recorded, but stays locked until Step ${blockedBy} is submitted; the link goes to their step list.`,
     })
   }
 

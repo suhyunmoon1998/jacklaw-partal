@@ -4,7 +4,7 @@ import { isAdmin } from '@/lib/adminAuth'
 import { advancesTo, assignmentLink, getAssignmentDetail } from '@/lib/questionSets'
 import { isConfigured, sendSms } from '@/lib/twilio'
 import { unreviewedRound } from '@/lib/followUpStore'
-import { invitationSms, lookupClientPhone, origin } from '@/lib/assignmentInvite'
+import { chooseSmsTarget, invitationSms, lookupClientSms, origin } from '@/lib/assignmentInvite'
 import { Lang, isLang } from '@/lib/langs'
 import { localizeName } from '@/lib/questionLogic'
 import { lookupClientEmail, lookupClientLanguage, sendAssignmentEmail } from '@/lib/sendAssignmentEmail'
@@ -17,12 +17,22 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   const assignment = await getAssignmentDetail(params.id)
   if (!assignment) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  const [email, lang] = await Promise.all([
+  const [email, lang, sms] = await Promise.all([
     lookupClientEmail(assignment.clientId),
     lookupClientLanguage(assignment.clientId),
+    lookupClientSms(assignment.clientId),
   ])
 
-  return NextResponse.json({ link: assignmentLink(req.nextUrl.origin, params.id), email, lang })
+  return NextResponse.json({
+    link: assignmentLink(req.nextUrl.origin, params.id),
+    email,
+    lang,
+    // So the dialog can offer the number as a field the office edits, and can
+    // say why the text box is closed when it is.
+    phone: sms.phone,
+    smsOptOut: sms.optedOut,
+    smsReady: isConfigured(),
+  })
 }
 
 /**
@@ -37,7 +47,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
  * of follow-up questions that could only go out by email was a round most
  * people would never see.
  */
-// POST /api/admin/assignments/[id]/send  { email?, sms? }
+// POST /api/admin/assignments/[id]/send  { email?, phone?, lang?, sms? }
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   if (!isAdmin(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
@@ -63,19 +73,48 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   }
 
   const body = await req.json().catch(() => ({}))
-  const to = String(body?.email ?? '').trim() || (await lookupClientEmail(assignment.clientId))
+  // A string that arrived means the office looked at the field and this is what
+  // they want; only an absent one falls back to the file. Clearing the box is
+  // how they send by one channel when the client is reachable on two.
+  const to =
+    typeof body?.email === 'string'
+      ? body.email.trim()
+      : await lookupClientEmail(assignment.clientId)
   const lang: Lang = isLang(body?.lang) ? body.lang : await lookupClientLanguage(assignment.clientId)
   const link = assignmentLink(req.nextUrl.origin, params.id)
 
-  const wantsSms = body?.sms !== false
-  const phone = wantsSms ? await lookupClientPhone(assignment.clientId) : ''
+  const typedPhone = typeof body?.phone === 'string' ? body.phone : undefined
+  const target =
+    body?.sms === false
+      ? { phone: '', reason: 'off' as const }
+      : chooseSmsTarget(typedPhone, await lookupClientSms(assignment.clientId))
+  const phone = target.phone
   const name = assignment.clientName || 'there'
 
+  // A number typed wrong is the office's mistake to see, not a text that
+  // quietly never happened.
+  if (target.reason === 'unusable') {
+    return NextResponse.json(
+      { error: `That does not look like a phone number: ${String(typedPhone).trim()}`, link },
+      { status: 400 }
+    )
+  }
+  if (target.reason === 'opted-out' && typedPhone) {
+    return NextResponse.json(
+      {
+        error:
+          `${name} replied STOP to our texts, so this office cannot text them. ` +
+          'Send it by email, or copy the link and pass it on yourself.',
+        link,
+      },
+      { status: 400 }
+    )
+  }
   if (!to.includes('@') && !phone) {
     return NextResponse.json(
       {
         error:
-          'No email address or phone number on file for this client. Enter an email, or copy the link and send it yourself.',
+          'No email address and no mobile number for this client. Type one of them, or copy the link and send it yourself.',
         link,
       },
       { status: 400 }
@@ -84,7 +123,14 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   // The text carries the front door, not this assignment's URL: sign-in is by
   // phone, and nothing in a text should be a key to somebody's case file.
-  const sms = phone && isConfigured() ? await sendSms(phone, invitationSms(lang, name, origin(req))) : null
+  // Not configured is reported as a failed text rather than a silent no-op, so
+  // "Sent" never covers for a channel that was never switched on. It is not
+  // fatal on its own: the email below may still carry the link.
+  const sms = !phone
+    ? null
+    : isConfigured()
+      ? await sendSms(phone, invitationSms(lang, name, origin(req)))
+      : { ok: false as const, error: 'Texting is not switched on for this portal yet.' }
   let emailed = false
   let emailError = ''
 

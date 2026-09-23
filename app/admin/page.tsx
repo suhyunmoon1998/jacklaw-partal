@@ -711,7 +711,16 @@ function AddClientModal({
   /** Set once the client exists — from here the modal is the questions flow. */
   const [created, setCreated] = useState<{ id: string; name: string } | null>(null)
   const [sending, setSending] = useState<
-    { assignmentId: string; setName: string; email: string; link: string; lang: Lang } | null
+    {
+      assignmentId: string
+      setName: string
+      email: string
+      phone: string
+      smsOptOut: boolean
+      smsReady: boolean
+      link: string
+      lang: Lang
+    } | null
   >(null)
 
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -793,6 +802,9 @@ function AddClientModal({
       assignmentId,
       setName,
       email: body.email ?? '',
+      phone: body.phone ?? '',
+      smsOptOut: Boolean(body.smsOptOut),
+      smsReady: body.smsReady !== false,
       // A link built here if the lookup failed, so the admin still has something
       // to copy rather than a dead end.
       link: body.link ?? `${window.location.origin}/questionnaire/${assignmentId}`,
@@ -808,6 +820,9 @@ function AddClientModal({
         clientName={created.name}
         link={sending.link}
         initialEmail={sending.email}
+        initialPhone={sending.phone}
+        smsOptOut={sending.smsOptOut}
+        smsReady={sending.smsReady}
         initialLang={sending.lang}
         onClose={onClose}
         onSent={onClose}

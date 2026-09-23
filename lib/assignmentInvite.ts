@@ -50,16 +50,67 @@ export function origin(req: NextRequest): string {
   return process.env.PUBLIC_ORIGIN ?? req.nextUrl.origin
 }
 
-export async function lookupClientPhone(clientId: string): Promise<string> {
+/**
+ * A number worth handing to Twilio.
+ *
+ * Ten digits is the floor because every shorter thing typed into a phone field
+ * is an extension, a partial, or a note to self, and `toE164` would turn some
+ * of them into a real stranger's number.
+ */
+export function usablePhone(raw: string): string {
+  const phone = String(raw ?? '').trim()
+  return phone.replace(/\D/g, '').length >= 10 ? phone : ''
+}
+
+/** What the office would text this client with, and why they might not be able to. */
+export async function lookupClientSms(
+  clientId: string
+): Promise<{ phone: string; optedOut: boolean }> {
   const { data } = await getSupabase()
     .from('clients')
     .select('phone, sms_opt_out')
     .eq('id', clientId)
     .maybeSingle()
+  if (!data) return { phone: '', optedOut: false }
+  return { phone: usablePhone(String(data.phone ?? '')), optedOut: Boolean(data.sms_opt_out) }
+}
+
+export async function lookupClientPhone(clientId: string): Promise<string> {
+  const { phone, optedOut } = await lookupClientSms(clientId)
   // Somebody who has replied STOP is not texted, whoever presses the button.
-  if (!data || data.sms_opt_out) return ''
-  const phone = String(data.phone ?? '')
-  return phone.replace(/\D/g, '').length >= 10 ? phone : ''
+  return optedOut ? '' : phone
+}
+
+/**
+ * Which number this send should text, if any.
+ *
+ * The office can now type a number the file does not have — that is the whole
+ * point of the field, since a client with no email address usually reached this
+ * firm by phone and the number is on a message pad, not in the database. Two
+ * rules survive anything they type:
+ *
+ *   - STOP wins. A client who asked this office to stop is not texted because
+ *     somebody typed their number into a different box.
+ *   - A number that is not a number is refused out loud, not silently dropped,
+ *     so a send that looks successful never means a text nobody sent.
+ *
+ * `typed` undefined means the caller never offered the field and the number on
+ * file should be used; an empty string means the office cleared it on purpose.
+ */
+export type SmsTarget = { phone: string; reason?: 'off' | 'opted-out' | 'unusable' | 'none' }
+
+export function chooseSmsTarget(
+  typed: string | undefined,
+  onFile: { phone: string; optedOut: boolean }
+): SmsTarget {
+  if (onFile.optedOut) return { phone: '', reason: 'opted-out' }
+  if (typed === undefined) {
+    return onFile.phone ? { phone: onFile.phone } : { phone: '', reason: 'none' }
+  }
+  const trimmed = typed.trim()
+  if (!trimmed) return { phone: '', reason: 'off' }
+  const usable = usablePhone(trimmed)
+  return usable ? { phone: usable } : { phone: '', reason: 'unusable' }
 }
 
 /**

@@ -71,7 +71,17 @@ export default function ClientAssignments({
   const [viewTranslating, setViewTranslating] = useState(false)
   /** Kept apart from the cache above so the toggle can go both ways. */
   const [viewOriginal, setViewOriginal] = useState(false)
-  const [sending, setSending] = useState<{ assignment: Assignment; email: string; link: string; lang: Lang } | null>(null)
+  const [sending, setSending] = useState<
+    {
+      assignment: Assignment
+      email: string
+      phone: string
+      smsOptOut: boolean
+      smsReady: boolean
+      link: string
+      lang: Lang
+    } | null
+  >(null)
   const [notice, setNotice] = useState('')
   const [banks, setBanks] = useState<RecommendedBank[]>([])
   /**
@@ -83,7 +93,17 @@ export default function ClientAssignments({
    */
   const [moduleSends, setModuleSends] = useState<Record<string, ModuleSend>>({})
   const [sendingModule, setSendingModule] = useState<
-    { moduleId: ModuleId; name: string; email: string; link: string; lang: Lang; warning: string } | null
+    {
+      moduleId: ModuleId
+      name: string
+      email: string
+      phone: string
+      smsOptOut: boolean
+      smsReady: boolean
+      link: string
+      lang: Lang
+      warning: string
+    } | null
   >(null)
 
   const load = useCallback(async () => {
@@ -193,13 +213,16 @@ export default function ClientAssignments({
       moduleId,
       name,
       email: body.email ?? '',
+      phone: body.phone ?? '',
+      smsOptOut: Boolean(body.smsOptOut),
+      smsReady: body.smsReady !== false,
       link: body.link ?? `${window.location.origin}/dashboard`,
       lang: toLang(body.lang),
       // Said before the email goes out, not after the client rings up asking
       // why the link her attorney sent does nothing.
       warning:
         typeof body.blockedBy === 'number'
-          ? `${clientName} has not submitted Step ${body.blockedBy} yet, so this will stay locked until they do. The email will point them at Step ${body.blockedBy} instead.`
+          ? `${clientName} has not submitted Step ${body.blockedBy} yet, so this will stay locked until they do. The link will point them at Step ${body.blockedBy} instead.`
           : '',
     })
   }
@@ -221,7 +244,15 @@ export default function ClientAssignments({
     const res = await fetch(`/api/admin/assignments/${assignment.id}/send`, { headers: adminHeaders })
     const body = await res.json().catch(() => ({}))
     setBusy(null)
-    setSending({ assignment, email: body.email ?? '', link: body.link ?? '', lang: toLang(body.lang) })
+    setSending({
+      assignment,
+      email: body.email ?? '',
+      phone: body.phone ?? '',
+      smsOptOut: Boolean(body.smsOptOut),
+      smsReady: body.smsReady !== false,
+      link: body.link ?? '',
+      lang: toLang(body.lang),
+    })
   }
 
   const markSent = async (assignment: Assignment) => {
@@ -607,6 +638,9 @@ export default function ClientAssignments({
             setSending({
               assignment: { id: assignmentId, questionSetName: name } as Assignment,
               email: body.email ?? '',
+              phone: body.phone ?? '',
+              smsOptOut: Boolean(body.smsOptOut),
+              smsReady: body.smsReady !== false,
               link: body.link ?? '',
               lang: toLang(body.lang),
             })
@@ -622,6 +656,9 @@ export default function ClientAssignments({
           clientName={clientName}
           link={sendingModule.link}
           initialEmail={sendingModule.email}
+          initialPhone={sendingModule.phone}
+          smsOptOut={sendingModule.smsOptOut}
+          smsReady={sendingModule.smsReady}
           initialLang={sendingModule.lang}
           sendTo={{ clientId, moduleId: sendingModule.moduleId }}
           onClose={() => setSendingModule(null)}
@@ -637,6 +674,9 @@ export default function ClientAssignments({
           clientName={clientName}
           link={sending.link}
           initialEmail={sending.email}
+          initialPhone={sending.phone}
+          smsOptOut={sending.smsOptOut}
+          smsReady={sending.smsReady}
           initialLang={sending.lang}
           onClose={() => setSending(null)}
           onSent={message => { setSending(null); setNotice(message); load() }}
