@@ -143,10 +143,23 @@ export default function CaseReading({ clientId, clientName }: { clientId: string
               (outdated.length && !stale ? ` ${outdated.length} to re-read.` : '')
             : 'Loading…'}
         </span>
+        {/* A tab in a modal is where this is read; the sheet is where it is
+            taken away. Opened rather than downloaded outright, because the
+            attorney should see the page they are about to keep. */}
+        {findings.length > 0 && (
+          <a
+            href={`/admin/reading/${clientId}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="ml-auto text-xs font-semibold px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 hover:text-black transition-colors"
+          >
+            Download
+          </a>
+        )}
         <button
           onClick={start}
           disabled={Boolean(running) || (!next && !stale)}
-          className="ml-auto text-xs font-semibold px-3 py-1.5 rounded-lg bg-black text-white disabled:opacity-40 hover:bg-gray-800 transition-colors"
+          className={`${findings.length > 0 ? '' : 'ml-auto '}text-xs font-semibold px-3 py-1.5 rounded-lg bg-black text-white disabled:opacity-40 hover:bg-gray-800 transition-colors`}
         >
           {running ? 'Reading…' : stale ? 'Read again' : next ? 'Read the case' : 'Read in full'}
         </button>
