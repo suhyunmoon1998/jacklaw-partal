@@ -1,7 +1,6 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { MOCK_ADMIN_PASSWORD } from '@/lib/mockData'
 // From the shape module, never from the engine: importing a value out of
 // lib/followUp.ts pulls the model SDK and node:fs into the browser bundle, and
 // the build says so in a stack trace that names neither.
@@ -40,7 +39,7 @@ import { roundAsText } from '@/lib/roundAsText'
  * like any other — by a person, on purpose.
  */
 
-const headers = { 'Content-Type': 'application/json', 'x-admin-key': MOCK_ADMIN_PASSWORD }
+const headers = { 'Content-Type': 'application/json' }
 
 // A number key, not the literal union LADDER carries: a stored rung comes back
 // from the database as a plain integer, and vet() is what decides whether it is

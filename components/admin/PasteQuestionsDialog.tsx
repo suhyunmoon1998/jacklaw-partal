@@ -14,7 +14,6 @@
  */
 
 import { useEffect, useRef, useState } from 'react'
-import { MOCK_ADMIN_PASSWORD } from '@/lib/mockData'
 import { Lang, LANG_ENGLISH_NAME, TranslatedLang } from '@/lib/langs'
 import { Question, QuestionType } from '@/types'
 import ModalPortal from '@/components/ModalPortal'
@@ -53,7 +52,6 @@ function gateLabel(questions: Draft[], questionId: string): string {
 
 const adminHeaders = {
   'Content-Type': 'application/json',
-  'x-admin-key': MOCK_ADMIN_PASSWORD,
 }
 
 export default function PasteQuestionsDialog({

@@ -16,12 +16,10 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
-import { MOCK_ADMIN_PASSWORD } from '@/lib/mockData'
-import { getAdminSession } from '@/lib/auth'
 import { StoredReading, allClaims } from '@/lib/caseReadingShape'
 import ReadingDocument, { Choice, Finding } from '@/components/admin/ReadingDocument'
 
-const headers = { 'x-admin-key': MOCK_ADMIN_PASSWORD }
+const headers = {}
 
 export default function ReadingSheetPage() {
   const params = useParams<{ clientId: string }>()
@@ -33,6 +31,8 @@ export default function ReadingSheetPage() {
   const [updatedAt, setUpdatedAt] = useState<string | null>(null)
   const [error, setError] = useState('')
   const [loaded, setLoaded] = useState(false)
+  /** null until the server has said. The cookie is what decides, not localStorage. */
+  const [signedIn, setSignedIn] = useState<boolean | null>(null)
 
   const load = useCallback(async () => {
     if (!clientId) return
@@ -62,13 +62,22 @@ export default function ReadingSheetPage() {
   }, [clientId])
 
   useEffect(() => {
-    void load()
+    let live = true
+    ;(async () => {
+      const res = await fetch('/api/admin/login', { cache: 'no-store' }).catch(() => null)
+      const ok = Boolean(res?.ok && (await res.json().catch(() => ({}))).authenticated)
+      if (!live) return
+      setSignedIn(ok)
+      if (ok) void load()
+      else setLoaded(true)
+    })()
+    return () => { live = false }
   }, [load])
 
   const findings = allClaims<Finding>(reading)
   const choice = reading?.wageOrder as Choice | undefined
 
-  if (!getAdminSession()) {
+  if (signedIn === false) {
     return (
       <main className="min-h-screen bg-gray-100 flex items-center justify-center p-8">
         <p className="text-sm text-gray-500">

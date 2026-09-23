@@ -2,10 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
 import { isLang } from '@/lib/langs'
 import { MODULES_GIVEN_ON_CREATE, moduleSectionCount } from '@/lib/modules'
+import { isAdmin } from '@/lib/adminAuth'
 
-function isAdmin(req: NextRequest) {
-  return req.headers.get('x-admin-key') === process.env.ADMIN_PASSWORD
-}
 
 /**
  * Name tags on a client, cleaned up.

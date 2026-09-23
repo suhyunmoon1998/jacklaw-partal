@@ -1,7 +1,6 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { MOCK_ADMIN_PASSWORD } from '@/lib/mockData'
 import {
   Analysis, Basis, Issue, STAGES, STAGE_LABEL, Stage, StoredAnalysis, Strength,
 } from '@/lib/caseAnalysisShape'
@@ -20,7 +19,7 @@ import {
  * fetched from the store on open and only run when somebody asks for it.
  */
 
-const headers = { 'Content-Type': 'application/json', 'x-admin-key': MOCK_ADMIN_PASSWORD }
+const headers = { 'Content-Type': 'application/json' }
 
 const BASIS_STYLE: Record<Basis, { cls: string; title: string }> = {
   FACT: {

@@ -48,5 +48,7 @@ export const DOCUMENT_CATEGORIES = [
   'Other Documents',
 ]
 
-// MOCK ADMIN PASSWORD — replace with real auth (e.g., Clerk, Auth0, or Firebase Admin)
-export const MOCK_ADMIN_PASSWORD = 'jacklaw'
+// The admin password is not here, and must never be: this module is imported by
+// client components, so anything in it is served to whoever loads the page. It
+// lives in ADMIN_PASSWORD, is checked in app/api/admin/login, and leaves that
+// route as an HttpOnly cookie. See lib/adminAuth.ts.

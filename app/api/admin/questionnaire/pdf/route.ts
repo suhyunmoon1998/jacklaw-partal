@@ -3,6 +3,7 @@ import { getSupabase } from '@/lib/supabase'
 import { generateAnswersPdfForOffice } from '@/lib/generateAnswersPdf'
 import { formatPhone } from '@/lib/auth'
 import { translateAnswersToEnglish } from '@/lib/machineTranslate'
+import { isAdmin } from '@/lib/adminAuth'
 
 /**
  * Putting a client's own words into English takes longer than drawing a PDF.
@@ -10,9 +11,6 @@ import { translateAnswersToEnglish } from '@/lib/machineTranslate'
  */
 export const maxDuration = 120
 
-function isAdmin(req: NextRequest) {
-  return req.headers.get('x-admin-key') === process.env.ADMIN_PASSWORD
-}
 
 // GET /api/admin/questionnaire/pdf?clientId=xxx
 export async function GET(req: NextRequest) {

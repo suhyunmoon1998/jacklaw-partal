@@ -1,7 +1,6 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { MOCK_ADMIN_PASSWORD } from '@/lib/mockData'
 
 /**
  * Reading a client's answers into the facts everything else stands on.
@@ -18,7 +17,7 @@ import { MOCK_ADMIN_PASSWORD } from '@/lib/mockData'
  * leaving behind as findings citing ids nothing can resolve.
  */
 
-const headers = { 'Content-Type': 'application/json', 'x-admin-key': MOCK_ADMIN_PASSWORD }
+const headers = { 'Content-Type': 'application/json' }
 
 interface Contradiction {
   about: string

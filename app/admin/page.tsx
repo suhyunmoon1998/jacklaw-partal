@@ -4,7 +4,6 @@ import { useEffect, useState, useCallback } from 'react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import {
-  getAdminSession,
   setAdminSession,
   clearAdminSession,
   getSubmissionNotifications,
@@ -20,7 +19,6 @@ import {
   type IntakeSubmission,
   type GeneratedGFROGDraft,
 } from '@/lib/auth'
-import { MOCK_ADMIN_PASSWORD } from '@/lib/mockData'
 import CaseAnalysis from '@/components/admin/CaseAnalysis'
 import CaseReading from '@/components/admin/CaseReading'
 import FactLedger from '@/components/admin/FactLedger'
@@ -79,17 +77,38 @@ function AdminLogin({ onLogin }: { onLogin: () => void }) {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
+  /**
+   * The password goes to the server and is checked there.
+   *
+   * It used to be compared here, against a constant compiled into this bundle
+   * — so the password was published with the page that asked for it, and the
+   * same constant was sent as the key on every admin request. What comes back
+   * now is an HttpOnly cookie the browser cannot read.
+   */
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
-    await new Promise(r => setTimeout(r, 400))
-    if (password === MOCK_ADMIN_PASSWORD) {
-      setAdminSession()
-      onLogin()
-    } else {
-      setError('Incorrect password.')
-    }
+    setError('')
+    const res = await fetch('/api/admin/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password }),
+    }).catch(() => null)
     setLoading(false)
+
+    if (!res) {
+      setError('Could not reach the server. Check your connection and try again.')
+      return
+    }
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      setError(body.error ?? 'Incorrect password.')
+      return
+    }
+    // Kept only so the panel knows to draw itself rather than the login form.
+    // The cookie is what the API believes.
+    setAdminSession()
+    onLogin()
   }
 
   return (
@@ -754,7 +773,7 @@ function AddClientModal({
     const post = (secondCase: boolean) =>
       fetch('/api/admin/clients', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-admin-key': MOCK_ADMIN_PASSWORD },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: name.trim(), phone: digits, caseType, lang, secondCase }),
       }).catch(() => null)
 
@@ -790,7 +809,7 @@ function AddClientModal({
     if (newId && caseFolderId) {
       await fetch('/api/admin/clients', {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', 'x-admin-key': MOCK_ADMIN_PASSWORD },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: newId, caseFolderId }),
       }).catch(() => null)
     }
@@ -809,8 +828,7 @@ function AddClientModal({
   /** Fetches the address, link and language, then hands over to the send dialog. */
   const openSend = async (assignmentId: string, setName: string) => {
     const res = await fetch(`/api/admin/assignments/${assignmentId}/send`, {
-      headers: { 'x-admin-key': MOCK_ADMIN_PASSWORD },
-    }).catch(() => null)
+          }).catch(() => null)
     const body = res?.ok ? await res.json().catch(() => ({})) : {}
     setSending({
       assignmentId,
@@ -1119,8 +1137,7 @@ export default function AdminPage() {
 
   const fetchClients = useCallback(async () => {
     const res = await fetch('/api/admin/clients', {
-      headers: { 'x-admin-key': MOCK_ADMIN_PASSWORD },
-      // Never the browser's copy. This panel is left open for days, and a
+            // Never the browser's copy. This panel is left open for days, and a
       // cached reply is a client list from whenever the tab was first opened.
       cache: 'no-store',
     })
@@ -1162,15 +1179,29 @@ export default function AdminPage() {
     }
   }, [authenticated, fetchClients])
 
+  /**
+   * The server decides whether this browser is signed in.
+   *
+   * The flag in localStorage is a hint for drawing, nothing more: it survives
+   * the cookie expiring, and a panel that believes it on its own shows an
+   * office a screen full of empty tables where their clients should be.
+   */
   useEffect(() => {
-    const isAuth = getAdminSession()
-    setAuthenticated(isAuth)
-    if (isAuth) {
-      setUnreadCount(getUnreadNotificationCount())
-      fetchClients()
-      setIntakeSubmissions(getIntakeSubmissions())
-    }
-    setLoading(false)
+    let live = true
+    ;(async () => {
+      const res = await fetch('/api/admin/login', { cache: 'no-store' }).catch(() => null)
+      const ok = Boolean(res?.ok && (await res.json().catch(() => ({}))).authenticated)
+      if (!live) return
+      if (!ok) clearAdminSession()
+      setAuthenticated(ok)
+      if (ok) {
+        setUnreadCount(getUnreadNotificationCount())
+        fetchClients()
+        setIntakeSubmissions(getIntakeSubmissions())
+      }
+      setLoading(false)
+    })()
+    return () => { live = false }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -1179,7 +1210,10 @@ export default function AdminPage() {
     }
   }, [selectedSubmission])
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    // The cookie is the session; clearing the local flag alone would leave the
+    // browser still able to read every client file.
+    await fetch('/api/admin/login', { method: 'DELETE' }).catch(() => null)
     clearAdminSession()
     setAuthenticated(false)
   }
@@ -1194,8 +1228,7 @@ export default function AdminPage() {
     if (!confirm('Remove this client? Their questionnaire data will also be deleted.')) return
     await fetch(`/api/admin/clients?id=${clientId}`, {
       method: 'DELETE',
-      headers: { 'x-admin-key': MOCK_ADMIN_PASSWORD },
-    })
+          })
     fetchClients()
   }
 
@@ -1244,8 +1277,7 @@ export default function AdminPage() {
 
   const handlePrintClient = async (client: AdminClient) => {
     const res = await fetch(`/api/admin/questionnaire/pdf?clientId=${client.id}`, {
-      headers: { 'x-admin-key': MOCK_ADMIN_PASSWORD },
-    })
+          })
     if (!res.ok) {
       alert('Failed to generate PDF. Please try again.')
       return
@@ -1269,7 +1301,7 @@ export default function AdminPage() {
     setAllClients(prev => prev.map(c => (c.id === clientId ? { ...c, tags } : c)))
     await fetch('/api/admin/clients', {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', 'x-admin-key': MOCK_ADMIN_PASSWORD },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: clientId, tags }),
     }).catch(() => null)
     fetchClients()
@@ -1280,7 +1312,7 @@ export default function AdminPage() {
     setAllClients(prev => prev.map(c => (c.id === clientId ? { ...c, portalLang } : c)))
     await fetch('/api/admin/clients', {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', 'x-admin-key': MOCK_ADMIN_PASSWORD },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: clientId, portalLang }),
     }).catch(() => null)
     fetchClients()
@@ -1290,7 +1322,7 @@ export default function AdminPage() {
     setAllClients(prev => prev.map(c => (c.id === clientId ? { ...c, caseName } : c)))
     const res = await fetch('/api/admin/clients', {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', 'x-admin-key': MOCK_ADMIN_PASSWORD },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: clientId, caseName }),
     })
     if (!res.ok) {
@@ -1320,8 +1352,7 @@ export default function AdminPage() {
     // Use the API to add client
     fetch('/api/admin/clients', {
       method: 'POST',
-      headers: { 'x-admin-key': MOCK_ADMIN_PASSWORD },
-      body: JSON.stringify({
+            body: JSON.stringify({
         name: clientName,
         phone: phone,
         caseType: 'Employment Law', // Default case type
@@ -1347,8 +1378,7 @@ export default function AdminPage() {
    */
   const refreshClientDocuments = async (clientId: string) => {
     const res = await fetch(`/api/admin/documents?clientId=${clientId}`, {
-      headers: { 'x-admin-key': MOCK_ADMIN_PASSWORD },
-    }).catch(() => null)
+          }).catch(() => null)
     if (!res?.ok) return
     const { documents } = await res.json()
     setClientData(prev => (prev ? { ...prev, documents: documents ?? prev.documents } : prev))
@@ -1357,8 +1387,8 @@ export default function AdminPage() {
 
   const handleViewClient = async (client: AdminClient) => {
     const [qRes, docsRes] = await Promise.all([
-      fetch(`/api/admin/questionnaire?clientId=${client.id}`, { headers: { 'x-admin-key': MOCK_ADMIN_PASSWORD } }),
-      fetch(`/api/admin/documents?clientId=${client.id}`, { headers: { 'x-admin-key': MOCK_ADMIN_PASSWORD } }),
+      fetch(`/api/admin/questionnaire?clientId=${client.id}`, undefined),
+      fetch(`/api/admin/documents?clientId=${client.id}`, undefined),
     ])
     const { state } = await qRes.json()
     const { documents } = await docsRes.json()

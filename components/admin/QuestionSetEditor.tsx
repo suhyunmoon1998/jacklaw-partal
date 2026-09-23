@@ -9,7 +9,6 @@
  */
 
 import { useEffect, useState } from 'react'
-import { MOCK_ADMIN_PASSWORD } from '@/lib/mockData'
 import { Question, QuestionSetDetail, QuestionType } from '@/types'
 import { LANGUAGES, TRANSLATED_LANGS, TranslatedLang } from '@/lib/langs'
 import type { RecommendedBank } from '@/lib/recommendedQuestions'
@@ -179,7 +178,7 @@ export default function QuestionSetEditor({
 
   useEffect(() => {
     if (!setId) return
-    fetch(`/api/admin/question-sets/${setId}`, { headers: { 'x-admin-key': MOCK_ADMIN_PASSWORD } })
+    fetch(`/api/admin/question-sets/${setId}`, undefined)
       .then(async r => {
         const body = await r.json().catch(() => ({}))
         if (!r.ok || !body?.set) throw new Error(body?.error ?? 'Could not load this question set.')
@@ -198,7 +197,7 @@ export default function QuestionSetEditor({
 
   useEffect(() => {
     if (!suggestOpen || banks) return
-    fetch('/api/admin/recommended-questions', { headers: { 'x-admin-key': MOCK_ADMIN_PASSWORD } })
+    fetch('/api/admin/recommended-questions', undefined)
       .then(r => r.json())
       .then(({ banks }: { banks: RecommendedBank[] }) => {
         setBanks(banks ?? [])
@@ -294,7 +293,7 @@ export default function QuestionSetEditor({
 
     const res = await fetch('/api/admin/questions/translate', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-admin-key': MOCK_ADMIN_PASSWORD },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         langs,
         questions: needing.map(q => ({
@@ -386,7 +385,7 @@ export default function QuestionSetEditor({
       setId ? `/api/admin/question-sets/${setId}` : '/api/admin/question-sets',
       {
         method: setId ? 'PATCH' : 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-admin-key': MOCK_ADMIN_PASSWORD },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       }
     )

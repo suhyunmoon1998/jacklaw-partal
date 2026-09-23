@@ -19,11 +19,10 @@
  */
 
 import { useState } from 'react'
-import { MOCK_ADMIN_PASSWORD } from '@/lib/mockData'
 import { Lang, LANGUAGES, LANG_ENGLISH_NAME, toLang } from '@/lib/langs'
 import ModalPortal from '@/components/ModalPortal'
 
-const adminHeaders = { 'Content-Type': 'application/json', 'x-admin-key': MOCK_ADMIN_PASSWORD }
+const adminHeaders = { 'Content-Type': 'application/json' }
 
 /** Ten digits is what the routes will accept, so the button agrees with them. */
 const phoneReady = (raw: string) => raw.replace(/\D/g, '').length >= 10

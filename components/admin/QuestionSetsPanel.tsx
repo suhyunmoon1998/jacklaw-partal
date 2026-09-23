@@ -6,7 +6,6 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
-import { MOCK_ADMIN_PASSWORD } from '@/lib/mockData'
 import { QuestionSet } from '@/types'
 import QuestionSetEditor from './QuestionSetEditor'
 
@@ -19,8 +18,7 @@ export default function QuestionSetsPanel({ onChanged }: { onChanged?: () => voi
 
   const load = useCallback(async () => {
     const res = await fetch('/api/admin/question-sets', {
-      headers: { 'x-admin-key': MOCK_ADMIN_PASSWORD },
-    })
+          })
     if (res.ok) {
       const { sets } = await res.json()
       setSets(sets ?? [])
@@ -36,7 +34,7 @@ export default function QuestionSetsPanel({ onChanged }: { onChanged?: () => voi
     setBusy(set.id)
     await fetch(`/api/admin/question-sets/${set.id}/duplicate`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-admin-key': MOCK_ADMIN_PASSWORD },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({}),
     })
     setBusy(null)
@@ -48,8 +46,7 @@ export default function QuestionSetsPanel({ onChanged }: { onChanged?: () => voi
     setBusy(set.id)
     const res = await fetch(`/api/admin/question-sets/${set.id}`, {
       method: 'DELETE',
-      headers: { 'x-admin-key': MOCK_ADMIN_PASSWORD },
-    })
+          })
     const body = await res.json().catch(() => ({}))
     setBusy(null)
     if (body.archived) {
@@ -62,7 +59,7 @@ export default function QuestionSetsPanel({ onChanged }: { onChanged?: () => voi
     setBusy(set.id)
     await fetch(`/api/admin/question-sets/${set.id}`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', 'x-admin-key': MOCK_ADMIN_PASSWORD },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status: 'active' }),
     })
     setBusy(null)

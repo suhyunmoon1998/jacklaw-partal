@@ -15,7 +15,6 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
-import { MOCK_ADMIN_PASSWORD } from '@/lib/mockData'
 import { ClientWork, STATUS_LABEL, clientProgressPercent, clientStatus } from '@/lib/clientProgress'
 import { alsoOn } from '@/lib/samePerson'
 import { formatPhone } from '@/lib/auth'
@@ -74,7 +73,7 @@ export interface ClientActions<C extends PanelClient = PanelClient> {
   onSetLang: (clientId: string, lang: string) => void
 }
 
-const KEY = { 'x-admin-key': MOCK_ADMIN_PASSWORD }
+const KEY = {}
 const JSON_KEY = { 'Content-Type': 'application/json', ...KEY }
 
 /** The id used for the folder that is not a folder. */

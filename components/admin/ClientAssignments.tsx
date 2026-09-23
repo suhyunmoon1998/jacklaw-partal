@@ -9,7 +9,6 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
-import { MOCK_ADMIN_PASSWORD } from '@/lib/mockData'
 import { AnswerValue, Assignment, AssignmentDetail, QuestionSet, QuestionnaireState } from '@/types'
 import { LANG_ENGLISH_NAME, Lang, toLang } from '@/lib/langs'
 import { submissionLanguage, translateAnswersToEnglish } from '@/lib/machineTranslate'
@@ -30,7 +29,7 @@ const STATUS_BADGE: Record<Assignment['status'], { label: string; cls: string }>
   completed: { label: 'Completed', cls: 'bg-green-100 text-green-700' },
 }
 
-const adminHeaders = { 'Content-Type': 'application/json', 'x-admin-key': MOCK_ADMIN_PASSWORD }
+const adminHeaders = { 'Content-Type': 'application/json' }
 
 function shortDate(iso: string | null): string {
   if (!iso) return ''

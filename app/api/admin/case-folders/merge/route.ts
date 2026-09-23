@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
+import { isAdmin } from '@/lib/adminAuth'
 
-function isAdmin(req: NextRequest) {
-  return req.headers.get('x-admin-key') === process.env.ADMIN_PASSWORD
-}
 
 /**
  * POST /api/admin/case-folders/merge — fold one case into another.
