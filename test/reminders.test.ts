@@ -277,26 +277,25 @@ describe('what it says', () => {
 })
 
 describe('what language to write in', () => {
-  it('uses what the client picked in the portal, above everything', () => {
-    expect(resolveLang('ko', 'es')).toBe('ko')
-    expect(resolveLang('zh', null)).toBe('zh')
+  it('uses what the client picked in the portal', () => {
+    for (const picked of ['ko', 'zh', 'es', 'en']) {
+      expect(resolveLang(picked), picked).toBe(picked)
+    }
   })
 
-  it('falls back to the language they filled the questionnaire in', () => {
-    // Somebody who answered in Korean should not be chased in English.
-    expect(resolveLang(null, 'ko')).toBe('ko')
-    expect(resolveLang('', 'es')).toBe('es')
-  })
-
-  it('falls back to English when neither is known', () => {
-    for (const picked of [null, undefined, '', 'klingon', 42]) {
-      expect(resolveLang(picked, null), String(picked)).toBe('en')
+  it('writes English whenever nobody chose a language', () => {
+    // Deliberately not guessed from the script their answers happen to be in.
+    // A client on the wrong language is one field in the admin panel; a
+    // confident guess is a law office ringing somebody in a language they did
+    // not ask for.
+    for (const picked of [null, undefined, '', 'klingon', 42, {}, []]) {
+      expect(resolveLang(picked), String(picked)).toBe('en')
     }
   })
 
   it('ignores a stored language that is not one we write', () => {
-    expect(resolveLang('fr', null)).toBe('en')
-    expect(resolveLang('fr', 'ko')).toBe('ko')
+    expect(resolveLang('fr')).toBe('en')
+    expect(resolveLang('ja')).toBe('en')
   })
 })
 

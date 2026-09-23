@@ -123,16 +123,21 @@ export function isSendingTime(now: Date, timeZone = 'America/Los_Angeles'): bool
 /**
  * The language to write to one client in.
  *
- * What they picked in the portal wins, because it is the only thing they said
- * themselves. Failing that, the language they filled the questionnaire in —
- * somebody who answered in Korean should not be chased in English. Failing
- * both, English: a client who has picked nothing and answered nothing gives us
- * nothing to go on, and guessing from a name would be worse than the default.
+ * What they picked in the portal, or English. Nothing else.
+ *
+ * This used to fall back to the language their questionnaire answers looked
+ * like, which is a guess dressed as a setting: the detector reads whatever
+ * script the free text happens to be in, and a client who typed their
+ * employer's name in Korean inside an English questionnaire would be rung up
+ * in Korean. A law office would rather send a clear message in the wrong
+ * language than a confident guess in one the client did not ask for — and the
+ * fix for a client on the wrong language is one field in the admin panel.
+ *
+ * The office's own setting is what this trusts, because it is the only value
+ * anybody chose on purpose.
  */
-export function resolveLang(picked: unknown, inferred: Lang | null | undefined): Lang {
-  if (isLang(picked)) return picked
-  if (inferred && isLang(inferred)) return inferred
-  return 'en'
+export function resolveLang(picked: unknown): Lang {
+  return isLang(picked) ? picked : 'en'
 }
 
 /** Whole days between two instants, counted on the calendar. */

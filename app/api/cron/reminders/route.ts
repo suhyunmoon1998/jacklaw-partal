@@ -156,30 +156,14 @@ export async function GET(req: NextRequest) {
   ]
 
   /**
-   * The language to write to this client in.
+   * The language to write to this client in: the one they picked, or English.
    *
-   * portal_lang is set the moment they pick a language in the portal, and
-   * seeded when the office adds them — but a client who was added without one
-   * and has never opened the portal has none, and defaulting those to English
-   * means texting somebody in a language they may not read.
-   *
-   * So where it is missing, it is read off their own answers: somebody who
-   * filled the questionnaire in Korean gets chased in Korean. Only fetched for
-   * the clients who actually need it, because an answers blob is not small.
+   * This used to read an answers blob for every client with no portal_lang and
+   * guess from the script the free text was in. The guess is now gone — a
+   * client on the wrong language is one field in the admin panel, and a law
+   * office would rather be plainly in English than confidently wrong — and so
+   * is the extra query it needed.
    */
-  const needLang = (clients ?? []).filter(c => !c.portal_lang).map(c => c.id)
-  const inferred = new Map<string, Lang>()
-  if (needLang.length) {
-    const { data: rows } = await db
-      .from('questionnaire_states')
-      .select('client_id, answers')
-      .in('client_id', needLang)
-    for (const row of rows ?? []) {
-      const guess = submissionLanguage(row.answers ?? {})
-      if (guess) inferred.set(row.client_id, guess)
-    }
-  }
-
   const targets = new Map<string, ReminderTarget>(
     (clients ?? []).map(c => [
       c.id,
@@ -187,7 +171,7 @@ export async function GET(req: NextRequest) {
         clientId: c.id,
         name: c.name ?? '',
         phone: c.phone ?? '',
-        lang: resolveLang(c.portal_lang, inferred.get(c.id)),
+        lang: resolveLang(c.portal_lang),
         optedOut: Boolean(c.sms_opt_out),
       },
     ])
