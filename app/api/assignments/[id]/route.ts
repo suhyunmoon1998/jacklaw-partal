@@ -3,14 +3,19 @@ import { getSupabase } from '@/lib/supabase'
 import { advancesTo, getAssignmentDetail } from '@/lib/questionSets'
 import { notifyFirmAssignmentCompleted } from '@/lib/sendAssignmentEmail'
 import { AnswerValue, AssignmentStatus } from '@/types'
+import { sessionClient } from '@/lib/clientAuth'
 
 /**
- * Every request carries the client id the browser session holds, and it has to
- * match the assignment's owner. That is what stops one client's link from
- * opening another client's assignment.
+ * The signed-in client has to be the assignment's owner.
+ *
+ * This used to compare the assignment's owner to a client id the caller put in
+ * the request — which the caller chooses, so it agreed with itself every time
+ * and stopped nobody. The cookie is the only part of the request the browser
+ * cannot write.
  */
-function authorize(assignmentClientId: string, requestClientId: string | null): boolean {
-  return !!requestClientId && requestClientId === assignmentClientId
+function authorize(req: NextRequest, assignmentClientId: string): boolean {
+  const who = sessionClient(req)
+  return !!who && who === assignmentClientId
 }
 
 // GET /api/assignments/[id]?clientId=xxx
@@ -20,7 +25,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   const assignment = await getAssignmentDetail(params.id, { forClient: true })
   if (!assignment) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  if (!authorize(assignment.clientId, clientId)) {
+  if (!authorize(req, assignment.clientId)) {
     return NextResponse.json({ error: 'This questionnaire belongs to a different client.' }, { status: 403 })
   }
   if (assignment.status === 'draft') {
@@ -43,7 +48,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     .maybeSingle()
 
   if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  if (!authorize(row.client_id, clientId)) {
+  if (!authorize(req, row.client_id)) {
     return NextResponse.json({ error: 'This questionnaire belongs to a different client.' }, { status: 403 })
   }
   if (row.status === 'draft') {

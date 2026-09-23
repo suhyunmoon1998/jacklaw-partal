@@ -12,53 +12,21 @@ import { Session, QuestionnaireState, UploadedDocument, MockClient } from '@/typ
 
 const SESSION_KEY = 'jlp_session'
 const SESSION_DURATION_MS = 24 * 60 * 60 * 1000 // 24 hours
-const OTP_KEY = 'jlp_pending_otp'
-const OTP_PHONE_KEY = 'jlp_pending_phone'
-const OTP_CLIENT_KEY = 'jlp_pending_client_id'
-const OTP_CLIENT_NAME_KEY = 'jlp_pending_client_name'
-const OTP_CLIENT_CASE_KEY = 'jlp_pending_client_case'
 
 // Strips all non-digit characters for consistent phone comparison
 export function normalizePhone(raw: string): string {
   return raw.replace(/\D/g, '')
 }
 
-// Generates a mock 6-digit OTP
-export function generateMockOTP(): string {
-  return Math.floor(100000 + Math.random() * 900000).toString()
-}
-
-// Stores pending OTP and phone during verification step
-export function storePendingVerification(
-  phone: string, clientId: string, otp: string,
-  clientName: string, caseType: string,
-): void {
-  sessionStorage.setItem(OTP_PHONE_KEY, phone)
-  sessionStorage.setItem(OTP_CLIENT_KEY, clientId)
-  sessionStorage.setItem(OTP_KEY, otp)
-  sessionStorage.setItem(OTP_CLIENT_NAME_KEY, clientName)
-  sessionStorage.setItem(OTP_CLIENT_CASE_KEY, caseType)
-}
-
-export function getPendingVerification(): {
-  phone: string; clientId: string; otp: string; clientName: string; caseType: string
-} | null {
-  const phone = sessionStorage.getItem(OTP_PHONE_KEY)
-  const clientId = sessionStorage.getItem(OTP_CLIENT_KEY)
-  const otp = sessionStorage.getItem(OTP_KEY)
-  const clientName = sessionStorage.getItem(OTP_CLIENT_NAME_KEY) ?? ''
-  const caseType = sessionStorage.getItem(OTP_CLIENT_CASE_KEY) ?? ''
-  if (!phone || !clientId || !otp) return null
-  return { phone, clientId, otp, clientName, caseType }
-}
-
-export function clearPendingVerification(): void {
-  sessionStorage.removeItem(OTP_PHONE_KEY)
-  sessionStorage.removeItem(OTP_CLIENT_KEY)
-  sessionStorage.removeItem(OTP_KEY)
-  sessionStorage.removeItem(OTP_CLIENT_NAME_KEY)
-  sessionStorage.removeItem(OTP_CLIENT_CASE_KEY)
-}
+/*
+ * The mock OTP helpers that stood here are gone, with the /verify page that
+ * was their only caller. Nothing linked to that page: signing in has always
+ * been a phone number and nothing else, and a six-digit code compared in the
+ * browser against a value sitting in sessionStorage was never going to be the
+ * thing that fixed it. Real verification is a server route that sends a code
+ * through Twilio and checks it server-side; it belongs with the client session
+ * in lib/clientAuth.ts when it is written.
+ */
 
 // Client session management
 export function setSession(session: Omit<Session, 'expiresAt'>): void {
@@ -83,6 +51,34 @@ export function getSession(): Session | null {
 
 export function clearSession(): void {
   localStorage.removeItem(SESSION_KEY)
+}
+
+/**
+ * Whether the server will still answer for this client.
+ *
+ * getSession() reads localStorage, which outlives the signed cookie the API
+ * now answers on. Without this, a client whose cookie has gone — or who was
+ * signed in before there were cookies at all — reaches a portal that draws
+ * their name and their steps and then fails every request behind it, which
+ * reads as the firm having lost their case rather than as a sign-in that ran
+ * out.
+ *
+ * A request that could not be made at all is not an answer: somebody on a
+ * train keeps their session.
+ */
+export async function serverSessionAgrees(): Promise<boolean> {
+  const local = getSession()
+  if (!local) return false
+  try {
+    const res = await fetch('/api/clients/session', { cache: 'no-store' })
+    if (!res.ok) return true
+    const { clientId } = await res.json()
+    if (clientId === local.clientId) return true
+  } catch {
+    return true
+  }
+  clearSession()
+  return false
 }
 
 // Questionnaire state per client

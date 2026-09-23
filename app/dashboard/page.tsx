@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Header from '@/components/Header'
 import MascotWatermark from '@/components/MascotWatermark'
-import { getSession } from '@/lib/auth'
+import { serverSessionAgrees, getSession } from '@/lib/auth'
 import { Assignment, Session } from '@/types'
 import { QUESTIONNAIRE_SECTIONS } from '@/lib/questionnaireData'
 import { MODULE_2_SECTIONS } from '@/lib/module2Data'
@@ -91,6 +91,8 @@ export default function DashboardPage() {
   useEffect(() => {
     const s = getSession()
     if (!s) { router.replace('/client'); return }
+    // Drawn on the local copy, corrected the moment the server disagrees.
+    void serverSessionAgrees().then(ok => { if (!ok) router.replace('/client') })
     setSession(s)
     load(s.clientId)
 

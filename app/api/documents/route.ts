@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
+import { denyClient } from '@/lib/clientAuth'
 
 // GET /api/documents?clientId=xxx
 export async function GET(req: NextRequest) {
   const clientId = req.nextUrl.searchParams.get('clientId')
   if (!clientId) return NextResponse.json({ documents: [] }, { status: 400 })
+
+  const denied = denyClient(req, clientId)
+  if (denied) return denied
 
   const { data, error } = await getSupabase()
     .from('documents')
@@ -35,6 +39,9 @@ export async function POST(req: NextRequest) {
   if (!clientId || !category) {
     return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
   }
+
+  const denied = denyClient(req, clientId)
+  if (denied) return denied
 
   let storagePath: string | null = null
 
@@ -88,9 +95,13 @@ export async function DELETE(req: NextRequest) {
   // Get storage path before deleting row
   const { data: doc } = await getSupabase()
     .from('documents')
-    .select('storage_path')
+    .select('storage_path, client_id')
     .eq('id', id)
     .maybeSingle()
+
+  // Whose file it is decides, not who is holding the id.
+  const denied = denyClient(req, doc?.client_id)
+  if (denied) return denied
 
   if (doc?.storage_path) {
     await getSupabase().storage.from('documents').remove([doc.storage_path])

@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Header from '@/components/Header'
-import { getSession } from '@/lib/auth'
+import { serverSessionAgrees, getSession } from '@/lib/auth'
 import { DOCUMENT_CATEGORIES } from '@/lib/mockData'
 import { Session, UploadedDocument } from '@/types'
 import { useLanguage } from '@/lib/i18n'
@@ -23,6 +23,8 @@ export default function DocumentsPage() {
   useEffect(() => {
     const s = getSession()
     if (!s) { router.replace('/client'); return }
+    // Drawn on the local copy, corrected the moment the server disagrees.
+    void serverSessionAgrees().then(ok => { if (!ok) router.replace('/client') })
     setSession(s)
     fetch(`/api/documents?clientId=${s.clientId}`)
       .then(r => r.json())

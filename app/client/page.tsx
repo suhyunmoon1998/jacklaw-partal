@@ -88,7 +88,27 @@ export default function LoginPage() {
     new Set(choices.map(c => `${c.case_label}|${c.case_type}|${openedOn(c.opened, lang)}`)).size <
       choices.length
 
-  const signIn = (client: FoundCase) => {
+  /**
+   * The session the portal actually runs on is the cookie the server sets.
+   *
+   * What is kept locally is the name and the case type, for drawing; every
+   * request for anything of this client's is answered on the cookie, which the
+   * browser cannot write.
+   */
+  const signIn = async (client: FoundCase) => {
+    const res = await fetch('/api/clients/session', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone: normalizePhone(phone), clientId: client.id }),
+    }).catch(() => null)
+
+    if (!res?.ok) {
+      const body = res ? await res.json().catch(() => ({})) : {}
+      setError(body.error ?? t('not_found'))
+      setLoading(false)
+      return
+    }
+
     setSession({
       clientId: client.id,
       phone: normalizePhone(phone),
@@ -115,7 +135,7 @@ export default function LoginPage() {
     // One case is the ordinary path and nothing about it changes. Two means the
     // office has this person on two matters, and only they can say which one
     // they came here for.
-    if (found.length === 1) signIn(found[0])
+    if (found.length === 1) { await signIn(found[0]); return }
     else if (found.length > 1) setChoices(found)
     else setError(t('not_found'))
 
@@ -150,7 +170,7 @@ export default function LoginPage() {
                 {choices.map((c, i) => (
                   <button
                     key={c.id}
-                    onClick={() => signIn(c)}
+                    onClick={() => { void signIn(c) }}
                     className="w-full flex items-center gap-3 text-left border border-gray-200 rounded-xl p-4 hover:border-gold hover:bg-gold/5 transition-colors"
                   >
                     <span className="text-xl">📁</span>

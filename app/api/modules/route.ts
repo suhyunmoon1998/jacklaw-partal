@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
+import { denyClient } from '@/lib/clientAuth'
 
 /**
  * GET /api/modules?clientId=xxx — the steps this client has been given.
@@ -22,6 +23,9 @@ import { getSupabase } from '@/lib/supabase'
 export async function GET(req: NextRequest) {
   const clientId = req.nextUrl.searchParams.get('clientId')
   if (!clientId) return NextResponse.json({ ok: false, sent: [], sends: [] }, { status: 400 })
+
+  const denied = denyClient(req, clientId)
+  if (denied) return denied
 
   const { data, error } = await getSupabase()
     .from('client_module_sends')

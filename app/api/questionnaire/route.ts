@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
 import { sendIntakeNotificationEmails } from '@/lib/sendIntakeEmail'
+import { denyClient } from '@/lib/clientAuth'
 
 /**
  * Both modules write here.
@@ -23,6 +24,9 @@ const asModule = (value: unknown): ModuleId => (value === 'module2' ? 'module2' 
 export async function GET(req: NextRequest) {
   const clientId = req.nextUrl.searchParams.get('clientId')
   if (!clientId) return NextResponse.json({ state: null }, { status: 400 })
+
+  const denied = denyClient(req, clientId)
+  if (denied) return denied
 
   const { data } = await getSupabase()
     .from('questionnaire_states')
@@ -63,6 +67,9 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const { clientId, answers, completedSections, submitted, module } = await req.json()
   if (!clientId) return NextResponse.json({ error: 'Missing clientId' }, { status: 400 })
+
+  const denied = denyClient(req, clientId)
+  if (denied) return denied
 
   const moduleId = asModule(module)
   const column = PROGRESS_COLUMNS[moduleId]

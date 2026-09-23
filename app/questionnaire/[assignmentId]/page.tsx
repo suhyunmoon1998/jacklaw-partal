@@ -16,7 +16,7 @@ import Header from '@/components/Header'
 import MascotWatermark from '@/components/MascotWatermark'
 import { QuestionInput } from '@/components/QuestionField'
 import { hasAnswer, isAnsweredFor, isFieldControl, isVisible, localize, localizeName } from '@/lib/questionLogic'
-import { getSession } from '@/lib/auth'
+import { getSession, serverSessionAgrees } from '@/lib/auth'
 import { useLanguage } from '@/lib/i18n'
 import { AnswerValue, AssignmentDetail, Session } from '@/types'
 
@@ -57,6 +57,10 @@ export default function AssignmentQuestionnairePage({
       router.replace(`/client?next=${encodeURIComponent(`/questionnaire/${params.assignmentId}`)}`)
       return
     }
+    // Drawn on the local copy, corrected the moment the server disagrees.
+    void serverSessionAgrees().then(ok => {
+      if (!ok) router.replace(`/client?next=${encodeURIComponent(`/questionnaire/${params.assignmentId}`)}`)
+    })
     setSession(s)
 
     fetch(`/api/assignments/${params.assignmentId}?clientId=${encodeURIComponent(s.clientId)}`)

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
 import { isLang } from '@/lib/langs'
+import { denyClient } from '@/lib/clientAuth'
 
 /**
  * POST /api/clients/language  { clientId, lang }
@@ -23,6 +24,9 @@ export async function POST(req: NextRequest) {
   if (!clientId || !isLang(lang)) {
     return NextResponse.json({ error: 'clientId and a known lang are required.' }, { status: 400 })
   }
+
+  const denied = denyClient(req, clientId)
+  if (denied) return denied
 
   const { error } = await getSupabase()
     .from('clients')

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
 import { ModuleId } from '@/lib/modules'
+import { denyClient } from '@/lib/clientAuth'
 
 const asModule = (value: unknown): ModuleId | null =>
   value === 'module1' || value === 'module2' || value === 'module3' ? value : null
@@ -29,6 +30,9 @@ export async function POST(req: NextRequest) {
   if (!clientId || !moduleId) {
     return NextResponse.json({ recorded: false }, { status: 400 })
   }
+
+  const denied = denyClient(req, clientId)
+  if (denied) return denied
 
   const { error } = await getSupabase()
     .from('client_module_sends')

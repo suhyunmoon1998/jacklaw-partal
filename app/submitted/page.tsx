@@ -3,7 +3,7 @@
 import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Header from '@/components/Header'
-import { getSession } from '@/lib/auth'
+import { serverSessionAgrees, getSession } from '@/lib/auth'
 import { useLanguage } from '@/lib/i18n'
 
 export default function SubmittedPage() {
@@ -13,6 +13,8 @@ export default function SubmittedPage() {
   useEffect(() => {
     const s = getSession()
     if (!s) { router.replace('/client'); return }
+    // Drawn on the local copy, corrected the moment the server disagrees.
+    void serverSessionAgrees().then(ok => { if (!ok) router.replace('/client') })
 
     fetch(`/api/questionnaire?clientId=${s.clientId}`)
       .then(r => r.json())
