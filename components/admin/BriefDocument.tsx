@@ -15,6 +15,7 @@
  */
 
 import { Brief, SECTION_ORDER, SECTION_TITLE, SectionKey } from '@/lib/caseBrief'
+import { Problem } from '@/lib/releaseTest'
 
 function Heading({ children }: { children: React.ReactNode }) {
   return (
@@ -48,7 +49,20 @@ const Bullets = ({ items }: { items: string[] }) => (
   </ul>
 )
 
-export default function BriefDocument({ brief }: { brief: Brief }) {
+export default function BriefDocument({
+  brief,
+  problems = [],
+}: {
+  brief: Brief
+  /**
+   * What the release test found. Shown on the document rather than beside it:
+   * a warning on the panel behind a sheet somebody prints is a warning that
+   * does not reach the person reading the print.
+   */
+  problems?: Problem[]
+}) {
+  const blocks = problems.filter(p => p.severity === 'block')
+  const flags = problems.filter(p => p.severity === 'flag')
   const absentOf = (key: SectionKey) => brief.absent.find(s => s.key === key)?.absent ?? null
 
   return (
@@ -65,6 +79,43 @@ export default function BriefDocument({ brief }: { brief: Brief }) {
             {brief.readOn ? ` · read ${new Date(brief.readOn).toLocaleDateString()}` : ''}
           </p>
         </header>
+
+        {/* Failed the release test. Printed with the document on purpose —
+            this is the one thing that must not be lost when somebody saves a
+            PDF and mails it to a colleague. */}
+        {blocks.length > 0 && (
+          <div className="mt-6 border-2 border-red-400 bg-red-50 px-4 py-3 print:bg-white">
+            <p className="font-sans text-[11px] font-bold uppercase tracking-wider text-red-700 mb-1.5">
+              Not to be sent out — {blocks.length} {blocks.length === 1 ? 'problem' : 'problems'}
+            </p>
+            <ul className="text-[14px] leading-[1.7] text-gray-900 list-disc pl-5 space-y-1">
+              {blocks.map((p, i) => (
+                <li key={i}>
+                  {p.what}
+                  <span className="block text-[12px] text-gray-500">
+                    {p.where} · {p.rule}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {flags.length > 0 && (
+          <div className="mt-4 border-l-4 border-gray-300 bg-gray-50 px-4 py-3 print:bg-white">
+            <p className="font-sans text-[11px] font-bold uppercase tracking-wider text-gray-500 mb-1.5">
+              Gaps in this draft
+            </p>
+            <ul className="text-[14px] leading-[1.7] text-gray-700 list-disc pl-5 space-y-1">
+              {flags.map((p, i) => (
+                <li key={i}>
+                  {p.what}
+                  <span className="block text-[12px] text-gray-400">{p.where}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         {/* Said first, not last: a reader who acts on a figure below should
             know before they reach it that somebody still has to settle the

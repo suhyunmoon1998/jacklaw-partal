@@ -22,6 +22,7 @@ import { useParams } from 'next/navigation'
 import { StoredReading, allClaims } from '@/lib/caseReadingShape'
 import { Finding, buildBrief } from '@/lib/caseBrief'
 import BriefDocument from '@/components/admin/BriefDocument'
+import { releaseTest } from '@/lib/releaseTest'
 
 const headers = {}
 
@@ -39,6 +40,8 @@ export default function ReadingSheetPage() {
   /** The damages reading, null until it has been run. */
   const [analysis, setAnalysis] = useState<Parameters<typeof buildBrief>[0]['analysis']>(null)
   const [questions, setQuestions] = useState<{ text: string; why?: string }[]>([])
+  /** The ledger's ids, so an invented fact id can be told from a real one. */
+  const [factIds, setFactIds] = useState<string[]>([])
   const [error, setError] = useState('')
   const [loaded, setLoaded] = useState(false)
   /** null until the server has said. The cookie is what decides, not localStorage. */
@@ -52,11 +55,12 @@ export default function ReadingSheetPage() {
       // All four readings at once. The brief is an assembly of what already
       // exists, so a missing one is a section that says why rather than a
       // failure — only the claims reading is fetched strictly.
-      const [rRes, cRes, aRes, fRes] = await Promise.all([
+      const [rRes, cRes, aRes, fRes, lRes] = await Promise.all([
         fetch(`/api/admin/clients/${clientId}/reading`, { headers, cache: 'no-store' }),
         fetch('/api/admin/clients', { headers, cache: 'no-store' }),
         fetch(`/api/admin/clients/${clientId}/analysis`, { headers, cache: 'no-store' }),
         fetch(`/api/admin/clients/${clientId}/follow-ups`, { headers, cache: 'no-store' }),
+        fetch(`/api/admin/clients/${clientId}/facts`, { headers, cache: 'no-store' }),
       ])
       const body = await rRes.json()
       if (!rRes.ok) throw new Error(body?.error || 'Could not load the reading.')
@@ -75,6 +79,10 @@ export default function ReadingSheetPage() {
       if (aRes.ok) {
         const { analysis: a } = await aRes.json()
         setAnalysis(a ?? null)
+      }
+      if (lRes.ok) {
+        const { ids } = await lRes.json()
+        setFactIds(ids ?? [])
       }
       if (fRes.ok) {
         const { questions: qs } = await fRes.json()
@@ -121,6 +129,9 @@ export default function ReadingSheetPage() {
   })
   /** Nothing has been read at all — not one section has anything to show. */
   const empty = !analysis && findings.length === 0 && !reading?.spine
+  // Read as an internal working draft: gaps are named, not fatal. An external
+  // document is the same test at 'external', where a gap stops it going out.
+  const problems = releaseTest(brief, { factIds: new Set(factIds) }, 'internal')
 
   if (signedIn === false) {
     return (
@@ -169,7 +180,7 @@ export default function ReadingSheetPage() {
         </p>
       )}
 
-      {!empty && <BriefDocument brief={brief} />}
+      {!empty && <BriefDocument brief={brief} problems={problems} />}
     </main>
   )
 }

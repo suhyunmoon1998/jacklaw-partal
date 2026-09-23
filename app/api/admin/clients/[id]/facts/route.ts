@@ -82,6 +82,12 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
       total: entries.length,
       unsettled: unsettled(entries).length,
       contradictions,
+      /**
+       * Bare ids, so the release test can tell a fact this client actually has
+       * from one a reading invented. Ids only — the ledger itself is large and
+       * nothing checking a citation needs to read it.
+       */
+      ids: entries.map(e => e.id),
     })
   } catch (err) {
     return NextResponse.json({ error: (err as Error).message }, { status: 500 })

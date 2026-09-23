@@ -1,0 +1,306 @@
+/**
+ * What must be true before a document leaves the building.
+ *
+ * The office already has one of these for questions: vet() refuses a
+ * follow-up containing "meal period" or "regular rate", and a test asserts it
+ * refuses them. The comment on that file is the whole argument — instructing a
+ * model to write simply is a hope, and refusing the output is a mechanism.
+ *
+ * Analysis had no such mechanism. Its schemas check shape, so a citation to a
+ * statute that does not exist, a fact id nothing in the ledger holds, or an
+ * estimate written as a certainty all pass. This is the missing half: the
+ * readings produce, and this refuses.
+ *
+ * It is deliberately mechanical. It cannot tell whether an argument is any
+ * good, and it does not try. It asks only the questions that can be answered
+ * by looking something up — does this citation exist, does this fact id exist,
+ * did an adverse fact survive into the document, is a figure marked estimated
+ * also written as estimated — because a check that cannot be wrong is worth
+ * more than one that is usually right.
+ *
+ * SEVERITY. An internal working draft may identify gaps; an external document
+ * may not carry them. The same problem is therefore a flag on one and a block
+ * on the other, and nothing here decides which a document is — the caller says.
+ */
+
+import { Brief } from '@/lib/caseBrief'
+import { available } from '@/lib/authority'
+
+export type Audience = 'internal' | 'external'
+export type Severity = 'block' | 'flag'
+
+export interface Problem {
+  /** Which clause of the standard this is. */
+  rule:
+    | 'invented citation'
+    | 'invented fact'
+    | 'hidden contrary evidence'
+    | 'allegation as proof'
+    | 'unsupported certainty'
+    | 'deadline without inputs'
+    | 'no relief requested'
+  severity: Severity
+  /** What is wrong, in a sentence somebody can act on. */
+  what: string
+  /** Where in the document to look. */
+  where: string
+}
+
+/** What the document is allowed to refer to. */
+export interface KnownSources {
+  /** Every fact id in this client's ledger. */
+  factIds: ReadonlySet<string>
+}
+
+/**
+ * A citation as it appears in prose, reduced to what can be looked up.
+ *
+ * The readings write citations the way a lawyer does — "Lab. Code sec. 512",
+ * "Wage Order 5, sec. 11", "CACI No. 2766A" — so this finds those shapes and
+ * nothing else. Prose that cites no authority raises nothing here; a document
+ * with no citations at all is a different problem and not this one.
+ */
+export function citationsIn(text: string): string[] {
+  const out: string[] = []
+  const push = (s: string) => {
+    if (s && !out.includes(s)) out.push(s)
+  }
+
+  // Plain exec loops rather than matchAll: this file is imported by the admin
+  // panel, whose tsconfig target predates the iterator.
+  const each = (re: RegExp, take: (m: RegExpExecArray) => void) => {
+    let m: RegExpExecArray | null
+    while ((m = re.exec(text)) !== null) take(m)
+  }
+
+  // Lab. Code § 512 · Labor Code section 512 · Lab Code sec. 226.7
+  each(
+    /\b(Lab(?:or)?\.?\s*Code|Bus\.?\s*&\s*Prof\.?\s*Code|Code\s*Civ\.?\s*Proc\.?)\s*(?:§+|sec(?:tion)?s?\.?)?\s*([\d.]+[a-zA-Z]?)/gi,
+    m => {
+      const law = /^lab/i.test(m[1]) ? 'LAB' : /^bus/i.test(m[1]) ? 'BPC' : 'CCP'
+      push(`${law} ${m[2].replace(/\.$/, '')}`)
+    }
+  )
+
+  // Wage Order 5, § 12 · IWC Wage Order 5 section 11
+  each(
+    /\bWage\s*Order\s*(\d+)(?:\s*[-–—]\s*\d+)?\s*(?:,)?\s*(?:§+|sec(?:tion)?s?\.?)\s*(\d+)/gi,
+    m => push(`IWC ${m[1]} sec ${m[2]}`)
+  )
+
+  // CACI No. 2766A
+  each(/\bCACI\s*(?:No\.?|Instruction)?\s*(\d+[A-Z]?)/gi, m => push(`CACI ${m[1]}`))
+
+  return out
+}
+
+/** Fact ids as the readings write them: f068, or client-123:f068. */
+export function factIdsIn(text: string): string[] {
+  const out: string[] = []
+  const re = /\b(?:[\w-]+:)?(f\d{2,})\b/g
+  let m: RegExpExecArray | null
+  while ((m = re.exec(text)) !== null) {
+    if (!out.includes(m[1])) out.push(m[1])
+  }
+  return out
+}
+
+/** Everything on file, as keys this can test membership against. */
+function onFile(): Set<string> {
+  return new Set(available().map(a => `${a.law} ${a.num}`))
+}
+
+/**
+ * Words that keep an estimate an estimate.
+ *
+ * A figure the reading itself marked ESTIMATE or ASSUMPTION has to read as one
+ * on the page. "About", "approximately", "roughly" and a range all do that;
+ * a bare number does not, and a bare number is what a demand letter quotes.
+ */
+const HEDGES =
+  /\b(about|approx|approximately|roughly|estimat|around|range|between|at least|up to|assum|unconfirmed|preliminary|subject to|if )/i
+
+export function readsAsEstimated(text: string): boolean {
+  return HEDGES.test(text) || /[–—-]\s*\$|\$[\d,]+\s*[–—-]/.test(text)
+}
+
+/** Everything in the document that might carry a citation or a fact id. */
+function proseOf(brief: Brief): { text: string; where: string }[] {
+  const bits: { text: string; where: string }[] = []
+  const add = (text: string | undefined | null, where: string) => {
+    if (text && text.trim()) bits.push({ text, where })
+  }
+
+  add(brief.overview.summary, 'Case overview')
+  for (const b of brief.overview.baseline) add(`${b.label} ${b.value}`, 'Employment baseline')
+  for (const c of brief.chronology.coreStory) add(c.note, 'Chronology')
+  for (const c of brief.chronology.conflicts) add(c, 'Conflicts and anomalies')
+  for (const f of brief.claims) {
+    add(f.standing, `Claim — ${f.claimId}`)
+    add(f.defense, `Claim — ${f.claimId}`)
+    for (const e of f.elements) {
+      add(e.reasoning, `Claim — ${f.claimId} · ${e.key}`)
+      add(e.wouldSettleIt, `Claim — ${f.claimId} · ${e.key}`)
+    }
+    for (const a of f.adverse) add(a, `Claim — ${f.claimId}`)
+  }
+  for (const i of brief.damages.issues) {
+    add(`${i.headline} ${i.law} ${i.why} ${i.math} ${i.estimate}`, `Damages — ${i.category}`)
+  }
+  add(brief.damages.drivers, 'Damages')
+  for (const m of brief.damages.missingInputs) add(m, 'Missing inputs')
+  for (const r of brief.evidence) add(`${r.record} ${r.proves?.note ?? ''}`, 'Records to obtain')
+
+  return bits
+}
+
+/** Fact ids the readings attached structurally, rather than wrote in prose. */
+function citedFactIds(brief: Brief): { id: string; where: string }[] {
+  const out: { id: string; where: string }[] = []
+  for (const c of brief.chronology.coreStory) {
+    for (const id of c.facts ?? []) out.push({ id, where: 'Chronology' })
+  }
+  for (const f of brief.claims) {
+    for (const e of f.elements) {
+      for (const id of e.facts ?? []) out.push({ id, where: `Claim — ${f.claimId} · ${e.key}` })
+    }
+  }
+  for (const r of brief.evidence) {
+    for (const id of r.proves?.facts ?? []) out.push({ id, where: 'Records to obtain' })
+  }
+  return out
+}
+
+/**
+ * The test itself.
+ *
+ * Returns everything it found. Ordering is by severity so a caller that shows
+ * only the first few shows the ones that stop a document going out.
+ */
+export function releaseTest(
+  brief: Brief,
+  known: KnownSources,
+  audience: Audience = 'internal'
+): Problem[] {
+  const problems: Problem[] = []
+  const strict = audience === 'external'
+  const sev = (s: Severity): Severity => (strict ? 'block' : s)
+
+  const authorities = onFile()
+  const seenCitation = new Set<string>()
+  const seenFact = new Set<string>()
+
+  for (const { text, where } of proseOf(brief)) {
+    for (const key of citationsIn(text)) {
+      if (authorities.has(key) || seenCitation.has(key)) continue
+      seenCitation.add(key)
+      problems.push({
+        rule: 'invented citation',
+        // Always a block. A provision the office does not hold is one nobody
+        // checked, and the standard's own words are that an unverified rule
+        // must not be applied.
+        severity: 'block',
+        what: `"${key}" is cited but is not in the authority on file. Nothing has verified what it says.`,
+        where,
+      })
+    }
+
+    // Only when the ledger is known. An empty set means the facts were not
+    // loaded, and treating that as "every id is invented" would be noise.
+    if (known.factIds.size > 0) {
+      for (const id of factIdsIn(text)) {
+        if (known.factIds.has(id) || seenFact.has(id)) continue
+        seenFact.add(id)
+        problems.push({
+          rule: 'invented fact',
+          severity: 'block',
+          what: `Fact ${id} is referred to but is not in this client's ledger.`,
+          where,
+        })
+      }
+    }
+  }
+
+  if (known.factIds.size > 0) {
+    for (const { id, where } of citedFactIds(brief)) {
+      if (known.factIds.has(id) || seenFact.has(id)) continue
+      seenFact.add(id)
+      problems.push({
+        rule: 'invented fact',
+        severity: 'block',
+        what: `Fact ${id} is cited but is not in this client's ledger.`,
+        where,
+      })
+    }
+  }
+
+  // Contrary evidence has to survive the assembly. A claim whose reading
+  // recorded an adverse fact, in a document that does not carry it, is the
+  // failure this clause exists for.
+  for (const f of brief.claims) {
+    for (const adverse of f.adverse) {
+      if (brief.weaknesses.some(w => w.includes(adverse))) continue
+      problems.push({
+        rule: 'hidden contrary evidence',
+        severity: 'block',
+        what: `An adverse fact recorded under ${f.claimId} does not appear in the document: "${adverse}"`,
+        where: `Claim — ${f.claimId}`,
+      })
+    }
+  }
+
+  for (const issue of brief.damages.issues) {
+    const estimated = issue.basis === 'ESTIMATE' || issue.basis === 'ASSUMPTION'
+
+    if (estimated && issue.estimate && !readsAsEstimated(issue.estimate)) {
+      problems.push({
+        rule: 'unsupported certainty',
+        severity: sev('flag'),
+        what: `${issue.category} is marked ${issue.basis} but its figure reads as settled: "${issue.estimate}"`,
+        where: `Damages — ${issue.category}`,
+      })
+    }
+
+    if (estimated && issue.confirm.length === 0) {
+      problems.push({
+        rule: 'allegation as proof',
+        severity: sev('flag'),
+        what: `${issue.category} rests on an ${issue.basis.toLowerCase()} and names nothing to confirm it.`,
+        where: `Damages — ${issue.category}`,
+      })
+    }
+
+    // A formula with no inputs is a number nobody can re-derive, and the
+    // standard asks for sourced arithmetic with visible assumptions.
+    if (issue.estimate && !issue.math) {
+      problems.push({
+        rule: 'deadline without inputs',
+        severity: sev('flag'),
+        what: `${issue.category} states a figure with no arithmetic behind it.`,
+        where: `Damages — ${issue.category}`,
+      })
+    }
+  }
+
+  // Something to do next. A brief that ends without a question, a record to
+  // get, or a step is a document nobody can act on.
+  if (
+    brief.questions.length === 0 &&
+    brief.evidence.length === 0 &&
+    brief.damages.missingInputs.length === 0
+  ) {
+    problems.push({
+      rule: 'no relief requested',
+      severity: sev('flag'),
+      what: 'The document asks for nothing: no question, no record to obtain, no missing input.',
+      where: 'Priority questions and evidence requests',
+    })
+  }
+
+  return problems.sort((a, b) => (a.severity === b.severity ? 0 : a.severity === 'block' ? -1 : 1))
+}
+
+/** Whether this document may go out as it stands. */
+export function blocked(problems: Problem[]): boolean {
+  return problems.some(p => p.severity === 'block')
+}
