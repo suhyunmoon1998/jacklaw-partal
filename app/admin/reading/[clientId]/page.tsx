@@ -26,6 +26,7 @@ import { releaseTest } from '@/lib/releaseTest'
 import { Changes, FactSnapshot } from '@/lib/briefChanges'
 import { defenceRecords } from '@/lib/defenceRecord'
 import { LedgerFact } from '@/lib/factualBrief'
+import { trialReadiness } from '@/lib/trialReadiness'
 
 const headers = {}
 
@@ -151,6 +152,8 @@ export default function ReadingSheetPage() {
   const problems = releaseTest(brief, { factIds: new Set(factIds) }, 'internal')
   // The other side's position and this office's answer, paired.
   const defences = defenceRecords(brief, ledger as unknown as LedgerFact[])
+  // Measured against the firm's Trial Brief Template, not laid out as one.
+  const readiness = trialReadiness(brief, ledger as unknown as LedgerFact[], defences)
 
   /**
    * Compare this reading against the one kept last time, and keep this one.
@@ -229,6 +232,7 @@ export default function ReadingSheetPage() {
           changes={changes}
           versions={versions}
           defences={defences}
+          readiness={readiness}
         />
       )}
     </main>

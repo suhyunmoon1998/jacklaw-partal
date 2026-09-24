@@ -17,6 +17,8 @@ import { FactualBrief, LedgerFact } from '@/lib/factualBrief'
 import { assumptionLog, evidenceStatusMap, submissionDigest } from '@/lib/submissionPackage'
 // Types only: the module reads the questionnaire definitions, which this sheet has no use for.
 import type { SearchRecord, SourceCategory } from '@/lib/sourceSearch'
+import type { FactualByTemplate } from '@/lib/factualTemplate'
+import TemplateChecks from '@/components/admin/TemplateChecks'
 
 const H = ({ children }: { children: React.ReactNode }) => (
   <h3 className="font-sans text-[11px] font-bold uppercase tracking-[0.12em] text-gray-400 mt-10 mb-3 break-after-avoid">
@@ -28,6 +30,19 @@ const Sub = ({ children }: { children: React.ReactNode }) => (
   <p className="font-sans text-[11px] font-bold uppercase tracking-wider text-gray-400 mb-1.5 mt-5">
     {children}
   </p>
+)
+
+/** A part the template asks for and nothing on file supplies — said, never left blank. */
+const Gap = ({ children }: { children: React.ReactNode }) => (
+  <p className="text-[14px] leading-[1.7] text-gray-400 italic mb-2">{children}</p>
+)
+
+const Bullets = ({ items }: { items: string[] }) => (
+  <ul className="text-[14px] leading-[1.7] text-gray-800 list-disc pl-5 space-y-1 mb-2">
+    {items.map((x, i) => (
+      <li key={i}>{x}</li>
+    ))}
+  </ul>
 )
 
 /** CONFIRMED · REPORTED · INFERRED · DISPUTED · UNKNOWN — never hidden. */
@@ -90,10 +105,13 @@ function Fact({ f }: { f: LedgerFact }) {
 
 export default function FactualDocument({
   brief,
+  view,
   ledger = [],
   searched,
 }: {
   brief: FactualBrief
+  /** The same brief, arranged by Factual Brief Template 1.0. */
+  view: FactualByTemplate
   /** The facts themselves, for the status map, the log and the digest. */
   ledger?: LedgerFact[]
   /**
@@ -106,6 +124,9 @@ export default function FactualDocument({
   const statuses = evidenceStatusMap(ledger)
   const assumptions = assumptionLog(ledger)
   const digest = submissionDigest(ledger)
+  const t = view.template
+  // Numbered exactly as the template numbers them, so the two read side by side.
+  const title = (n: string) => `${n}. ${t.sections.find(x => x.n === n)!.title}`
 
   return (
     <div className="bg-gray-100 px-0 sm:px-6 py-0 sm:py-6 print:bg-white print:p-0">
@@ -120,13 +141,38 @@ export default function FactualDocument({
             {brief.factCount} fact{brief.factCount === 1 ? '' : 's'} on file
             {brief.readOn ? ` · read ${new Date(brief.readOn).toLocaleDateString()}` : ''}
           </p>
+          <p className="font-sans text-[11px] text-gray-400 mt-1">
+            Laid out to the firm’s {t.name} {t.version}. Assembled from the record on file; nothing
+            below is written by a model.
+          </p>
         </header>
 
+        {/* ── I ─────────────────────────────────────────────────────────── */}
+        <H>{title('I')}</H>
+        <table className="w-full text-[14px] leading-[1.6] text-gray-800 mb-3">
+          <tbody>
+            {view.snapshot.map(f => (
+              <tr key={f.field} className="border-b border-gray-100 last:border-0">
+                <td className="py-1.5 pr-4 align-top text-gray-500 w-56">{f.field}</td>
+                <td className="py-1.5 align-top">
+                  {f.onFile ? (
+                    <>
+                      {f.value}
+                      <span className="block text-[12px] text-gray-400">{f.source}</span>
+                    </>
+                  ) : (
+                    <span className="text-gray-400 italic">{f.source}</span>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
         {/* Where the record stands, in the firm standard's own vocabulary.
-            The ledger keeps five statuses that mean these five things. */}
+            The template's first rule is to keep these five apart. */}
         {ledger.length > 0 && (
           <>
-            <H>Evidence status</H>
+            <Sub>Evidence status</Sub>
             <table className="w-full text-[14px] text-gray-800 mb-1">
               <tbody>
                 {statuses.map(s2 => (
@@ -142,7 +188,9 @@ export default function FactualDocument({
           </>
         )}
 
-        <H>Core story</H>
+        {/* ── II ────────────────────────────────────────────────────────── */}
+        <H>{title('II')}</H>
+        <Sub>A. The Core Story</Sub>
         {brief.coreStory.length > 0 ? (
           brief.coreStory.map((c, i) => (
             <p key={i} className="text-[15px] leading-[1.75] text-gray-800 mb-3">
@@ -150,12 +198,10 @@ export default function FactualDocument({
             </p>
           ))
         ) : (
-          <p className="text-[15px] text-gray-400 italic">
-            {missing('chronology') ?? 'The spine has not named a core story yet.'}
-          </p>
+          <Gap>{missing('chronology') ?? 'The spine has not named a core story yet.'}</Gap>
         )}
 
-        <H>Strongest proof</H>
+        <Sub>B. Strongest Proof</Sub>
         {brief.strongestProof.length > 0 ? (
           <ul className="text-[15px] leading-[1.7] text-gray-800 list-disc pl-5">
             {brief.strongestProof.map(f => (
@@ -163,14 +209,26 @@ export default function FactualDocument({
             ))}
           </ul>
         ) : (
-          <p className="text-[15px] text-gray-400 italic">
-            {missing('proof') ?? missing('facts')}
-          </p>
+          <Gap>{missing('proof') ?? missing('facts')}</Gap>
         )}
 
-        <H>What cuts against</H>
-        {/* Kept here rather than in a separate file, because the corpus says
-            harmful evidence and unresolved conflicts are not to be buried. */}
+        <Sub>C. Strongest Admissions or Defense-Generated Evidence</Sub>
+        {view.theory.admissions.length > 0 ? (
+          <ul className="text-[15px] leading-[1.7] text-gray-800 list-disc pl-5">
+            {view.theory.admissions.map(f => (
+              <Fact key={f.id} f={f} />
+            ))}
+          </ul>
+        ) : (
+          <Gap>
+            Nothing from the employer’s own documents, discovery or testimony is on file. Statements a
+            manager made, as she reported them, would appear here.
+          </Gap>
+        )}
+
+        <Sub>D. Biggest Weaknesses / Contradictions</Sub>
+        {/* The template: "Include unfavorable evidence and contradictions. Do
+            not bury them." */}
         {brief.weaknesses.length > 0 ? (
           <ul className="text-[15px] leading-[1.7] text-gray-800 list-disc pl-5 space-y-1">
             {brief.weaknesses.map((w, i) => (
@@ -178,23 +236,44 @@ export default function FactualDocument({
                 <span className="font-sans text-[10px] font-bold uppercase tracking-wider text-gray-400 block">
                   {w.kind}
                 </span>
-                {/* What it cuts at, then what cuts. The field holds only the
-                    second, and on its own it reads as a list of codes. */}
-                {w.against && (
-                  <span className="block text-gray-900">{w.against}</span>
-                )}
+                {w.against && <span className="block text-gray-900">{w.against}</span>}
                 <span className="block text-gray-700">{w.what}</span>
                 {w.from && <span className="block text-[12px] text-gray-400">{w.from}</span>}
               </li>
             ))}
           </ul>
         ) : (
-          <p className="text-[15px] text-gray-400 italic">
-            Nothing on file cuts against the account yet.
-          </p>
+          <Gap>Nothing on file cuts against the account yet.</Gap>
         )}
 
-        <H>Chronology</H>
+        <Sub>E. What Must Be Proven Next</Sub>
+        {view.theory.provenNext.length > 0 ? (
+          <Bullets items={view.theory.provenNext} />
+        ) : (
+          <Gap>No open loop is recorded on any fact.</Gap>
+        )}
+
+        {/* ── III ───────────────────────────────────────────────────────── */}
+        <H>{title('III')}</H>
+        <Sub>A. Employer / Business</Sub>
+        {view.parties.employer.length ? <Bullets items={view.parties.employer} /> : <Gap>Nothing on file describes the business.</Gap>}
+        <Sub>B. Plaintiff’s Actual Job</Sub>
+        {view.parties.job.length ? <Bullets items={view.parties.job} /> : <Gap>No job title or duties in the employment baseline.</Gap>}
+        <Sub>C. Supervision and Control</Sub>
+        {view.parties.control.length ? (
+          <Bullets
+            items={view.parties.control.map(
+              p => `${p.name} — in ${p.knows} fact${p.knows === 1 ? '' : 's'}${p.about.length ? ` · ${p.about.join(', ')}` : ''}`
+            )}
+          />
+        ) : (
+          <Gap>No supervisor or manager is named in her answers.</Gap>
+        )}
+        <Sub>D. Classification / Pay Structure Facts</Sub>
+        {view.parties.pay.length ? <Bullets items={view.parties.pay} /> : <Gap>No pay structure in the employment baseline.</Gap>}
+
+        {/* ── IV ────────────────────────────────────────────────────────── */}
+        <H>{title('IV')}</H>
         {brief.chronology.length > 0 ? (
           <table className="w-full text-[14px] leading-[1.6] text-gray-800">
             <tbody>
@@ -207,28 +286,63 @@ export default function FactualDocument({
             </tbody>
           </table>
         ) : (
-          <p className="text-[15px] text-gray-400 italic">{missing('chronology')}</p>
+          <Gap>{missing('chronology')}</Gap>
         )}
 
-        <H>Issue by issue</H>
-        {brief.issues.map(issue => (
-          <div key={issue.issue} className="mb-7 break-inside-avoid">
-            <p className="font-sans text-[15px] font-bold text-gray-900">{issue.issue}</p>
+        {/* ── V ─────────────────────────────────────────────────────────── */}
+        <H>{title('V')}</H>
+        {view.issues.length === 0 && <Gap>No fact carries an issue tag yet.</Gap>}
+        {view.issues.map(issue => (
+          <div key={issue.issue} className="mb-8">
+            <p className="font-sans text-[15px] font-bold text-gray-900">ISSUE: {issue.issue}</p>
 
-            <Sub>What she says</Sub>
+            <Sub>1. Plaintiff’s Account</Sub>
             <ul className="text-[15px] leading-[1.7] text-gray-800 list-disc pl-5">
               {issue.account.slice(0, 6).map(f => (
                 <Fact key={f.id} f={f} />
               ))}
             </ul>
+            {issue.account.length > 6 && (
+              <p className="text-[12px] text-gray-400 mb-2">and {issue.account.length - 6} more on file</p>
+            )}
 
+            <Sub>2. Documentary Record</Sub>
+            {issue.documentary.length ? (
+              <ul className="text-[14px] leading-[1.7] text-gray-800 list-disc pl-5">
+                {issue.documentary.map(f => <Fact key={f.id} f={f} />)}
+              </ul>
+            ) : (
+              <Gap>No record on file bears on this issue. Everything above is her account.</Gap>
+            )}
+
+            <Sub>3. Defendant’s Account</Sub>
+            {issue.defendant.length ? (
+              <ul className="text-[14px] leading-[1.7] text-gray-800 list-disc pl-5">
+                {issue.defendant.map(f => <Fact key={f.id} f={f} />)}
+              </ul>
+            ) : (
+              <Gap>Nothing from the employer is on file for this issue.</Gap>
+            )}
+
+            <Sub>4. Corroboration</Sub>
+            {issue.corroboration.length ? (
+              <ul className="text-[14px] leading-[1.7] text-gray-800 list-disc pl-5">
+                {issue.corroboration.map(f => (
+                  <li key={f.id}>
+                    {f.proposition}
+                    <span className="block text-[12px] text-gray-400">{(f.corroboration ?? []).join(', ')}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <Gap>Nothing other than her own account supports this issue yet.</Gap>
+            )}
             {issue.consistentWith.length > 0 && (
               <>
-                {/* Internal consistency, which is worth seeing and is not
-                    corroboration. Nothing in this file is corroborated by a
-                    record yet. */}
-                <Sub>Consistent with her other answers</Sub>
-                <ul className="text-[14px] leading-[1.7] text-gray-800 list-disc pl-5">
+                {/* Consistency with her other answers, which is worth seeing
+                    and is not corroboration. */}
+                <p className="text-[12px] font-semibold text-gray-600 mt-2">Consistent with her other answers — not corroboration</p>
+                <ul className="text-[14px] leading-[1.7] text-gray-700 list-disc pl-5">
                   {issue.consistentWith.slice(0, 5).map(f => (
                     <li key={f.id}>{f.proposition}</li>
                   ))}
@@ -236,145 +350,206 @@ export default function FactualDocument({
               </>
             )}
 
-            {issue.corroborated.length > 0 && (
-              <>
-                <Sub>Corroborated by something other than her account</Sub>
-                <ul className="text-[14px] leading-[1.7] text-gray-800 list-disc pl-5">
-                  {issue.corroborated.map(f => (
-                    <li key={f.id}>
-                      {f.proposition}
-                      <span className="block text-[12px] text-gray-400">
-                        {(f.corroboration ?? []).join(', ')}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </>
+            <Sub>5. Contrary / Harmful Evidence</Sub>
+            {issue.contrary.length || issue.disputed.length ? (
+              <ul className="text-[14px] leading-[1.7] text-gray-800 list-disc pl-5">
+                {issue.contrary.map((h, i) => (
+                  <li key={`c${i}`}>{h.contrary}</li>
+                ))}
+                {issue.disputed.map(f => (
+                  <li key={f.id}>
+                    {f.proposition} <Status status={f.status} />
+                    {(f.verbatimEnglish || f.verbatim) && (
+                      <span className="block text-[13px] text-gray-600">&ldquo;{f.verbatimEnglish || f.verbatim}&rdquo;</span>
+                    )}
+                    <span className="block text-[12px] text-gray-400">Answers that disagree — both kept.</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <Gap>Nothing on file cuts against this issue yet.</Gap>
             )}
 
-            {issue.harmful.length > 0 && (
+            <Sub>6. Record Anomalies</Sub>
+            {issue.anomalies.length ? <Bullets items={issue.anomalies} /> : <Gap>None found in the facts under this issue.</Gap>}
+
+            <Sub>7. Best Factual Nugget</Sub>
+            {issue.nugget ? (
               <>
-                <Sub>What cuts against it</Sub>
-                <ul className="text-[14px] leading-[1.7] text-gray-800 list-disc pl-5">
-                  {issue.harmful.map((h, i) => (
-                    <li key={i}>{h.contrary}</li>
-                  ))}
+                <ul className="text-[15px] leading-[1.7] text-gray-800 list-disc pl-5">
+                  <Fact f={issue.nugget.fact} />
                 </ul>
+                {!issue.nugget.proof && (
+                  <p className="text-[12px] text-gray-500 -mt-1 mb-2">
+                    The strongest thing she says on this issue. Nothing corroborates it yet.
+                  </p>
+                )}
               </>
+            ) : (
+              <Gap>No fact on file.</Gap>
             )}
 
-            {issue.disputed.length > 0 && (
-              <>
-                <Sub>Answers that disagree — both kept</Sub>
-                <ul className="text-[14px] leading-[1.7] text-gray-800 list-disc pl-5">
-                  {issue.disputed.map(f => (
-                    <li key={f.id}>
-                      {f.proposition}
-                      {(f.verbatimEnglish || f.verbatim) && (
-                        <span className="block text-[13px] text-gray-600">
-                          &ldquo;{f.verbatimEnglish || f.verbatim}&rdquo;
-                          {f.verbatimEnglish && (
-                            <span className="font-sans text-[10px] uppercase tracking-wider text-gray-400">
-                              {' '}
-                              translated
-                            </span>
-                          )}
-                        </span>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              </>
-            )}
-
-            {issue.open.length > 0 && (
-              <>
-                <Sub>Still missing — the first {issue.open.length}</Sub>
-                <ul className="text-[14px] leading-[1.7] text-gray-800 list-disc pl-5">
-                  {issue.open.map((o, i) => (
-                    <li key={i}>{o}</li>
-                  ))}
-                </ul>
-              </>
-            )}
+            <Sub>8. What Is Still Missing</Sub>
+            {issue.missing.length ? <Bullets items={issue.missing} /> : <Gap>No open loop recorded for this issue.</Gap>}
           </div>
         ))}
 
-        <H>Records to obtain</H>
-        {brief.evidence.length > 0 ? (
-          <ul className="text-[15px] leading-[1.7] text-gray-800 list-disc pl-5 space-y-2">
-            {brief.evidence.map((r, i) => (
+        {view.otherIssues.length > 0 && (
+          <>
+            <Sub>Other issues — fewer facts on file, not developed above</Sub>
+            <p className="text-[13px] leading-[1.7] text-gray-600 mb-2">
+              {view.otherIssues.map(o => `${o.issue} (${o.facts})`).join(' · ')}
+            </p>
+          </>
+        )}
+
+        {/* ── VI ────────────────────────────────────────────────────────── */}
+        <H>{title('VI')}</H>
+        {view.records.map(r => (
+          <div key={r.key} className="mb-4">
+            <Sub>
+              {r.key}. {r.title}
+            </Sub>
+            {r.inHand.length === 0 && r.toObtain.length === 0 && r.facts.length === 0 ? (
+              <Gap>Nothing on file, and nothing named to obtain.</Gap>
+            ) : (
+              <ul className="text-[14px] leading-[1.7] text-gray-800 list-disc pl-5 space-y-1">
+                {r.inHand.map((x, i) => (
+                  <li key={`h${i}`}>
+                    <strong className="font-semibold">{x.record}</strong>{' '}
+                    <span className="font-sans text-[10px] font-bold uppercase tracking-wider text-green-700">in hand</span>
+                    {x.proves?.note && <span className="block text-[13px] text-gray-500">{x.proves.note}</span>}
+                  </li>
+                ))}
+                {r.facts.map(f => (
+                  <li key={f.id}>
+                    {f.proposition} <Status status={f.status} />
+                    <span className="block text-[12px] text-gray-400">
+                      {f.provenance.kind} · {f.provenance.pinpoint}
+                    </span>
+                  </li>
+                ))}
+                {r.toObtain.map((x, i) => (
+                  <li key={`o${i}`}>
+                    <strong className="font-semibold">{x.record}</strong>{' '}
+                    <span className="font-sans text-[10px] font-bold uppercase tracking-wider text-gray-400">to obtain</span>
+                    {x.proves?.note && <span className="block text-[13px] text-gray-500">{x.proves.note}</span>}
+                    {x.howToGetIt && <span className="block text-[13px] text-gray-500">{x.howToGetIt}</span>}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        ))}
+        {searched !== undefined && (
+          <>
+            <Sub>Sources this reading searched</Sub>
+            <Searched record={searched} />
+          </>
+        )}
+
+        {/* ── VII ───────────────────────────────────────────────────────── */}
+        <H>{title('VII')}</H>
+        {brief.people.length === 0 ? (
+          <Gap>{missing('people') ?? 'Nobody is named in her answers yet.'}</Gap>
+        ) : (
+          <table className="w-full text-[14px] leading-[1.6] text-gray-800">
+            <tbody>
+              {brief.people.map((p, i) => (
+                <tr key={i} className="border-b border-gray-100 last:border-0 break-inside-avoid">
+                  <td className="py-2 pr-4 align-top w-56">
+                    <span className="font-sans font-semibold">{p.name}</span>
+                    <span className="font-sans text-[10px] font-bold uppercase tracking-wider text-gray-400 block">
+                      {p.alignment}
+                      {p.identified ? '' : ' · not identified'}
+                    </span>
+                  </td>
+                  <td className="py-2 align-top">
+                    <span className="block">
+                      Knows {p.facts.length} fact{p.facts.length === 1 ? '' : 's'} firsthand
+                      {p.knowsAbout.length > 0 ? ` · ${p.knowsAbout.join(', ')}` : ''}
+                    </span>
+                    <span className="block text-[13px] text-gray-500">{p.nextStep}</span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+
+        {/* ── VIII ──────────────────────────────────────────────────────── */}
+        <H>{title('VIII')}</H>
+        <Sub>A. Expected Defense Narrative</Sub>
+        {view.defense.narrative.length ? (
+          <ul className="text-[15px] leading-[1.7] text-gray-800 list-disc pl-5">
+            {view.defense.narrative.map(f => <Fact key={f.id} f={f} />)}
+          </ul>
+        ) : (
+          <Gap>
+            No statement by the employer is on file, so its position is not developed here. The case
+            brief carries the defences the reading predicts.
+          </Gap>
+        )}
+        <Sub>B. Evidence Supporting the Defense</Sub>
+        {view.defense.supporting.length ? (
+          <ul className="text-[14px] leading-[1.7] text-gray-800 list-disc pl-5 space-y-1">
+            {view.defense.supporting.map((w, i) => (
               <li key={i}>
-                <strong className="font-semibold">{r.record}</strong>
-                {r.proves?.note && (
-                  <span className="block text-[13px] text-gray-500">{r.proves.note}</span>
-                )}
-                {r.howToGetIt && (
-                  <span className="block text-[13px] text-gray-500">{r.howToGetIt}</span>
-                )}
+                {w.what}
+                {w.against && <span className="block text-[12px] text-gray-400">against: {w.against}</span>}
               </li>
             ))}
           </ul>
         ) : (
-          <p className="text-[15px] text-gray-400 italic">Nothing outstanding on the spine.</p>
+          <Gap>Nothing on file supports the defence yet.</Gap>
         )}
+        <Sub>C. Plaintiff’s Best Contrary Evidence</Sub>
+        {view.defense.rebuttal.length ? (
+          <ul className="text-[14px] leading-[1.7] text-gray-800 list-disc pl-5">
+            {view.defense.rebuttal.map(f => <Fact key={f.id} f={f} />)}
+          </ul>
+        ) : (
+          <Gap>Nothing on file is corroborated beyond her account, so nothing yet rebuts a defence with proof.</Gap>
+        )}
+        <Sub>D. Unresolved Conflicts</Sub>
+        {view.defense.unresolved.length ? <Bullets items={view.defense.unresolved} /> : <Gap>None recorded.</Gap>}
 
-        <H>Who&rsquo;s Who — what each person knows</H>
-        <table className="w-full text-[14px] leading-[1.6] text-gray-800">
-          <tbody>
-            {brief.people.map((p, i) => (
-              <tr key={i} className="border-b border-gray-100 last:border-0 break-inside-avoid">
-                <td className="py-2 pr-4 align-top w-56">
-                  <span className="font-sans font-semibold">{p.name}</span>
-                  <span className="font-sans text-[10px] font-bold uppercase tracking-wider text-gray-400 block">
-                    {p.alignment}
-                    {p.identified ? '' : ' · not identified'}
-                  </span>
-                </td>
-                <td className="py-2 align-top">
-                  <span className="block">
-                    Knows {p.facts.length} fact{p.facts.length === 1 ? '' : 's'} firsthand
-                    {p.knowsAbout.length > 0 ? ` · ${p.knowsAbout.join(', ')}` : ''}
-                  </span>
-                  <span className="block text-[13px] text-gray-500">{p.nextStep}</span>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-
-        <H>Damages facts</H>
+        {/* ── IX ────────────────────────────────────────────────────────── */}
+        <H>{title('IX')}</H>
         {/* Inputs only. What they come to is the living brief's question. */}
-        <table className="w-full text-[14px] leading-[1.6] text-gray-800">
-          <tbody>
-            {brief.damages.map((d, i) => (
-              <tr key={i} className="border-b border-gray-100 last:border-0">
-                <td className="py-2 pr-4 align-top w-44 font-sans font-semibold">
-                  {d.input}
-                  {d.unresolved && (
-                    <span className="block font-sans text-[10px] font-bold uppercase tracking-wider text-red-600">
-                      not established
-                    </span>
-                  )}
-                </td>
-                <td className="py-2 align-top">
-                  <ul className="list-disc pl-4">
-                    {d.facts.slice(0, 4).map(f => (
-                      <li key={f.id}>
-                        {f.proposition} <Status status={f.status} />
-                      </li>
-                    ))}
-                  </ul>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-
-        <H>Damages assumption log</H>
-        {/* What each input rests on, and the record that would replace it.
-            "Estimated" is not a disclosure; "estimated, and the pay stubs
-            would settle it" is. */}
+        {brief.damages.length === 0 ? (
+          <Gap>No fact carries a damages input yet.</Gap>
+        ) : (
+          <table className="w-full text-[14px] leading-[1.6] text-gray-800">
+            <tbody>
+              {brief.damages.map((d, i) => (
+                <tr key={i} className="border-b border-gray-100 last:border-0">
+                  <td className="py-2 pr-4 align-top w-44 font-sans font-semibold">
+                    {d.input}
+                    {d.unresolved && (
+                      <span className="block font-sans text-[10px] font-bold uppercase tracking-wider text-red-600">
+                        not established
+                      </span>
+                    )}
+                  </td>
+                  <td className="py-2 align-top">
+                    <ul className="list-disc pl-4">
+                      {d.facts.slice(0, 4).map(f => (
+                        <li key={f.id}>
+                          {f.proposition} <Status status={f.status} />
+                        </li>
+                      ))}
+                    </ul>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        <Sub>Missing Inputs</Sub>
+        {view.damagesMissing.length ? <Bullets items={view.damagesMissing} /> : <Gap>Every input on file has a fact behind it.</Gap>}
+        <Sub>Assumption log</Sub>
+        {/* What each input rests on, and the record that would replace it. */}
         {assumptions.length > 0 ? (
           <table className="w-full text-[14px] leading-[1.6] text-gray-800 mb-3">
             <tbody>
@@ -394,9 +569,7 @@ export default function FactualDocument({
                     {a.wouldReplace ? (
                       <span className="block">Would be replaced by: {a.wouldReplace}</span>
                     ) : (
-                      <span className="block text-gray-400 italic">
-                        No record named that would settle it.
-                      </span>
+                      <span className="block text-gray-400 italic">No record named that would settle it.</span>
                     )}
                     <span className="block text-[12px] text-gray-400">
                       {a.facts.length} fact{a.facts.length === 1 ? '' : 's'} on file
@@ -407,38 +580,52 @@ export default function FactualDocument({
             </tbody>
           </table>
         ) : (
-          <p className="text-[15px] text-gray-400 italic">
-            No fact on file is tagged to a damages input yet.
-          </p>
+          <Gap>No damages input to log.</Gap>
         )}
 
-        <H>What she said</H>
-        {/* Her words and where she said them. No proposition, no conclusion —
-            the corpus says the digest carries neither. */}
-        <table className="w-full text-[14px] leading-[1.6] text-gray-800 mb-3">
-          <tbody>
-            {digest.map((d, i) => (
-              <tr key={i} className="border-b border-gray-100 last:border-0">
-                <td className="py-1.5 pr-4 align-top text-gray-500 w-72">{d.where}</td>
-                <td className="py-1.5 align-top">&ldquo;{d.said}&rdquo;</td>
-              </tr>
+        {/* ── X ─────────────────────────────────────────────────────────── */}
+        <H>{title('X')}</H>
+        {view.plan.length ? (
+          <ol className="text-[15px] leading-[1.7] text-gray-800 list-decimal pl-5 space-y-1">
+            {view.plan.map((d, i) => (
+              <li key={i}>{d}</li>
             ))}
-          </tbody>
-        </table>
+          </ol>
+        ) : (
+          <Gap>No open loop is recorded on any fact.</Gap>
+        )}
 
-        {searched !== undefined && (
+        {/* ── XI ────────────────────────────────────────────────────────── */}
+        <H>{title('XI')}</H>
+        {view.summary.paragraphs.length ? (
+          view.summary.paragraphs.map((p, i) => (
+            <p key={i} className="text-[15px] leading-[1.75] text-gray-800 mb-3">
+              {p}
+            </p>
+          ))
+        ) : (
+          <Gap>There is no core story on file to assemble from yet.</Gap>
+        )}
+        <p className="text-[12px] text-gray-400 mb-3">{view.summary.how}</p>
+        {digest.length > 0 && (
           <>
-            <H>What this reading searched</H>
-            <Searched record={searched} />
+            <Sub>Her words, and where she said them</Sub>
+            <table className="w-full text-[14px] leading-[1.6] text-gray-800 mb-3">
+              <tbody>
+                {digest.map((d, i) => (
+                  <tr key={i} className="border-b border-gray-100 last:border-0">
+                    <td className="py-1.5 pr-4 align-top text-gray-500 w-72">{d.where}</td>
+                    <td className="py-1.5 align-top">&ldquo;{d.said}&rdquo;</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </>
         )}
 
-        <H>Open development plan</H>
-        <ul className="text-[15px] leading-[1.7] text-gray-800 list-disc pl-5 space-y-1">
-          {brief.development.map((d, i) => (
-            <li key={i}>{d}</li>
-          ))}
-        </ul>
+        {/* ── XII ───────────────────────────────────────────────────────── */}
+        <H>{title('XII')}</H>
+        <TemplateChecks checks={view.checks} />
       </div>
     </div>
   )

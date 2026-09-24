@@ -21,6 +21,8 @@ import { missingInformation } from '@/lib/missingInformation'
 import { audienceRequests } from '@/lib/audienceRequests'
 import { DefenceRecord } from '@/lib/defenceRecord'
 import { FOR_A_PERSON, adversarialPass } from '@/lib/adversarialPass'
+import type { TrialReadiness } from '@/lib/trialReadiness'
+import TemplateChecks from '@/components/admin/TemplateChecks'
 
 function Heading({ children }: { children: React.ReactNode }) {
   return (
@@ -77,8 +79,11 @@ export default function BriefDocument({
   changes = null,
   versions,
   defences = [],
+  readiness,
 }: {
   brief: Brief
+  /** Measured against Trial Brief Template 1.0. Omitted, the section is not drawn. */
+  readiness?: TrialReadiness
   /** What moved since the last reading. Null on a first reading. */
   changes?: Changes | null
   /** Every version kept, newest first. Undefined while loading; null if it could not load. */
@@ -179,6 +184,48 @@ export default function BriefDocument({
             </section>
           )
         })}
+
+        {/* The legal standard, applied as a measure rather than a layout: this
+            sheet is an intake reading, and dressing its sections as I–XIII
+            would claim a trial readiness nothing here has. */}
+        {readiness && (
+          <section>
+            <Heading>
+              {readiness.template.name} {readiness.template.version} — how far from a trial brief
+            </Heading>
+            <P>{readiness.headline}</P>
+            <table className="w-full text-[14px] leading-[1.6] text-gray-800 mb-3">
+              <tbody>
+                {readiness.sections.map(s => (
+                  <tr key={s.n} className="border-b border-gray-100 last:border-0 break-inside-avoid">
+                    <td className="py-2 pr-4 align-top w-64">
+                      <span className="font-sans font-semibold">
+                        {s.n === 'Caption' ? '' : `${s.n}. `}
+                        {s.title}
+                      </span>
+                      <span
+                        className={`block font-sans text-[10px] font-bold uppercase tracking-wider ${
+                          s.readiness === 'inputs on file'
+                            ? 'text-green-700'
+                            : s.readiness === 'not on file'
+                              ? 'text-red-700'
+                              : s.readiness === 'partial'
+                                ? 'text-gray-500'
+                                : 'text-amber-700'
+                        }`}
+                      >
+                        {s.readiness}
+                      </span>
+                    </td>
+                    <td className="py-2 align-top">{s.note}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <Label>XIII. Final Trial-Brief Quality Control</Label>
+            <TemplateChecks checks={readiness.checks} />
+          </section>
+        )}
       </div>
     </div>
   )

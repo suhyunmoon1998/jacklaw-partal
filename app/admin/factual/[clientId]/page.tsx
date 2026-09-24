@@ -14,6 +14,7 @@ import { useParams } from 'next/navigation'
 import { LedgerFact, buildFactualBrief } from '@/lib/factualBrief'
 import FactualDocument from '@/components/admin/FactualDocument'
 import type { SearchRecord } from '@/lib/sourceSearch'
+import { BaselineRow, FactualTemplateInput, byTemplate } from '@/lib/factualTemplate'
 
 export default function FactualSheetPage() {
   const params = useParams<{ clientId: string }>()
@@ -22,7 +23,10 @@ export default function FactualSheetPage() {
   const [clientName, setClientName] = useState('')
   const [caseType, setCaseType] = useState('')
   const [ledger, setLedger] = useState<LedgerFact[]>([])
-  const [spine, setSpine] = useState<Parameters<typeof buildFactualBrief>[0]['spine']>(null)
+  const [spine, setSpine] = useState<FactualTemplateInput['spine'] & Parameters<typeof buildFactualBrief>[0]['spine']>(null)
+  /** The damages reading's employment baseline, for the case snapshot. Empty when it has not run. */
+  const [baseline, setBaseline] = useState<BaselineRow[]>([])
+  const [caseName, setCaseName] = useState('')
   const [readOn, setReadOn] = useState<string | null>(null)
   /** What the extraction searched. Undefined until the ledger has loaded. */
   const [searched, setSearched] = useState<SearchRecord | null | undefined>(undefined)
@@ -33,11 +37,18 @@ export default function FactualSheetPage() {
   const load = useCallback(async () => {
     if (!clientId) return
     try {
-      const [lRes, rRes, cRes] = await Promise.all([
+      const [lRes, rRes, cRes, aRes] = await Promise.all([
         fetch(`/api/admin/clients/${clientId}/facts`, { cache: 'no-store' }),
         fetch(`/api/admin/clients/${clientId}/reading`, { cache: 'no-store' }),
         fetch('/api/admin/clients', { cache: 'no-store' }),
+        fetch(`/api/admin/clients/${clientId}/analysis`, { cache: 'no-store' }),
       ])
+      if (aRes.ok) {
+        // The baseline lands with the first stage, so it is read from the
+        // parts rather than waiting for a finished reading.
+        const body = await aRes.json()
+        setBaseline(body?.parts?.overview?.baseline ?? [])
+      }
       if (lRes.ok) {
         const { snapshot, searched: s } = await lRes.json()
         setLedger(snapshot ?? [])
@@ -53,6 +64,7 @@ export default function FactualSheetPage() {
         const mine = (clients ?? []).find((c: { id: string }) => c.id === clientId)
         setClientName(mine?.name ?? '')
         setCaseType(mine?.caseType ?? '')
+        setCaseName(mine?.caseName ?? '')
       }
     } catch (err) {
       setError((err as Error).message)
@@ -85,6 +97,7 @@ export default function FactualSheetPage() {
   }
 
   const brief = buildFactualBrief({ clientName, caseType, ledger, spine, readOn })
+  const view = byTemplate({ brief, ledger, baseline, caseName, spine, searched })
   const empty = ledger.length === 0
 
   return (
@@ -120,7 +133,7 @@ export default function FactualSheetPage() {
         </p>
       )}
 
-      {!empty && <FactualDocument brief={brief} ledger={ledger} searched={searched} />}
+      {!empty && <FactualDocument brief={brief} view={view} ledger={ledger} searched={searched} />}
     </main>
   )
 }
