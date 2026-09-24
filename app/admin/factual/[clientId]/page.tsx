@@ -116,7 +116,7 @@ export default function FactualSheetPage() {
         </p>
       )}
 
-      {!empty && <FactualDocument brief={brief} />}
+      {!empty && <FactualDocument brief={brief} ledger={ledger} />}
     </main>
   )
 }

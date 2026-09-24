@@ -24,6 +24,8 @@ import { Finding, buildBrief } from '@/lib/caseBrief'
 import BriefDocument from '@/components/admin/BriefDocument'
 import { releaseTest } from '@/lib/releaseTest'
 import { Changes, FactSnapshot } from '@/lib/briefChanges'
+import { defenceRecords } from '@/lib/defenceRecord'
+import { LedgerFact } from '@/lib/factualBrief'
 
 const headers = {}
 
@@ -145,6 +147,8 @@ export default function ReadingSheetPage() {
   // Read as an internal working draft: gaps are named, not fatal. An external
   // document is the same test at 'external', where a gap stops it going out.
   const problems = releaseTest(brief, { factIds: new Set(factIds) }, 'internal')
+  // The other side's position and this office's answer, paired.
+  const defences = defenceRecords(brief, ledger as unknown as LedgerFact[])
 
   /**
    * Compare this reading against the one kept last time, and keep this one.
@@ -216,7 +220,7 @@ export default function ReadingSheetPage() {
         </p>
       )}
 
-      {!empty && <BriefDocument brief={brief} problems={problems} changes={changes} />}
+      {!empty && <BriefDocument brief={brief} problems={problems} changes={changes} defences={defences} />}
     </main>
   )
 }

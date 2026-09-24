@@ -59,6 +59,13 @@ export interface ConclusionChange {
   because: string[]
 }
 
+/** One thing that is not what it was, in a part of the brief other than a fact. */
+export interface Moved {
+  what: string
+  from: string
+  to: string
+}
+
 export interface Changes {
   /** When the version being compared against was read. */
   since: string | null
@@ -68,6 +75,12 @@ export interface Changes {
   /** What kept its conclusion, and the ledger it was read against. */
   unaffected: { claims: string[] }
   conclusions: ConclusionChange[]
+  /** sec. 17.C — dates and periods added or changed. */
+  chronology: Moved[]
+  /** sec. 17.E — records identified, obtained, or newly missing. */
+  evidence: Moved[]
+  /** sec. 17.H — damages inputs and figures affected. */
+  damages: Moved[]
   /**
    * Disagreements left standing. Both sides, in the client's own words.
    * Nothing here is resolved by this file; it is listed so a person resolves it.
@@ -249,11 +262,61 @@ export function compare(input: {
     affected,
     unaffected,
     conclusions: conclusionChanges(input.before.brief, input.after.brief, changedIds),
+    chronology: movedIn(
+      chronologyLines(input.before.brief),
+      chronologyLines(input.after.brief),
+      'Chronology'
+    ),
+    evidence: movedIn(evidenceLines(input.before.brief), evidenceLines(input.after.brief), 'Record'),
+    damages: movedIn(damagesLines(input.before.brief), damagesLines(input.after.brief), 'Damages'),
     unresolved: unresolvedIn(input.after.facts),
   }
 }
 
+/**
+ * What moved in a list of lines, by their text.
+ *
+ * Used for the parts of the brief that are prose rather than structured
+ * records — a chronology row, a record on the spine, a damages figure. Exact
+ * text is the key, so a reworded line reads as one gone and one arrived. That
+ * is honest: the office should see that the sentence changed.
+ */
+export function movedIn(
+  before: { key: string; text: string }[],
+  after: { key: string; text: string }[],
+  label: string
+): Moved[] {
+  const was = new Map(before.map(b => [b.key, b.text]))
+  const now = new Map(after.map(a => [a.key, a.text]))
+  const out: Moved[] = []
+
+  for (const [key, text] of Array.from(was.entries())) {
+    const t = now.get(key)
+    if (t === undefined) out.push({ what: `${label}: ${key}`, from: text, to: 'no longer on the brief' })
+    else if (t !== text) out.push({ what: `${label}: ${key}`, from: text, to: t })
+  }
+  for (const [key, text] of Array.from(now.entries())) {
+    if (!was.has(key)) out.push({ what: `${label}: ${key}`, from: 'not on the previous brief', to: text })
+  }
+  return out
+}
+
+const chronologyLines = (b: Brief) =>
+  b.chronology.events.map(e => ({ key: e.when || e.what.slice(0, 40), text: e.what }))
+
+const evidenceLines = (b: Brief) =>
+  b.evidence.map(r => ({ key: r.record, text: r.proves?.note || r.howToGetIt || 'listed' }))
+
+const damagesLines = (b: Brief) =>
+  b.damages.issues.map(i => ({ key: i.category, text: `${i.estimate || 'no figure'} \u00b7 ${i.math || 'no arithmetic'}` }))
+
 /** Nothing moved. Said as a sentence, because a blank section says nothing. */
 export function nothingChanged(changes: Changes): boolean {
-  return changes.facts.length === 0 && changes.conclusions.length === 0
+  return (
+    changes.facts.length === 0 &&
+    changes.conclusions.length === 0 &&
+    changes.chronology.length === 0 &&
+    changes.evidence.length === 0 &&
+    changes.damages.length === 0
+  )
 }

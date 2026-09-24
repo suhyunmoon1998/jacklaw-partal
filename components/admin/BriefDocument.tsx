@@ -19,6 +19,8 @@ import { Problem } from '@/lib/releaseTest'
 import { Changes, nothingChanged } from '@/lib/briefChanges'
 import { missingInformation } from '@/lib/missingInformation'
 import { audienceRequests } from '@/lib/audienceRequests'
+import { DefenceRecord } from '@/lib/defenceRecord'
+import { FOR_A_PERSON, adversarialPass } from '@/lib/adversarialPass'
 
 function Heading({ children }: { children: React.ReactNode }) {
   return (
@@ -56,10 +58,13 @@ export default function BriefDocument({
   brief,
   problems = [],
   changes = null,
+  defences = [],
 }: {
   brief: Brief
   /** What moved since the last reading. Null on a first reading. */
   changes?: Changes | null
+  /** The other side's position and this office's answer, paired. */
+  defences?: DefenceRecord[]
   /**
    * What the release test found. Shown on the document rather than beside it:
    * a warning on the panel behind a sheet somebody prints is a warning that
@@ -149,7 +154,7 @@ export default function BriefDocument({
               {missing ? (
                 <Absent why={missing} />
               ) : (
-                <Body brief={brief} section={key} changes={changes} />
+                <Body brief={brief} section={key} changes={changes} defences={defences} />
               )}
             </section>
           )
@@ -163,10 +168,12 @@ function Body({
   brief,
   section,
   changes,
+  defences,
 }: {
   brief: Brief
   section: SectionKey
   changes: Changes | null
+  defences: DefenceRecord[]
 }) {
   if (section === 'overview') {
     return (
@@ -299,6 +306,53 @@ function Body({
   if (section === 'strengths') {
     return (
       <>
+        {/* The pair the corpus asks for: their position, what it rests on,
+            and what this office answers with. A predicted defence and one the
+            employer has actually taken are marked apart. */}
+        {defences.length > 0 && (
+          <>
+            <Label>The defence, paired with the answer</Label>
+            {defences.map((d, i) => (
+              <div key={i} className="mb-4 break-inside-avoid">
+                <p className="font-sans text-[14px] font-semibold text-gray-900">
+                  {d.claimId}{' '}
+                  <span className="font-sans text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                    {d.standing}
+                  </span>
+                </p>
+                <p className="text-[14px] leading-[1.7] text-gray-800">{d.position}</p>
+                {d.restsOn.length > 0 && (
+                  <ul className="text-[13px] leading-[1.6] text-gray-600 list-disc pl-5">
+                    {d.restsOn.map((f, j) => (
+                      <li key={j}>
+                        {f.proposition}
+                        {f.verbatim && <span className="block">&ldquo;{f.verbatim}&rdquo;</span>}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {d.response.length > 0 && (
+                  <>
+                    <span className="font-sans text-[10px] font-bold uppercase tracking-wider text-gray-400 block mt-1">
+                      Our problem with it
+                    </span>
+                    <ul className="text-[13px] leading-[1.6] text-gray-700 list-disc pl-5">
+                      {d.response.map((r, j) => (
+                        <li key={j}>{r}</li>
+                      ))}
+                    </ul>
+                  </>
+                )}
+                {d.development.length > 0 && (
+                  <span className="block text-[13px] text-gray-500">
+                    Settles it: {d.development.join(' ')}
+                  </span>
+                )}
+              </div>
+            ))}
+          </>
+        )}
+
         {brief.strengths.length > 0 && (
           <>
             <Label>Where it is strongest</Label>
@@ -499,6 +553,34 @@ function Body({
           ))}
         </ul>
       )}
+      {(() => {
+        const challenges = adversarialPass(brief)
+        return (
+          <>
+            {challenges.length > 0 && (
+              <>
+                <Label>Read as the other side would</Label>
+                <ul className="text-[14px] leading-[1.7] text-gray-800 list-disc pl-5 space-y-1 mb-3">
+                  {challenges.map((c, i) => (
+                    <li key={i}>
+                      {c.what}
+                      <span className="block text-[12px] text-gray-400">
+                        {c.question} \u00b7 {c.where}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+            {/* Named rather than dropped: a clean mechanical pass must not
+                read as "the standard was satisfied". */}
+            <p className="text-[13px] leading-[1.6] text-gray-500 mb-4">
+              Still for a person to ask: {FOR_A_PERSON.join(' ')}
+            </p>
+          </>
+        )
+      })()}
+
       <Label>Changes from the previous reading</Label>
       {!changes ? (
         <Absent why="This is the first reading kept for this client, so there is nothing yet to compare it against. The next one will say what moved." />
@@ -585,6 +667,28 @@ function Body({
               <Bullets items={changes.unaffected.claims} />
             </>
           )}
+
+          {[
+            { rows: changes.chronology, label: 'Chronology' },
+            { rows: changes.evidence, label: 'Records' },
+            { rows: changes.damages, label: 'Damages' },
+          ]
+            .filter(g => g.rows.length > 0)
+            .map(g => (
+              <div key={g.label}>
+                <Label>{g.label} — what moved</Label>
+                <ul className="text-[14px] leading-[1.7] text-gray-800 list-disc pl-5 space-y-1 mb-4">
+                  {g.rows.map((m, i) => (
+                    <li key={i}>
+                      {m.what}
+                      <span className="block text-[12px] text-gray-500">
+                        was &ldquo;{m.from}&rdquo; \u2192 now &ldquo;{m.to}&rdquo;
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
 
           {changes.unresolved.length > 0 && (
             <>

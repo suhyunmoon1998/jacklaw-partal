@@ -14,6 +14,7 @@
  */
 
 import { FactualBrief, LedgerFact } from '@/lib/factualBrief'
+import { assumptionLog, evidenceStatusMap, submissionDigest } from '@/lib/submissionPackage'
 
 const H = ({ children }: { children: React.ReactNode }) => (
   <h3 className="font-sans text-[11px] font-bold uppercase tracking-[0.12em] text-gray-400 mt-10 mb-3 break-after-avoid">
@@ -85,8 +86,18 @@ function Fact({ f }: { f: LedgerFact }) {
   )
 }
 
-export default function FactualDocument({ brief }: { brief: FactualBrief }) {
+export default function FactualDocument({
+  brief,
+  ledger = [],
+}: {
+  brief: FactualBrief
+  /** The facts themselves, for the status map, the log and the digest. */
+  ledger?: LedgerFact[]
+}) {
   const missing = (key: string) => brief.absent.find(a => a.key === key)?.why
+  const statuses = evidenceStatusMap(ledger)
+  const assumptions = assumptionLog(ledger)
+  const digest = submissionDigest(ledger)
 
   return (
     <div className="bg-gray-100 px-0 sm:px-6 py-0 sm:py-6 print:bg-white print:p-0">
@@ -102,6 +113,26 @@ export default function FactualDocument({ brief }: { brief: FactualBrief }) {
             {brief.readOn ? ` · read ${new Date(brief.readOn).toLocaleDateString()}` : ''}
           </p>
         </header>
+
+        {/* Where the record stands, in the firm standard's own vocabulary.
+            The ledger keeps five statuses that mean these five things. */}
+        {ledger.length > 0 && (
+          <>
+            <H>Evidence status</H>
+            <table className="w-full text-[14px] text-gray-800 mb-1">
+              <tbody>
+                {statuses.map(s2 => (
+                  <tr key={s2.status} className="border-b border-gray-100 last:border-0">
+                    <td className="py-1.5 pr-4 font-sans text-[11px] font-bold uppercase tracking-wider text-gray-500">
+                      {s2.status}
+                    </td>
+                    <td className="py-1.5 tabular-nums w-16 text-right">{s2.count}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>
+        )}
 
         <H>Core story</H>
         {brief.coreStory.length > 0 ? (
@@ -308,6 +339,61 @@ export default function FactualDocument({ brief }: { brief: FactualBrief }) {
                     ))}
                   </ul>
                 </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        <H>Damages assumption log</H>
+        {/* What each input rests on, and the record that would replace it.
+            "Estimated" is not a disclosure; "estimated, and the pay stubs
+            would settle it" is. */}
+        {assumptions.length > 0 ? (
+          <table className="w-full text-[14px] leading-[1.6] text-gray-800 mb-3">
+            <tbody>
+              {assumptions.map((a, i) => (
+                <tr key={i} className="border-b border-gray-100 last:border-0 break-inside-avoid">
+                  <td className="py-2 pr-4 align-top w-44">
+                    <span className="font-sans font-semibold">{a.input}</span>
+                    <span
+                      className={`font-sans text-[10px] font-bold uppercase tracking-wider block ${
+                        a.basis === 'sourced' ? 'text-green-700' : 'text-gray-400'
+                      }`}
+                    >
+                      {a.basis}
+                    </span>
+                  </td>
+                  <td className="py-2 align-top">
+                    {a.wouldReplace ? (
+                      <span className="block">Would be replaced by: {a.wouldReplace}</span>
+                    ) : (
+                      <span className="block text-gray-400 italic">
+                        No record named that would settle it.
+                      </span>
+                    )}
+                    <span className="block text-[12px] text-gray-400">
+                      {a.facts.length} fact{a.facts.length === 1 ? '' : 's'} on file
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          <p className="text-[15px] text-gray-400 italic">
+            No fact on file is tagged to a damages input yet.
+          </p>
+        )}
+
+        <H>What she said</H>
+        {/* Her words and where she said them. No proposition, no conclusion —
+            the corpus says the digest carries neither. */}
+        <table className="w-full text-[14px] leading-[1.6] text-gray-800 mb-3">
+          <tbody>
+            {digest.map((d, i) => (
+              <tr key={i} className="border-b border-gray-100 last:border-0">
+                <td className="py-1.5 pr-4 align-top text-gray-500 w-72">{d.where}</td>
+                <td className="py-1.5 align-top">&ldquo;{d.said}&rdquo;</td>
               </tr>
             ))}
           </tbody>
