@@ -146,12 +146,24 @@ export default function CaseReading({ clientId, clientName }: { clientId: string
             whole case is put in one order and taken away. Opened rather than
             downloaded outright, because the attorney should see the page they
             are about to keep. */}
+        {/* Two sheets, kept apart the way the corpus keeps them: the record,
+            and the argument built on it. */}
+        {loaded && (
+          <a
+            href={`/admin/factual/${clientId}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="ml-auto text-xs font-semibold px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 hover:text-black transition-colors"
+          >
+            Open facts
+          </a>
+        )}
         {loaded && (
           <a
             href={`/admin/reading/${clientId}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="ml-auto text-xs font-semibold px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 hover:text-black transition-colors"
+            className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 hover:text-black transition-colors"
           >
             Open brief
           </a>
