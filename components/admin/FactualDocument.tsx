@@ -48,9 +48,31 @@ function Fact({ f }: { f: LedgerFact }) {
     <li className="mb-2">
       {f.proposition} <Status status={f.status} />
       {/* Her own words are evidence; the paraphrase above is the reusable
-          object. The corpus is explicit that one never erases the other. */}
-      {f.verbatim && (
-        <span className="block text-[13px] text-gray-600">&ldquo;{f.verbatim}&rdquo;</span>
+          object. The corpus is explicit that one never erases the other — so
+          where she answered in Korean the English rides alongside it and does
+          not replace it. The office reads case files in English; a deposition
+          quotes what she actually said. */}
+      {f.verbatimEnglish ? (
+        <>
+          <span className="block text-[13px] text-gray-700">
+            &ldquo;{f.verbatimEnglish}&rdquo;
+            <span className="font-sans text-[10px] uppercase tracking-wider text-gray-400">
+              {' '}
+              translated
+            </span>
+          </span>
+          <span className="block text-[13px] text-gray-500">
+            &ldquo;{f.verbatim}&rdquo;
+            <span className="font-sans text-[10px] uppercase tracking-wider text-gray-400">
+              {' '}
+              her words
+            </span>
+          </span>
+        </>
+      ) : (
+        f.verbatim && (
+          <span className="block text-[13px] text-gray-600">&ldquo;{f.verbatim}&rdquo;</span>
+        )
       )}
       <span className="block text-[12px] text-gray-400">
         {f.provenance.pinpoint}
@@ -102,7 +124,9 @@ export default function FactualDocument({ brief }: { brief: FactualBrief }) {
             ))}
           </ul>
         ) : (
-          <p className="text-[15px] text-gray-400 italic">{missing('facts')}</p>
+          <p className="text-[15px] text-gray-400 italic">
+            {missing('proof') ?? missing('facts')}
+          </p>
         )}
 
         <H>What cuts against</H>
@@ -112,8 +136,11 @@ export default function FactualDocument({ brief }: { brief: FactualBrief }) {
           <ul className="text-[15px] leading-[1.7] text-gray-800 list-disc pl-5 space-y-1">
             {brief.weaknesses.map((w, i) => (
               <li key={i}>
+                <span className="font-sans text-[10px] font-bold uppercase tracking-wider text-gray-400 block">
+                  {w.kind}
+                </span>
                 {w.what}
-                <span className="block text-[12px] text-gray-400">{w.from}</span>
+                {w.from && <span className="block text-[12px] text-gray-400">{w.from}</span>}
               </li>
             ))}
           </ul>
@@ -185,8 +212,16 @@ export default function FactualDocument({ brief }: { brief: FactualBrief }) {
                   {issue.disputed.map(f => (
                     <li key={f.id}>
                       {f.proposition}
-                      {f.verbatim && (
-                        <span className="block text-[13px] text-gray-600">&ldquo;{f.verbatim}&rdquo;</span>
+                      {(f.verbatimEnglish || f.verbatim) && (
+                        <span className="block text-[13px] text-gray-600">
+                          &ldquo;{f.verbatimEnglish || f.verbatim}&rdquo;
+                          {f.verbatimEnglish && (
+                            <span className="font-sans text-[10px] uppercase tracking-wider text-gray-400">
+                              {' '}
+                              translated
+                            </span>
+                          )}
+                        </span>
                       )}
                     </li>
                   ))}

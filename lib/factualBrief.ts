@@ -34,6 +34,8 @@ export interface LedgerFact {
   proposition: string
   /** The client's own words. Evidence; never replaced by the paraphrase. */
   verbatim: string
+  /** The same sentence in English when hers was not. '' when it already was. */
+  verbatimEnglish?: string
   status: string
   provenance: { kind: string; pinpoint: string; on: string }
   period?: string
@@ -80,7 +82,7 @@ export interface FactualBrief {
   absent: { key: string; why: string }[]
   coreStory: Cited[]
   strongestProof: LedgerFact[]
-  weaknesses: { what: string; from: string }[]
+  weaknesses: { what: string; from: string; kind: string }[]
   chronology: { when: string; what: string }[]
   issues: IssueFacts[]
   evidence: SpineRecord[]
@@ -109,6 +111,9 @@ export interface FactualBriefInput {
 
 const live = (f: LedgerFact) => !f.supersededBy
 
+/** The client id is on every fact reference and identical on every one. */
+export const shortIds = (s: string) => s.replace(/\bclient-\d+:/g, '')
+
 /**
  * Words that would make this the other document.
  *
@@ -134,15 +139,35 @@ export function legalConclusionsIn(brief: FactualBrief): { where: string; text: 
 }
 
 /**
- * How well proved a fact is, for ordering.
+ * Whether a fact is proof of anything, as opposed to true.
  *
- * Corroboration by something other than her own account is what the ledger
- * means by CONFIRMED, and it is what makes a fact worth leading with.
+ * "Strongest proof" first listed the client's name, her date of birth and her
+ * home address. They are facts, they are on file, and none of them proves
+ * anything about the case: with only one fact in the ledger corroborated, the
+ * ranking had nothing to sort by and fell back to the order the facts were
+ * written in, which begins with the intake's identity questions.
+ *
+ * So a fact is proof when something other than her own account supports it —
+ * corroboration, or the CONFIRMED status the ledger gives exactly that. Where
+ * the file has none, the section says so. A law office reading "strongest
+ * proof: the client's street address" learns less than one reading "nothing
+ * here is corroborated yet".
  */
+export function isProof(f: LedgerFact): boolean {
+  return (f.corroboration?.length ?? 0) > 0 || f.status.toUpperCase() === 'CONFIRMED'
+}
+
 export function proofWeight(f: LedgerFact): number {
   const status = f.status.toUpperCase()
   const base = status === 'CONFIRMED' ? 40 : status === 'REPORTED' ? 20 : status === 'INFERRED' ? 10 : 0
-  return base + Math.min((f.corroboration?.length ?? 0) * 10, 30) + (f.verbatim ? 3 : 0)
+  return (
+    base +
+    Math.min((f.corroboration?.length ?? 0) * 10, 30) +
+    // A fact that carries a damages input or an answer cutting against it is
+    // material; an identity answer is not.
+    ((f.damagesTags?.length ?? 0) > 0 ? 8 : 0) +
+    (f.contrary?.trim() ? 6 : 0)
+  )
 }
 
 export function buildFactualBrief(input: FactualBriefInput): FactualBrief {
@@ -151,6 +176,13 @@ export function buildFactualBrief(input: FactualBriefInput): FactualBrief {
   const note = (key: string, why: string) => absent.push({ key, why })
 
   if (facts.length === 0) note('facts', 'The answers have not been read into facts for this client yet.')
+  else if (!facts.some(isProof)) {
+    note(
+      'proof',
+      'Nothing on file is corroborated by anything other than the client\u2019s own account. ' +
+        'No record has been obtained yet, so every proposition below rests on what she said.'
+    )
+  }
   if (!input.spine) note('chronology', 'The chronology has not been built yet.')
 
   // ── issue by issue ───────────────────────────────────────────────────────
@@ -185,18 +217,27 @@ export function buildFactualBrief(input: FactualBriefInput): FactualBrief {
   }
 
   // ── what cuts against, all in one place ──────────────────────────────────
-  const weaknesses: { what: string; from: string }[] = []
+  const weaknesses: { what: string; from: string; kind: string }[] = []
   for (const f of facts) {
-    if (f.contrary?.trim()) weaknesses.push({ what: f.contrary.trim(), from: f.id })
+    if (f.contrary?.trim()) {
+      weaknesses.push({ what: f.contrary.trim(), from: shortIds(f.id), kind: 'Contrary fact' })
+    }
   }
   for (const c of input.spine?.restingOnTestimonyAlone ?? []) {
-    weaknesses.push({ what: `Rests on her word alone: ${c.note}`, from: (c.facts ?? []).join(', ') })
+    // Not all of these are corroboration problems. The spine files a
+    // self-contradiction here too, and prefixing every one of them "rests on
+    // her word alone" told the office that a contradiction was a proof gap.
+    const note = c.note ?? ''
+    const kind = /contradict|inconsisten|both|yet also|conflict/i.test(note)
+      ? 'Contradiction in her own answers'
+      : 'Rests on her word alone'
+    weaknesses.push({ what: note, from: shortIds((c.facts ?? []).join(', ')), kind })
   }
   for (const c of input.spine?.dateConflicts ?? []) {
-    if (c.what) weaknesses.push({ what: c.what, from: 'Date conflict' })
+    if (c.what) weaknesses.push({ what: c.what, from: '', kind: 'Date conflict' })
   }
   for (const a of input.spine?.anomalies ?? []) {
-    if (a.what) weaknesses.push({ what: a.what, from: 'Anomaly' })
+    if (a.what) weaknesses.push({ what: a.what, from: '', kind: 'Anomaly' })
   }
 
   return {
@@ -206,7 +247,7 @@ export function buildFactualBrief(input: FactualBriefInput): FactualBrief {
     readOn: input.readOn,
     absent,
     coreStory: input.spine?.coreStory ?? [],
-    strongestProof: [...facts].sort((a, b) => proofWeight(b) - proofWeight(a)).slice(0, 8),
+    strongestProof: facts.filter(isProof).sort((a, b) => proofWeight(b) - proofWeight(a)).slice(0, 8),
     weaknesses,
     chronology: (input.spine?.events ?? [])
       .map(e => ({ when: e.when ?? '', what: e.event ?? e.what ?? '' }))

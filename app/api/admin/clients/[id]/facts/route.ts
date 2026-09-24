@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
 import { isAdmin } from '@/lib/adminAuth'
+import { detectLanguage, machineTranslate } from '@/lib/machineTranslate'
 import { ExtractionInput, extractFacts } from '@/lib/factExtraction'
 import { getAssignmentDetail } from '@/lib/questionSets'
 import {
@@ -70,6 +71,19 @@ async function gather(clientId: string) {
   }
 }
 
+/**
+ * The same sentence in English, or '' when it already is.
+ *
+ * Empty rather than a copy, so a reader can tell a translation from an
+ * original at a glance and nothing in the document claims to be her words
+ * when it is not.
+ */
+async function inEnglish(text: string): Promise<string> {
+  const from = detectLanguage(text ?? '')
+  if (!from) return ''
+  return (await machineTranslate(text, from, 'en').catch(() => '')) || ''
+}
+
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   if (!isAdmin(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   try {
@@ -93,19 +107,37 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
        * a change is shown in her words, and the rest is the ledger's own
        * screen to display.
        */
-      snapshot: entries.map(e => ({
-        id: e.id,
-        proposition: e.proposition,
-        verbatim: e.verbatim,
-        status: e.status,
-        provenance: e.provenance,
-        supersededBy: e.supersededBy,
-        supersededWhy: e.supersededWhy,
-        // Who appears in the fact, and what it is tagged to — the Who's Who
-        // map is grouped from these rather than asked for separately.
-        actors: e.actors,
-        legalTags: e.legalTags,
-      })),
+      /**
+       * The whole fact, not a slice of it.
+       *
+       * This carried nine fields and the factual brief reads fifteen, so the
+       * corroboration on 60 facts, the contrary fact on 20, the damages tag
+       * on 68 and the open loop on 163 all arrived empty — and the brief drew
+       * the sections that depend on them as though the record had none.
+       */
+      snapshot: await Promise.all(
+        entries.map(async e => ({
+          id: e.id,
+          proposition: e.proposition,
+          verbatim: e.verbatim,
+          // Her own words are evidence and are never replaced. An English
+          // rendering rides alongside, because the office reads case files in
+          // English and half of this client's answers are in Korean.
+          verbatimEnglish: await inEnglish(e.verbatim),
+          status: e.status,
+          provenance: e.provenance,
+          period: e.period,
+          actors: e.actors,
+          location: e.location,
+          corroboration: e.corroboration,
+          contrary: e.contrary,
+          legalTags: e.legalTags,
+          damagesTags: e.damagesTags,
+          openLoop: e.openLoop,
+          supersededBy: e.supersededBy,
+          supersededWhy: e.supersededWhy,
+        }))
+      ),
     })
   } catch (err) {
     return NextResponse.json({ error: (err as Error).message }, { status: 500 })

@@ -2,8 +2,10 @@ import { describe, it, expect } from 'vitest'
 import {
   LedgerFact,
   buildFactualBrief,
+  isProof,
   legalConclusionsIn,
   proofWeight,
+  shortIds,
 } from '@/lib/factualBrief'
 
 /**
@@ -143,7 +145,88 @@ describe('what cuts against, all in one place', () => {
       })
     )
     expect(brief.weaknesses).toHaveLength(4)
-    expect(brief.weaknesses.some(w => w.what.includes('Rests on her word alone'))).toBe(true)
+    expect(brief.weaknesses.map(w => w.kind)).toEqual([
+      'Contrary fact',
+      'Rests on her word alone',
+      'Date conflict',
+      'Anomaly',
+    ])
+  })
+
+  it('does not call a contradiction a proof gap', () => {
+    // The spine files a self-contradiction under restingOnTestimonyAlone too.
+    // Labelling every one of them "rests on her word alone" told the office a
+    // contradiction was a corroboration problem.
+    const brief = buildFactualBrief(
+      input({
+        spine: {
+          restingOnTestimonyAlone: [
+            { facts: [], note: 'The meal-period answers contradict each other.' },
+            { facts: [], note: 'The office holds no time record for any of it.' },
+          ],
+        },
+      })
+    )
+    expect(brief.weaknesses.map(w => w.kind)).toEqual([
+      'Contradiction in her own answers',
+      'Rests on her word alone',
+    ])
+  })
+
+  it('takes the client id off the fact references', () => {
+    const brief = buildFactualBrief(
+      input({
+        spine: {
+          restingOnTestimonyAlone: [
+            { facts: ['client-1789103134380:f107', 'client-1789103134380:f109'], note: 'x' },
+          ],
+        },
+      })
+    )
+    expect(brief.weaknesses[0].from).toBe('f107, f109')
+    expect(shortIds('client-1789103134380:f068')).toBe('f068')
+  })
+})
+
+describe('what counts as proof', () => {
+  it('refuses a fact nothing but her own account supports', () => {
+    // "Strongest proof" first listed her name, her date of birth and her home
+    // address: with one corroborated fact in the ledger the ranking had
+    // nothing to sort by and fell back to the order the intake asks questions.
+    expect(isProof(fact({ status: 'REPORTED', corroboration: [] }))).toBe(false)
+    expect(isProof(fact({ status: 'CONFIRMED' }))).toBe(true)
+    expect(isProof(fact({ corroboration: ['punch records'] }))).toBe(true)
+  })
+
+  it('says so plainly when the file has no corroborated fact at all', () => {
+    const brief = buildFactualBrief(input({ ledger: [fact({ status: 'REPORTED' })] }))
+    expect(brief.strongestProof).toEqual([])
+    expect(brief.absent.find(a => a.key === 'proof')?.why).toContain('corroborated')
+  })
+
+  it('ranks a material fact above an identity answer', () => {
+    const material = fact({ corroboration: ['punch records'], damagesTags: ['rate'] })
+    const identity = fact({ corroboration: ['ID'] })
+    expect(proofWeight(material)).toBeGreaterThan(proofWeight(identity))
+  })
+})
+
+describe('an answer she gave in Korean', () => {
+  it('shows the English beside her words, and does not replace them', () => {
+    const brief = buildFactualBrief(
+      input({
+        ledger: [
+          fact({
+            status: 'CONFIRMED',
+            verbatim: '2시간 일찍 나와서 팁정리하라고 요구',
+            verbatimEnglish: 'Asked to come in two hours early to sort tips',
+          }),
+        ],
+      })
+    )
+    const f = brief.strongestProof[0]
+    expect(f.verbatim).toBe('2시간 일찍 나와서 팁정리하라고 요구')
+    expect(f.verbatimEnglish).toBe('Asked to come in two hours early to sort tips')
   })
 })
 
