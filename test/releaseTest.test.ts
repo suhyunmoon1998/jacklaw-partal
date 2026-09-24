@@ -164,9 +164,26 @@ describe('contrary evidence', () => {
 describe('an estimate written as a certainty', () => {
   it('knows a hedged figure from a bare one', () => {
     expect(readsAsEstimated('$770')).toBe(false)
+    expect(readsAsEstimated('44 hours')).toBe(false)
+    expect(readsAsEstimated('$12,400.00')).toBe(false)
     expect(readsAsEstimated('about $770')).toBe(true)
     expect(readsAsEstimated('$700–$850')).toBe(true)
     expect(readsAsEstimated('roughly 44 hours')).toBe(true)
+  })
+
+  it('accepts the shapes a real reading actually writes', () => {
+    // All four are from Dayeon Kim's brief. Every one was objected to by the
+    // first version of this, which knew hedge words and a dollar range and
+    // nothing else — so the office was told four times that its own carefully
+    // qualified arithmetic was unsafe, which is how a check gets ignored.
+    for (const figure of [
+      '34.6 / 43.4 / 52.0 unpaid hours; dollar value = hours x $R, rate not established',
+      '10.9 - 32.6 straight-time hours, most likely ~21.7 hrs x $R',
+      '~21.7 unpaid OT hours most likely; value = OT hrs x 1.5 x $R, rate not established',
+      '327R to 545R; at a rate still to be pulled from pay stubs. No dollar figure can be stated until R is established.',
+    ]) {
+      expect(readsAsEstimated(figure), figure.slice(0, 40)).toBe(true)
+    }
   })
 
   it('flags internally and blocks on the way out', () => {

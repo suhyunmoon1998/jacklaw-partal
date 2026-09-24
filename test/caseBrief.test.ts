@@ -54,10 +54,9 @@ describe('a section with nothing in it', () => {
   })
 })
 
-describe('reading how a claim stands', () => {
+describe('reading how an element stands', () => {
   it('tells support from its negation', () => {
     expect(readsAsStrong('supported')).toBe(true)
-    expect(readsAsStrong('partly supported')).toBe(true)
     // The trap: "not supported" contains "supported".
     expect(readsAsStrong('not supported on this record')).toBe(false)
     expect(readsAsStrong('unsupported')).toBe(false)
@@ -65,24 +64,90 @@ describe('reading how a claim stands', () => {
     expect(readsAsWeak('contradicted by her own answers')).toBe(true)
   })
 
+  it('does not call a partial result a strength', () => {
+    expect(readsAsStrong('partially supported')).toBe(false)
+    expect(readsAsWeak('partially supported')).toBe(false)
+  })
+
   it('counts a wording it cannot place as neither', () => {
     expect(readsAsStrong('needs authority')).toBe(false)
     expect(readsAsWeak('needs authority')).toBe(false)
+    expect(readsAsStrong('unknown')).toBe(false)
+  })
+})
+
+describe('where the strength of a case is actually written', () => {
+  it('reads the elements, not the claim heading', () => {
+    // Every claim on a real file came back "gaps to close" or "not raised by
+    // these facts". Reading strength off that left a case with eight
+    // supported elements showing nothing at all under "where it is strongest".
+    const brief = buildBrief(
+      base({
+        findings: [
+          finding({
+            claimId: 'meal-periods',
+            standing: 'gaps to close',
+            elements: [
+              { key: 'over-five-hours', state: 'supported', reasoning: '', wouldSettleIt: '' },
+              { key: 'no-thirty-minutes', state: 'contradicted', reasoning: '', wouldSettleIt: '' },
+              { key: 'provided-means-relieved', state: 'partially supported', reasoning: '', wouldSettleIt: '' },
+            ],
+          }),
+        ],
+      })
+    )
+    expect(brief.strengths).toEqual(['meal-periods · over-five-hours — supported'])
+    expect(brief.weaknesses).toEqual(['meal-periods · no-thirty-minutes — contradicted'])
+  })
+
+  it('takes the client id off a fact reference', () => {
+    const brief = buildBrief(
+      base({
+        findings: [
+          finding({ adverse: ['client-1789103134380:f069 — she got a meal break every day.'] }),
+        ],
+      })
+    )
+    expect(brief.weaknesses[0]).toBe('meal-periods — f069 — she got a meal break every day.')
+  })
+})
+
+describe('the chronology', () => {
+  it('reads the sentence off the field the spine writes it in', () => {
+    // The spine calls it `event`. Mapping `what` printed twenty-nine rows of
+    // a date and a blank.
+    const brief = buildBrief(
+      base({ spine: { events: [{ when: 'July 28, 2024', event: 'She started work.' }] } })
+    )
+    expect(brief.chronology.events).toEqual([
+      { when: 'July 28, 2024', what: 'She started work.' },
+    ])
+  })
+
+  it('drops a row that has a date and nothing to say', () => {
+    const brief = buildBrief(
+      base({ spine: { events: [{ when: 'Undated', event: '' }, { when: 'x', event: 'Something.' }] } })
+    )
+    expect(brief.chronology.events).toHaveLength(1)
   })
 })
 
 describe('strengths and weaknesses', () => {
-  it('keeps an adverse fact even under a supported claim', () => {
-    // A supported claim with a bad fact under it still has the bad fact, and
-    // burying it is how a firm is surprised at a deposition.
+  it('keeps an adverse fact even under a supported element', () => {
+    // A supported element with a bad fact under it still has the bad fact,
+    // and burying it is how a firm is surprised at a deposition.
     const brief = buildBrief(
       base({
         findings: [
-          finding({ standing: 'supported', adverse: ['She answered "0 days" for working through the meal.'] }),
+          finding({
+            standing: 'gaps to close',
+            elements: [{ key: 'relieved', state: 'supported', reasoning: '', wouldSettleIt: '' }],
+            adverse: ['She answered "0 days" for working through the meal.'],
+          }),
         ],
       })
     )
-    expect(brief.strengths).toHaveLength(1)
+    expect(brief.strengths).toEqual(['meal-periods · relieved — supported'])
     expect(brief.weaknesses).toEqual([
       'meal-periods — She answered "0 days" for working through the meal.',
     ])

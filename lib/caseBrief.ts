@@ -44,7 +44,8 @@ export interface WageOrderChoice {
 }
 
 export interface SpineReading {
-  events?: { id?: string; when?: string; what?: string }[]
+  /** `event` is what the spine calls the sentence; `what` is tolerated. */
+  events?: { id?: string; when?: string; event?: string; what?: string; whyItMatters?: string }[]
   coreStory?: Cited[]
   records?: SpineRecord[]
   restingOnTestimonyAlone?: Cited[]
@@ -145,25 +146,39 @@ export interface Brief {
 const has = <T,>(xs: T[] | undefined | null): xs is T[] => Array.isArray(xs) && xs.length > 0
 
 /**
- * Where one claim's assessment lands, for the strengths section.
+ * Where an assessment lands.
  *
- * The claims reading writes `standing` as free text, so this reads it rather
- * than switching on an enum that does not exist. Anything it cannot place
- * counts as neither a strength nor a weakness, which is the honest answer.
+ * Read off an ELEMENT's state, not a claim's standing. The claims reading
+ * writes standing as a heading — every claim on a real file came back either
+ * "gaps to close" or "not raised by these facts" — so reading strength from it
+ * produced a brief with nothing under "where it is strongest" on a case with
+ * eight supported elements. The state of an element is where the reading
+ * actually commits: supported, partially supported, contradicted, unknown,
+ * needs authority.
+ *
+ * Free text on purpose: this reads what the reading wrote rather than
+ * switching on an enum that does not exist. Anything it cannot place is
+ * neither, which is the honest answer.
  */
-export function readsAsStrong(standing: string): boolean {
-  const s = standing.toLowerCase()
+export function readsAsStrong(state: string): boolean {
+  const s = state.toLowerCase()
+  if (s.includes('partly') || s.includes('partially')) return false
   return s.includes('support') && !s.includes('not support') && !s.includes('unsupport')
 }
 
-export function readsAsWeak(standing: string): boolean {
-  const s = standing.toLowerCase()
+export function readsAsWeak(state: string): boolean {
+  const s = state.toLowerCase()
   return (
     s.includes('contradict') ||
     s.includes('not support') ||
     s.includes('unsupport') ||
     s.includes('insufficient')
   )
+}
+
+/** `client-1789103134380:f069` → `f069`. The prefix is on every one of them. */
+export function shortFact(s: string): string {
+  return s.replace(/\bclient-\d+:/g, '')
 }
 
 /**
@@ -234,12 +249,14 @@ export function buildBrief(input: BriefInput): Brief {
   const defenses: { claimId: string; defense: string }[] = []
 
   for (const f of input.findings) {
-    if (readsAsStrong(f.standing)) strengths.push(`${f.claimId} — ${f.standing}`)
-    if (readsAsWeak(f.standing)) weaknesses.push(`${f.claimId} — ${f.standing}`)
+    for (const el of f.elements) {
+      if (readsAsStrong(el.state)) strengths.push(`${f.claimId} · ${el.key} — ${el.state}`)
+      if (readsAsWeak(el.state)) weaknesses.push(`${f.claimId} · ${el.key} — ${el.state}`)
+    }
     if (f.defense) defenses.push({ claimId: f.claimId, defense: f.defense })
-    // An adverse fact is a weakness whatever the claim's overall standing is:
-    // a supported claim with a bad fact under it still has the bad fact.
-    for (const adverse of f.adverse) weaknesses.push(`${f.claimId} — ${adverse}`)
+    // An adverse fact is a weakness whatever the claim's elements say: a
+    // supported element with a bad fact under it still has the bad fact.
+    for (const adverse of f.adverse) weaknesses.push(shortFact(`${f.claimId} — ${adverse}`))
   }
 
   const missingInputs = [
@@ -261,7 +278,11 @@ export function buildBrief(input: BriefInput): Brief {
       baseline: a?.baseline ?? [],
     },
     chronology: {
-      events: (input.spine?.events ?? []).map(e => ({ when: e.when ?? '', what: e.what ?? '' })),
+      events: (input.spine?.events ?? [])
+        .map(e => ({ when: e.when ?? '', what: e.event ?? e.what ?? '' }))
+        // A row with a date and no sentence is a row that says nothing. It
+        // printed twenty-nine of them before the field name was checked.
+        .filter(e => e.what.trim()),
       coreStory: input.spine?.coreStory ?? [],
       conflicts: [
         ...(input.spine?.dateConflicts ?? []).map(c => c.what ?? '').filter(Boolean),

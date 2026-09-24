@@ -132,17 +132,40 @@ function onFile(): Set<string> {
 }
 
 /**
- * Words that keep an estimate an estimate.
+ * Whether a figure still reads as an estimate on the page.
  *
- * A figure the reading itself marked ESTIMATE or ASSUMPTION has to read as one
- * on the page. "About", "approximately", "roughly" and a range all do that;
- * a bare number does not, and a bare number is what a demand letter quotes.
+ * A number the reading itself marked ESTIMATE or ASSUMPTION has to arrive as
+ * one, because a bare number is what gets quoted into a demand letter.
+ *
+ * The first version of this only knew words — "about", "roughly" — and a
+ * dollar range, so it objected to every figure in a real brief, all four of
+ * which were carefully qualified: "34.6 / 43.4 / 52.0 unpaid hours", "10.9 -
+ * 32.6 straight-time hours, most likely ~21.7", "327R to 545R; at a rate still
+ * to be pulled from pay stubs". An office told four times that its own hedged
+ * arithmetic is unsafe stops reading the box, and then it is not a check at
+ * all. So the shapes count too: a range, a low/likely/high triple, a tilde,
+ * and a figure that names the input it is still missing.
  */
-const HEDGES =
-  /\b(about|approx|approximately|roughly|estimat|around|range|between|at least|up to|assum|unconfirmed|preliminary|subject to|if )/i
+const HEDGE_WORDS =
+  /\b(about|approx|approximately|roughly|estimat|around|range|between|at least|up to|assum|unconfirmed|preliminary|subject to|most likely|likely|if |cannot be (stated|computed)|not (yet )?(established|known|fixed)|still to be|to be (pulled|confirmed|established)|pending)/i
+
+/** 10.9 - 32.6 · $700–$850 · 327R to 545R */
+const RANGE = /\d[\d,.]*\s*(?:[–—-]|\bto\b)\s*[$]?\d/i
+/** 34.6 / 43.4 / 52.0 — the low, likely and high the methodology asks for. */
+const TRIPLE = /\d[\d,.]*\s*\/\s*\d[\d,.]*\s*\/\s*\d/
+/** ~21.7 */
+const TILDE = /~\s*\d/
+/** A formula standing in for a number it does not have: hours x $R */
+const UNRESOLVED_SYMBOL = /[x*]\s*\$?[A-Z]\b|\b\d+R\b/
 
 export function readsAsEstimated(text: string): boolean {
-  return HEDGES.test(text) || /[–—-]\s*\$|\$[\d,]+\s*[–—-]/.test(text)
+  return (
+    HEDGE_WORDS.test(text) ||
+    RANGE.test(text) ||
+    TRIPLE.test(text) ||
+    TILDE.test(text) ||
+    UNRESOLVED_SYMBOL.test(text)
+  )
 }
 
 /** Everything in the document that might carry a citation or a fact id. */
