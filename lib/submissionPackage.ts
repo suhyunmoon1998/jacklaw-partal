@@ -20,7 +20,7 @@
  * and the pay stubs would settle it" is.
  */
 
-import { LedgerFact } from '@/lib/factualBrief'
+import { LedgerFact, independentCorroboration } from '@/lib/factualBrief'
 
 /** The standard's five labels. The ledger's five ideas, said its way. */
 export type EvidenceStatus =
@@ -43,7 +43,10 @@ export function evidenceStatus(f: LedgerFact): EvidenceStatus {
   if (s === 'DISPUTED') return 'DISPUTED'
   if (s === 'UNKNOWN') return 'UNKNOWN / REQUIRES FOUNDATION'
   if (s === 'CONFIRMED') return 'ESTABLISHED'
-  if ((f.corroboration?.length ?? 0) > 0) return 'SUPPORTED'
+  // SUPPORTED means something other than her own account supports it. A fact
+  // that only agrees with her other answers is still her contention, and
+  // labelling it SUPPORTED tells a law office it has evidence it does not.
+  if (independentCorroboration(f).length > 0) return 'SUPPORTED'
   // INFERRED included: an inference is not a confirmed fact, and the corpus
   // requires it labelled rather than promoted.
   return 'PARTY CONTENTION / TESTIMONY'
@@ -107,7 +110,7 @@ export function assumptionLog(ledger: LedgerFact[]): AssumptionEntry[] {
       const s = f.status.toUpperCase()
       // The strongest basis on file wins: one corroborated fact makes the
       // input sourced however many "I don't know" answers sit beside it.
-      if (s === 'CONFIRMED' || (f.corroboration?.length ?? 0) > 0) entry.basis = 'sourced'
+      if (s === 'CONFIRMED' || independentCorroboration(f).length > 0) entry.basis = 'sourced'
       else if (s === 'REPORTED' && entry.basis !== 'sourced') entry.basis = 'client testimony'
       else if (s === 'INFERRED' && entry.basis === 'not established') entry.basis = 'estimate'
 

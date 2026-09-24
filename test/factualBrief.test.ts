@@ -2,7 +2,9 @@ import { describe, it, expect } from 'vitest'
 import {
   LedgerFact,
   buildFactualBrief,
+  independentCorroboration,
   isProof,
+  isSelfReference,
   legalConclusionsIn,
   proofWeight,
   shortIds,
@@ -106,6 +108,15 @@ describe('issue by issue', () => {
       'Obtain the punch records for Feb–Jul 2025.',
     ])
   })
+
+  it('keeps the open list to the smallest set', () => {
+    // Sixty lines under one heading is the problem the reader had before
+    // anybody wrote it down.
+    const many = Array.from({ length: 30 }, (_, i) =>
+      fact({ id: `f${i}`, legalTags: ['overtime'], openLoop: `Missing thing ${i}` })
+    )
+    expect(buildFactualBrief(input({ ledger: many })).issues[0].open).toHaveLength(8)
+  })
 })
 
 describe('damages facts, and only facts', () => {
@@ -188,6 +199,49 @@ describe('what cuts against, all in one place', () => {
   })
 })
 
+describe('corroboration that is not corroboration', () => {
+  it('knows the intake pointing back at itself', () => {
+    // Every one of the 91 corroboration entries on a real file is one of
+    // these. Not one names a document, a witness or a record.
+    for (const v of [
+      'f068',
+      'F-SCHED-005',
+      'f_m2p_019',
+      'm2_meal_redone — \'This did not happen\'',
+      'm2_p_told_who',
+    ]) {
+      expect(isSelfReference(v), v).toBe(true)
+    }
+  })
+
+  it('knows a record when one finally arrives', () => {
+    for (const v of ['Punch records for Feb–Jul 2025', 'The tip notebook', 'Pay stubs']) {
+      expect(isSelfReference(v), v).toBe(false)
+    }
+    expect(independentCorroboration(fact({ corroboration: ['f068', 'Pay stubs'] }))).toEqual([
+      'Pay stubs',
+    ])
+  })
+
+  it('does not let her own answers make a fact proof', () => {
+    // Calling this file's 53 self-consistent facts "SUPPORTED" tells a law
+    // office it has evidence it does not have.
+    expect(isProof(fact({ status: 'REPORTED', corroboration: ['f068', 'F-SCHED-005'] }))).toBe(false)
+    expect(isProof(fact({ status: 'REPORTED', corroboration: ['Punch records'] }))).toBe(true)
+  })
+
+  it('keeps the consistency, filed as consistency', () => {
+    const brief = buildFactualBrief(
+      input({
+        ledger: [fact({ legalTags: ['overtime'], corroboration: ['f068'] })],
+      })
+    )
+    const issue = brief.issues[0]
+    expect(issue.corroborated).toEqual([])
+    expect(issue.consistentWith).toHaveLength(1)
+  })
+})
+
 describe('what counts as proof', () => {
   it('refuses a fact nothing but her own account supports', () => {
     // "Strongest proof" first listed her name, her date of birth and her home
@@ -196,6 +250,7 @@ describe('what counts as proof', () => {
     expect(isProof(fact({ status: 'REPORTED', corroboration: [] }))).toBe(false)
     expect(isProof(fact({ status: 'CONFIRMED' }))).toBe(true)
     expect(isProof(fact({ corroboration: ['punch records'] }))).toBe(true)
+    expect(isProof(fact({ corroboration: ['f068'] }))).toBe(false)
   })
 
   it('says so plainly when the file has no corroborated fact at all', () => {
@@ -206,7 +261,7 @@ describe('what counts as proof', () => {
 
   it('ranks a material fact above an identity answer', () => {
     const material = fact({ corroboration: ['punch records'], damagesTags: ['rate'] })
-    const identity = fact({ corroboration: ['ID'] })
+    const identity = fact({ corroboration: ['a government ID'] })
     expect(proofWeight(material)).toBeGreaterThan(proofWeight(identity))
   })
 })
@@ -240,6 +295,20 @@ describe('a superseded fact', () => {
 })
 
 describe('a section with nothing in it', () => {
+  it('names what a contrary fact cuts at, not only the reference', () => {
+    const brief = buildFactualBrief(
+      input({
+        ledger: [
+          fact({
+            proposition: 'She usually worked 6.5 to 7 hours a day.',
+            contrary: 'F-SCHED-005 (Friday/Saturday shifts imply 7.5 hours).',
+          }),
+        ],
+      })
+    )
+    expect(brief.weaknesses[0].against).toBe('She usually worked 6.5 to 7 hours a day.')
+  })
+
   it('says why', () => {
     const brief = buildFactualBrief(input({ ledger: [], spine: null }))
     expect(brief.absent.map(a => a.key)).toEqual(['facts', 'chronology'])

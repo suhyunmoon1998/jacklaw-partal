@@ -57,6 +57,8 @@ export interface IssueFacts {
   account: LedgerFact[]
   /** Facts something other than her account supports. */
   corroborated: LedgerFact[]
+  /** Facts her own other answers agree with. Consistency, not corroboration. */
+  consistentWith: LedgerFact[]
   /** What cuts against, kept with the issue rather than in a separate file. */
   harmful: { fact: LedgerFact; contrary: string }[]
   /** Answers that disagree and were both kept. */
@@ -82,7 +84,7 @@ export interface FactualBrief {
   absent: { key: string; why: string }[]
   coreStory: Cited[]
   strongestProof: LedgerFact[]
-  weaknesses: { what: string; from: string; kind: string }[]
+  weaknesses: { what: string; from: string; kind: string; against?: string }[]
   chronology: { when: string; what: string }[]
   issues: IssueFacts[]
   evidence: SpineRecord[]
@@ -113,6 +115,42 @@ const live = (f: LedgerFact) => !f.supersededBy
 
 /** The client id is on every fact reference and identical on every one. */
 export const shortIds = (s: string) => s.replace(/\bclient-\d+:/g, '')
+
+/**
+ * A corroboration entry that points back into the same intake.
+ *
+ * The extraction fills `corroboration` with whatever supports a fact, and on
+ * a file with no records in it that is always another of her own answers: a
+ * fact id, or the id of the question she answered. Of 91 entries on Dayeon
+ * Kim's ledger, 91 are internal and none names a document, a witness or a
+ * record.
+ *
+ * That is worth having — it is internal consistency, and inconsistency is
+ * what the office most needs to see — but the corpus defines corroboration as
+ * support from something OTHER than the client's own account, and calling
+ * this file 53 facts "SUPPORTED" tells a law office a third of it is backed
+ * by evidence when none of it is.
+ */
+export function isSelfReference(entry: string): boolean {
+  const s = entry.trim()
+  // f068 · F-SCHED-005 · f_m2p_019 · m2_meal_redone — 'This did not happen'
+  return (
+    // F-SCHED-005 carries hyphens inside the code, not only after the F.
+    /^[fF][-_]?[A-Za-z0-9_-]*\d/.test(s) ||
+    /^m2_|^[a-z_]+ (?:—|-) /.test(s) ||
+    /^[a-z][a-z0-9_]*$/.test(s)
+  )
+}
+
+/** Corroboration by something other than her own answers. */
+export function independentCorroboration(f: LedgerFact): string[] {
+  return (f.corroboration ?? []).filter(c => c.trim() && !isSelfReference(c))
+}
+
+/** Her other answers that agree with this one. Consistency, not proof. */
+export function selfCorroboration(f: LedgerFact): string[] {
+  return (f.corroboration ?? []).filter(c => c.trim() && isSelfReference(c))
+}
 
 /**
  * Words that would make this the other document.
@@ -154,7 +192,7 @@ export function legalConclusionsIn(brief: FactualBrief): { where: string; text: 
  * here is corroborated yet".
  */
 export function isProof(f: LedgerFact): boolean {
-  return (f.corroboration?.length ?? 0) > 0 || f.status.toUpperCase() === 'CONFIRMED'
+  return independentCorroboration(f).length > 0 || f.status.toUpperCase() === 'CONFIRMED'
 }
 
 export function proofWeight(f: LedgerFact): number {
@@ -162,7 +200,7 @@ export function proofWeight(f: LedgerFact): number {
   const base = status === 'CONFIRMED' ? 40 : status === 'REPORTED' ? 20 : status === 'INFERRED' ? 10 : 0
   return (
     base +
-    Math.min((f.corroboration?.length ?? 0) * 10, 30) +
+    Math.min(independentCorroboration(f).length * 10, 30) +
     // A fact that carries a damages input or an answer cutting against it is
     // material; an identity answer is not.
     ((f.damagesTags?.length ?? 0) > 0 ? 8 : 0) +
@@ -191,16 +229,26 @@ export function buildFactualBrief(input: FactualBriefInput): FactualBrief {
     for (const tag of f.legalTags ?? []) {
       let issue = byIssue.get(tag)
       if (!issue) {
-        issue = { issue: tag, account: [], corroborated: [], harmful: [], disputed: [], open: [] }
+        issue = {
+          issue: tag,
+          account: [],
+          corroborated: [],
+          consistentWith: [],
+          harmful: [],
+          disputed: [],
+          open: [],
+        }
         byIssue.set(tag, issue)
       }
       issue.account.push(f)
-      if ((f.corroboration?.length ?? 0) > 0) issue.corroborated.push(f)
+      if (independentCorroboration(f).length > 0) issue.corroborated.push(f)
+      else if (selfCorroboration(f).length > 0) issue.consistentWith.push(f)
       if (f.contrary?.trim()) issue.harmful.push({ fact: f, contrary: f.contrary.trim() })
       if (f.status.toUpperCase() === 'DISPUTED') issue.disputed.push(f)
-      if (f.openLoop?.trim() && !issue.open.includes(f.openLoop.trim())) {
-        issue.open.push(f.openLoop.trim())
-      }
+      // The smallest set the corpus asks for. Sixty lines under one heading
+      // is the problem the reader had before anybody wrote it down.
+      const loop = f.openLoop?.trim()
+      if (loop && !issue.open.includes(loop) && issue.open.length < 8) issue.open.push(loop)
     }
   }
 
@@ -217,10 +265,17 @@ export function buildFactualBrief(input: FactualBriefInput): FactualBrief {
   }
 
   // ── what cuts against, all in one place ──────────────────────────────────
-  const weaknesses: { what: string; from: string; kind: string }[] = []
+  const weaknesses: { what: string; from: string; kind: string; against?: string }[] = []
   for (const f of facts) {
     if (f.contrary?.trim()) {
-      weaknesses.push({ what: f.contrary.trim(), from: shortIds(f.id), kind: 'Contrary fact' })
+      // The field holds the thing that cuts, not the thing it cuts at. Without
+      // the proposition beside it the section reads as a list of codes.
+      weaknesses.push({
+        what: f.contrary.trim(),
+        against: f.proposition,
+        from: shortIds(f.id),
+        kind: 'Contrary fact',
+      })
     }
   }
   for (const c of input.spine?.restingOnTestimonyAlone ?? []) {

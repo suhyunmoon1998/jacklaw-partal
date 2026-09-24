@@ -170,7 +170,12 @@ export default function FactualDocument({
                 <span className="font-sans text-[10px] font-bold uppercase tracking-wider text-gray-400 block">
                   {w.kind}
                 </span>
-                {w.what}
+                {/* What it cuts at, then what cuts. The field holds only the
+                    second, and on its own it reads as a list of codes. */}
+                {w.against && (
+                  <span className="block text-gray-900">{w.against}</span>
+                )}
+                <span className="block text-gray-700">{w.what}</span>
                 {w.from && <span className="block text-[12px] text-gray-400">{w.from}</span>}
               </li>
             ))}
@@ -208,6 +213,20 @@ export default function FactualDocument({
                 <Fact key={f.id} f={f} />
               ))}
             </ul>
+
+            {issue.consistentWith.length > 0 && (
+              <>
+                {/* Internal consistency, which is worth seeing and is not
+                    corroboration. Nothing in this file is corroborated by a
+                    record yet. */}
+                <Sub>Consistent with her other answers</Sub>
+                <ul className="text-[14px] leading-[1.7] text-gray-800 list-disc pl-5">
+                  {issue.consistentWith.slice(0, 5).map(f => (
+                    <li key={f.id}>{f.proposition}</li>
+                  ))}
+                </ul>
+              </>
+            )}
 
             {issue.corroborated.length > 0 && (
               <>
@@ -262,7 +281,7 @@ export default function FactualDocument({
 
             {issue.open.length > 0 && (
               <>
-                <Sub>Still missing</Sub>
+                <Sub>Still missing — the first {issue.open.length}</Sub>
                 <ul className="text-[14px] leading-[1.7] text-gray-800 list-disc pl-5">
                   {issue.open.map((o, i) => (
                     <li key={i}>{o}</li>
