@@ -18,6 +18,7 @@ import { Brief, SECTION_ORDER, SECTION_TITLE, SectionKey } from '@/lib/caseBrief
 import { Problem } from '@/lib/releaseTest'
 import { Changes, nothingChanged } from '@/lib/briefChanges'
 import { missingInformation } from '@/lib/missingInformation'
+import { audienceRequests } from '@/lib/audienceRequests'
 
 function Heading({ children }: { children: React.ReactNode }) {
   return (
@@ -412,6 +413,57 @@ function Body({
             </ul>
           </>
         )}
+        {/* The same gaps, put to whoever can actually close them. Drafts to
+            edit and serve — nothing here is filing-ready. */}
+        {(() => {
+          const asked = audienceRequests(brief)
+          return (
+            <>
+              {asked.witness.length > 0 && (
+                <>
+                  <Label>To put to a witness</Label>
+                  <ul className="text-[14px] leading-[1.7] text-gray-800 list-disc pl-5 space-y-2 mb-4">
+                    {asked.witness.map((r, i) => (
+                      <li key={i}>
+                        {r.text}
+                        <span className="block text-[12px] text-gray-500">{r.because}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+              {asked.discovery.length > 0 && (
+                <>
+                  <Label>To put to the other side — drafts</Label>
+                  <ul className="text-[14px] leading-[1.7] text-gray-800 list-disc pl-5 space-y-2 mb-4">
+                    {asked.discovery.map((r, i) => (
+                      <li key={i}>
+                        {r.text}
+                        <span className="block text-[12px] text-gray-500">
+                          {r.to} · {r.because}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+              {asked.attorney.length > 0 && (
+                <>
+                  <Label>For the attorney to settle</Label>
+                  <ul className="text-[14px] leading-[1.7] text-gray-800 list-disc pl-5 space-y-2 mb-4">
+                    {asked.attorney.map((r, i) => (
+                      <li key={i}>
+                        {r.text}
+                        <span className="block text-[12px] text-gray-500">{r.because}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+            </>
+          )
+        })()}
+
         {brief.evidence.length > 0 && (
           <>
             <Label>Records to obtain</Label>
