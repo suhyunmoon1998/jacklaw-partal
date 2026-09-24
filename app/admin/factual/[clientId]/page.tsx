@@ -120,6 +120,12 @@ export default function FactualSheetPage() {
             Save as PDF
           </button>
         </div>
+        {/* The button opens the print dialog; it does not download. Said here,
+            as the case brief already says it, because "Save as PDF" alone
+            reads as a download that silently never arrives. */}
+        <p className="mx-auto w-full max-w-[52rem] px-6 pb-2 text-[11px] text-gray-400">
+          Choose “Save as PDF” as the destination in the print dialog to keep a copy.
+        </p>
       </div>
 
       {error && (

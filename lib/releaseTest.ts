@@ -31,7 +31,7 @@
  * on the other, and nothing here decides which a document is — the caller says.
  */
 
-import { Brief } from '@/lib/caseBrief'
+import { Brief, shortFact } from '@/lib/caseBrief'
 import { available } from '@/lib/authority'
 
 export type Audience = 'internal' | 'external'
@@ -284,9 +284,16 @@ export function releaseTest(
   // Contrary evidence has to survive the assembly. A claim whose reading
   // recorded an adverse fact, in a document that does not carry it, is the
   // failure this clause exists for.
+  //
+  // Compared with the client prefix stripped from both sides. buildBrief
+  // writes each adverse fact into the weaknesses through shortFact, so
+  // `client-1789103134380:f069` arrives as `f069`; matching the raw text
+  // against that found none of them, and a real file was marked "not to be
+  // sent out" for 91 adverse facts that were all on the page.
   for (const f of brief.claims) {
     for (const adverse of f.adverse) {
-      if (brief.weaknesses.some(w => w.includes(adverse))) continue
+      const said = shortFact(adverse)
+      if (brief.weaknesses.some(w => shortFact(w).includes(said))) continue
       problems.push({
         rule: 'hidden contrary evidence',
         severity: 'block',

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { Brief } from '@/lib/caseBrief'
+import { Brief, buildBrief } from '@/lib/caseBrief'
 import { bareFactId, blocked, citationsIn, factIdsIn, readsAsEstimated, releaseTest } from '@/lib/releaseTest'
 
 /**
@@ -158,6 +158,27 @@ describe('contrary evidence', () => {
       }),
       LEDGER
     )
+    expect(problems.filter(p => p.rule === 'hidden contrary evidence')).toEqual([])
+  })
+
+  it('finds an adverse fact the brief carried with its client prefix stripped', () => {
+    // The shape of a real reading: the adverse line cites a prefixed id, and
+    // buildBrief writes it into the weaknesses without the prefix.
+    const adverse = 'client-1789103134380:f069 — she received a meal break on every day of five hours or more.'
+    const assembled = buildBrief({
+      clientName: 'Dayeon Kim',
+      caseType: 'Wage & Hour',
+      analysis: null,
+      findings: [{ claimId: 'meal-periods', standing: 'gaps to close', elements: [], adverse: [adverse], defense: '' }],
+      wageOrder: null,
+      spine: null,
+      pendingQuestions: [],
+      factCount: 1,
+      readOn: null,
+      stale: false,
+      staleStages: [],
+    })
+    const problems = releaseTest(assembled, { factIds: new Set() }, 'internal')
     expect(problems.filter(p => p.rule === 'hidden contrary evidence')).toEqual([])
   })
 })
