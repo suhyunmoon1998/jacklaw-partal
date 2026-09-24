@@ -25,6 +25,7 @@
 
 import { Analysis, Issue } from '@/lib/caseAnalysisShape'
 import { Cited, SpineRecord } from '@/lib/evidenceSpine'
+import { FactForPeople, Person, whosWho } from '@/lib/whosWho'
 
 /** One claim as the claims reading produced it. */
 export interface Finding {
@@ -64,6 +65,12 @@ export interface BriefInput {
   spine: SpineReading | null
   /** Questions written and waiting for somebody to approve them. */
   pendingQuestions: { text: string; why?: string }[]
+  /**
+   * The ledger, for the people in it. The corpus asks for a witness map built
+   * from who appears in the facts (sec. 10), and every fact already names its
+   * actors — so this is grouped, not asked for a second time.
+   */
+  ledger?: FactForPeople[]
   factCount: number
   readOn: string | null
   /** The facts moved since the readings were taken. */
@@ -83,6 +90,7 @@ export interface BriefSection {
 export const SECTION_ORDER = [
   'overview',
   'facts',
+  'people',
   'claims',
   'strengths',
   'damages',
@@ -94,6 +102,7 @@ export type SectionKey = (typeof SECTION_ORDER)[number]
 export const SECTION_TITLE: Record<SectionKey, string> = {
   overview: 'Case overview',
   facts: 'Material facts and chronology',
+  people: 'Who\u2019s Who \u2014 what each person knows',
   claims: 'Claim-by-claim assessment',
   strengths: 'Strengths, weaknesses and anticipated defenses',
   damages: 'Damages and missing inputs',
@@ -138,6 +147,8 @@ export interface Brief {
   }
   questions: { text: string; why?: string }[]
   evidence: SpineRecord[]
+  /** Who's Who — people linked to what they personally know. */
+  people: Person[]
   review: ReviewItem[]
   /** Null until readings are kept rather than replaced — see the file comment. */
   changes: string | null
@@ -240,6 +251,9 @@ export function buildBrief(input: BriefInput): Brief {
   if (!a) note('damages', 'The damages reading has not been run for this client yet.')
   if (!has(input.findings)) note('claims', 'The claims reading has not been run for this client yet.')
   if (!input.spine) note('facts', 'The chronology has not been built yet.')
+  if (!has(input.ledger)) {
+    note('people', 'The fact ledger has not been read for this client yet, so there is nobody to map.')
+  }
   if (!has(input.pendingQuestions)) {
     note('questions', 'No round of follow-up questions is waiting for approval.')
   }
@@ -305,6 +319,7 @@ export function buildBrief(input: BriefInput): Brief {
     // Only what the office does not already hold: a list that includes the
     // documents already in the file is a list nobody acts on.
     evidence: (input.spine?.records ?? []).filter(r => !r.inHand),
+    people: whosWho(input.ledger ?? [], input.clientName),
     review: reviewItems(input),
     changes: null,
   }

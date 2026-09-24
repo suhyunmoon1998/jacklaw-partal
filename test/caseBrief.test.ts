@@ -48,6 +48,9 @@ describe('a section with nothing in it', () => {
         findings: [finding()],
         spine: { events: [] },
         pendingQuestions: [{ text: 'When did that start?' }],
+        ledger: [
+          { id: 'f001', proposition: 'A manager gave the instruction.', status: 'REPORTED', actors: ['manager'] },
+        ],
       })
     )
     expect(brief.absent).toHaveLength(0)

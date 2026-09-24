@@ -24,6 +24,7 @@ const brief = (over: Partial<Brief> = {}): Brief => ({
   damages: { issues: [], totals: null, drivers: '', doubleCounting: [], missingInputs: [] },
   questions: [],
   evidence: [],
+  people: [],
   review: [],
   changes: null,
   ...over,

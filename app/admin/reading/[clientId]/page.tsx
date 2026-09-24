@@ -127,6 +127,14 @@ export default function ReadingSheetPage() {
     wageOrder: (reading?.wageOrder as Parameters<typeof buildBrief>[0]['wageOrder']) ?? null,
     spine: (reading?.spine as Parameters<typeof buildBrief>[0]['spine']) ?? null,
     pendingQuestions: questions,
+    // The people map is grouped from the facts the ledger already holds.
+    ledger: ledger.map(f => ({
+      id: f.id,
+      proposition: f.proposition,
+      status: f.status,
+      actors: (f as unknown as { actors?: string[] }).actors ?? [],
+      legalTags: (f as unknown as { legalTags?: string[] }).legalTags ?? [],
+    })),
     factCount: facts,
     readOn: updatedAt,
     stale,

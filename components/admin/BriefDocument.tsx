@@ -230,6 +230,45 @@ function Body({
     )
   }
 
+  if (section === 'people') {
+    return (
+      <>
+        {/* Built from who appears in the facts, not asked for separately. A
+            role word is kept as a role word: "boss" and "unnamed manager or
+            lead" may be one person or two, and folding them would put a name
+            on a deposition notice nobody ever gave. */}
+        <table className="w-full text-[14px] leading-[1.6] text-gray-800 mb-3">
+          <tbody>
+            {brief.people.map((p, i) => (
+              <tr key={i} className="border-b border-gray-100 last:border-0 break-inside-avoid">
+                <td className="py-2 pr-4 align-top w-56">
+                  <span className="font-sans font-semibold">{p.name}</span>
+                  <span className="font-sans text-[10px] font-bold uppercase tracking-wider text-gray-400 block">
+                    {p.alignment}
+                    {p.kind !== 'individual' ? ` \u00b7 ${p.kind}` : ''}
+                    {p.identified ? '' : ' \u00b7 not identified'}
+                  </span>
+                </td>
+                <td className="py-2 align-top">
+                  <span className="block">
+                    Knows {p.facts.length} fact{p.facts.length === 1 ? '' : 's'} firsthand
+                    {p.knowsAbout.length > 0 ? ` \u00b7 ${p.knowsAbout.join(', ')}` : ''}
+                  </span>
+                  <span className="block text-[13px] text-gray-500">{p.nextStep}</span>
+                  {p.aliases.length > 0 && (
+                    <span className="block text-[12px] text-gray-400">
+                      also written as {p.aliases.join(', ')}
+                    </span>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </>
+    )
+  }
+
   if (section === 'claims') {
     return (
       <>

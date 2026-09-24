@@ -101,6 +101,10 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
         provenance: e.provenance,
         supersededBy: e.supersededBy,
         supersededWhy: e.supersededWhy,
+        // Who appears in the fact, and what it is tagged to — the Who's Who
+        // map is grouped from these rather than asked for separately.
+        actors: e.actors,
+        legalTags: e.legalTags,
       })),
     })
   } catch (err) {
