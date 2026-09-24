@@ -17,6 +17,7 @@
 import { Brief, SECTION_ORDER, SECTION_TITLE, SectionKey } from '@/lib/caseBrief'
 import { Problem } from '@/lib/releaseTest'
 import { Changes, nothingChanged } from '@/lib/briefChanges'
+import { missingInformation } from '@/lib/missingInformation'
 
 function Heading({ children }: { children: React.ReactNode }) {
   return (
@@ -333,8 +334,32 @@ function Body({
   }
 
   if (section === 'questions') {
+    const missing = missingInformation(brief)
     return (
       <>
+        {/* The short ranked list, before the long ones. Ten at most, each
+            saying what is missing, why it matters, who holds it and how the
+            office gets it — the four things somebody needs to act. */}
+        {missing.length > 0 && (
+          <>
+            <Label>Most important missing information</Label>
+            <ol className="text-[15px] leading-[1.75] text-gray-800 list-decimal pl-5 space-y-2 mb-5">
+              {missing.map((m, i) => (
+                <li key={i}>
+                  <strong className="font-semibold">{m.what}</strong>
+                  {m.why && <span className="block text-[13px] text-gray-600">{m.why}</span>}
+                  <span className="block text-[13px] text-gray-500">
+                    {m.source || 'Holder not named by the reading'} ·{' '}
+                    <span className="font-sans uppercase tracking-wider text-[10px] font-bold">
+                      {m.method}
+                    </span>
+                  </span>
+                </li>
+              ))}
+            </ol>
+          </>
+        )}
+
         {brief.questions.length > 0 && (
           <>
             <Label>Waiting to be approved and sent</Label>
