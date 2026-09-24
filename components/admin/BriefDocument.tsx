@@ -46,6 +46,23 @@ const P = ({ children }: { children: React.ReactNode }) => (
   <p className="text-[15px] leading-[1.75] text-gray-800 mb-3">{children}</p>
 )
 
+/**
+ * One kept version of the brief, as the history lists it.
+ *
+ * Declared here rather than imported from lib/briefHistory, which hashes with
+ * node's crypto and must not be pulled into the browser bundle.
+ */
+export interface VersionLine {
+  takenAt: string
+  readOn: string | null
+  /** Why it was kept: opened, or taken just before something replaced it. */
+  reason: string
+  factCount: number
+  /** One line: what this version changed from the one before it. */
+  summary: string
+  changes: Changes | null
+}
+
 const Bullets = ({ items }: { items: string[] }) => (
   <ul className="text-[15px] leading-[1.75] text-gray-800 list-disc pl-5 space-y-1 mb-3">
     {items.map((t, i) => (
@@ -58,11 +75,14 @@ export default function BriefDocument({
   brief,
   problems = [],
   changes = null,
+  versions,
   defences = [],
 }: {
   brief: Brief
   /** What moved since the last reading. Null on a first reading. */
   changes?: Changes | null
+  /** Every version kept, newest first. Undefined while loading; null if it could not load. */
+  versions?: VersionLine[] | null
   /** The other side's position and this office's answer, paired. */
   defences?: DefenceRecord[]
   /**
@@ -154,7 +174,7 @@ export default function BriefDocument({
               {missing ? (
                 <Absent why={missing} />
               ) : (
-                <Body brief={brief} section={key} changes={changes} defences={defences} />
+                <Body brief={brief} section={key} changes={changes} versions={versions} defences={defences} />
               )}
             </section>
           )
@@ -168,11 +188,13 @@ function Body({
   brief,
   section,
   changes,
+  versions,
   defences,
 }: {
   brief: Brief
   section: SectionKey
   changes: Changes | null
+  versions: VersionLine[] | null | undefined
   defences: DefenceRecord[]
 }) {
   if (section === 'overview') {
@@ -682,7 +704,7 @@ function Body({
                     <li key={i}>
                       {m.what}
                       <span className="block text-[12px] text-gray-500">
-                        was &ldquo;{m.from}&rdquo; \u2192 now &ldquo;{m.to}&rdquo;
+                        was &ldquo;{m.from}&rdquo; &rarr; now &ldquo;{m.to}&rdquo;
                       </span>
                     </li>
                   ))}
@@ -708,6 +730,42 @@ function Body({
             </>
           )}
         </>
+      )}
+
+      {/* Every version kept, not only the last. "What did we have on file when
+          we told the client that" is answered here, not by memory. */}
+      <Label>Version history</Label>
+      {versions === undefined ? (
+        <Absent why="Loading the earlier versions…" />
+      ) : versions === null ? (
+        <Absent why="The history of earlier versions could not be loaded." />
+      ) : versions.length === 0 ? (
+        <Absent why="No version of this brief has been kept yet." />
+      ) : (
+        <ol className="text-[14px] leading-[1.7] text-gray-800 space-y-3 mb-4">
+          {versions.map((v, i) => (
+            <li key={v.takenAt + i} className="border-l-2 border-gray-200 pl-3">
+              <span className="font-sans text-[11px] font-bold uppercase tracking-wider text-gray-400">
+                {i === 0 ? 'Newest · ' : ''}
+                {new Date(v.takenAt).toLocaleString()} · {v.reason}
+              </span>
+              <span className="block">{v.summary}</span>
+              <span className="block text-[12px] text-gray-500">
+                {v.factCount} fact{v.factCount === 1 ? '' : 's'} on file
+                {v.readOn ? ` · read ${new Date(v.readOn).toLocaleDateString()}` : ''}
+              </span>
+              {(v.changes?.conclusions.length ?? 0) > 0 && (
+                <ul className="list-disc pl-5 text-[13px] text-gray-700">
+                  {v.changes!.conclusions.map((c, j) => (
+                    <li key={j}>
+                      {c.what} — was <em>{c.from}</em>, now <em>{c.to}</em>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </li>
+          ))}
+        </ol>
       )}
     </>
   )

@@ -10,6 +10,7 @@
 import { getSupabase } from '@/lib/supabase'
 import { Brief } from '@/lib/caseBrief'
 import { FactSnapshot } from '@/lib/briefChanges'
+import { SnapshotRow } from '@/lib/briefHistory'
 
 export interface Snapshot {
   brief: Brief
@@ -38,6 +39,31 @@ export async function lastSnapshot(clientId: string): Promise<Snapshot | null> {
 }
 
 /**
+ * The newest `limit`, returned oldest first — the order versions are read in.
+ *
+ * Throws, unlike the rest of this file: a history that silently came back
+ * empty would read as "this case has never changed".
+ */
+export async function listSnapshots(clientId: string, limit = 40): Promise<SnapshotRow[]> {
+  const { data, error } = await getSupabase()
+    .from('brief_snapshots')
+    .select('brief, facts, read_on, created_at, reason')
+    .eq('client_id', clientId)
+    .order('created_at', { ascending: false })
+    .limit(limit)
+  if (error) throw new Error(`Could not read the brief's earlier versions: ${error.message}`)
+  return (data ?? [])
+    .map(r => ({
+      brief: r.brief as Brief,
+      facts: (r.facts ?? []) as FactSnapshot[],
+      readOn: r.read_on ?? null,
+      takenAt: r.created_at,
+      reason: r.reason ?? 'opened',
+    }))
+    .reverse()
+}
+
+/**
  * Keeps one.
  *
  * Failure is logged and swallowed. A snapshot that could not be written costs
@@ -46,13 +72,14 @@ export async function lastSnapshot(clientId: string): Promise<Snapshot | null> {
  */
 export async function keepSnapshot(
   clientId: string,
-  snapshot: { brief: Brief; facts: FactSnapshot[]; readOn: string | null }
+  snapshot: { brief: Brief; facts: FactSnapshot[]; readOn: string | null; reason?: string }
 ): Promise<boolean> {
   const { error } = await getSupabase().from('brief_snapshots').insert({
     client_id: clientId,
     brief: snapshot.brief,
     facts: snapshot.facts,
     read_on: snapshot.readOn,
+    reason: snapshot.reason ?? 'opened',
   })
   if (error) {
     console.error('could not keep the brief snapshot for', clientId, error)

@@ -11,6 +11,7 @@ import { readReading } from '@/lib/caseReadingStore'
 import { askFollowUps, vetAll } from '@/lib/followUp'
 import { planQuestions, readPlans, reviewPlan, savePlan } from '@/lib/followUpStore'
 import { ClaimFinding } from '@/lib/claimMatrix'
+import { snapshotNow } from '@/lib/briefVersions'
 import { SpineReading } from '@/lib/evidenceSpine'
 
 /**
@@ -107,6 +108,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   // saved with it. The office reviews everything before it goes out anyway,
   // and discarding twenty good questions because one is badly worded would
   // throw away the reading that produced them.
+  // The brief lists the newest round's questions; a new round replaces them.
+  await snapshotNow(params.id, 'before a new round of questions was written')
   try {
     const plan = await savePlan({
       clientId: params.id,
@@ -161,6 +164,8 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     return NextResponse.json({ error: `Not in this round: ${unknown.join(', ')}` }, { status: 400 })
   }
 
+  // Striking a question deletes it, and the brief listed it.
+  await snapshotNow(params.id, 'before the round was reviewed')
   try {
     const result = await reviewPlan(planId, keep, String(body?.by ?? 'admin'))
     return NextResponse.json({ ok: true, ...result })

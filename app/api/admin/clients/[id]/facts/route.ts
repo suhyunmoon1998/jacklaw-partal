@@ -16,6 +16,9 @@ import { standing, unsettled } from '@/lib/factLedger'
 import { clearReading } from '@/lib/caseReadingStore'
 import { AnswerValue } from '@/types'
 import { Meter, describeSpend } from '@/lib/spend'
+import { AssignmentFound, READ_STATUSES, recordSearch } from '@/lib/sourceSearch'
+import { keepSearch, lastSearch } from '@/lib/sourceSearchStore'
+import { snapshotNow } from '@/lib/briefVersions'
 
 /** One answer as a line of text, arrays flattened. */
 const shown = (v: AnswerValue | undefined): string =>
@@ -37,9 +40,18 @@ export const maxDuration = 300
 
 async function gather(clientId: string) {
   const db = getSupabase()
-  const [{ data: client }, { data: state }] = await Promise.all([
+  const [{ data: client }, { data: state }, assigned, docs] = await Promise.all([
     db.from('clients').select('id, name').eq('id', clientId).maybeSingle(),
     db.from('questionnaire_states').select('answers').eq('client_id', clientId).maybeSingle(),
+    // Every status, not only the answered ones: an assigned set nobody has
+    // opened is not a source, but it is something the record is missing.
+    // A plain select, not a join: this query also decides which answers the
+    // extraction reads, and it must not fail over a set's display name.
+    db
+      .from('client_question_set_assignments')
+      .select('id, status, question_set_id')
+      .eq('client_id', clientId),
+    db.from('documents').select('name, category').eq('client_id', clientId),
   ])
   if (!client) return null
   // The raw record. extractFacts runs it through answersForReading itself, so
@@ -49,13 +61,28 @@ async function gather(clientId: string) {
   // live in their own table, outside the questionnaire's structure, so nothing
   // reading `answers` alone would ever see them.
   const extra: NonNullable<ExtractionInput['extra']> = []
-  const { data: done } = await db
-    .from('client_question_set_assignments')
-    .select('id, question_set_id')
-    .eq('client_id', clientId)
-    .in('status', ['completed', 'in_progress'])
-  for (const a of done ?? []) {
-    const detail = await getAssignmentDetail(a.id as string)
+  const found: AssignmentFound[] = []
+  // Names only label the record, so a failure here costs a label and nothing else.
+  const setIds = Array.from(new Set((assigned.data ?? []).map(a => String(a.question_set_id))))
+  const { data: sets } = setIds.length
+    ? await db.from('question_sets').select('id, name').in('id', setIds)
+    : { data: [] }
+  const names = new Map((sets ?? []).map(s => [String(s.id), String(s.name ?? '')]))
+  for (const a of assigned.data ?? []) {
+    const name = names.get(String(a.question_set_id)) || 'Unnamed question set'
+    const status = String(a.status ?? '')
+    if (!(READ_STATUSES as readonly string[]).includes(status)) {
+      found.push({ name, status, detail: null })
+      continue
+    }
+    // A set that would not load used to be skipped without a word, and the
+    // facts it held were simply absent. It is now named as inaccessible.
+    const detail = await getAssignmentDetail(a.id as string).catch((err: Error) => {
+      found.push({ name, status, detail: null, error: err.message })
+      return undefined
+    })
+    if (detail === undefined) continue
+    found.push({ name, status, detail })
     if (!detail) continue
     const rows = detail.questions
       .map(q => ({ id: q.id, label: q.label, answer: shown(detail.answers[q.id]) }))
@@ -63,11 +90,20 @@ async function gather(clientId: string) {
     if (rows.length) extra.push({ title: `Question set: ${detail.questionSetName}`, rows })
   }
 
+  const answers = (state?.answers ?? {}) as Record<string, AnswerValue>
   return {
     clientId,
     clientName: client.name ?? '',
-    answers: (state?.answers ?? {}) as Record<string, AnswerValue>,
+    answers,
     extra,
+    searched: recordSearch({
+      ranAt: new Date().toISOString(),
+      answers: state ? answers : null,
+      assignments: assigned.error ? { error: assigned.error.message } : found,
+      documents: docs.error
+        ? { error: docs.error.message }
+        : (docs.data ?? []).map(d => ({ name: String(d.name ?? ''), category: String(d.category ?? '') })),
+    }),
   }
 }
 
@@ -87,15 +123,18 @@ async function inEnglish(text: string): Promise<string> {
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   if (!isAdmin(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   try {
-    const [entries, contradictions] = await Promise.all([
+    const [entries, contradictions, searched] = await Promise.all([
       readLedger(params.id),
       readContradictions(params.id),
+      lastSearch(params.id),
     ])
     return NextResponse.json({
       facts: standing(entries).length,
       total: entries.length,
       unsettled: unsettled(entries).length,
       contradictions,
+      /** What the extraction behind these facts searched. Null for a ledger read before this was kept. */
+      searched,
       /**
        * Bare ids, so the release test can tell a fact this client actually has
        * from one nothing in the ledger carries.
@@ -188,6 +227,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   try {
     if (existing.length) {
+      // The brief read from these facts is about to become unreadable — its
+      // findings cite ids that are going. Kept first, so the next brief can say
+      // what the re-read changed.
+      await snapshotNow(params.id, 'before the facts were read again')
       await clearLedger(params.id)
       await clearContradictions(params.id)
       // The matrix and the spine were read against facts that no longer exist.
@@ -196,6 +239,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     }
     await addFacts(params.id, read.entries)
     await saveContradictions(params.id, read.contradictions)
+    // After the facts, so the newest search on file always belongs to the
+    // ledger on file. A run that failed above searched nothing that stands.
+    await keepSearch(params.id, input.searched)
   } catch (err) {
     // The reading ran and could not be stored, which has cost this project a
     // whole reading before. It fails loudly rather than reporting success.
@@ -207,6 +253,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     answered: read.answered,
     contradictions: read.contradictions,
     replaced: existing.length,
+    searched: input.searched,
     seconds: Math.round((Date.now() - began) / 1000),
     spent: meter.spent,
     spentSaid: describeSpend(meter.spent),
@@ -217,6 +264,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
   if (!isAdmin(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   try {
+    await snapshotNow(params.id, 'before the facts were cleared')
     await clearLedger(params.id)
     await clearContradictions(params.id)
     await clearReading(params.id)

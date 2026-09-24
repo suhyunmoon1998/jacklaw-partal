@@ -15,6 +15,8 @@
 
 import { FactualBrief, LedgerFact } from '@/lib/factualBrief'
 import { assumptionLog, evidenceStatusMap, submissionDigest } from '@/lib/submissionPackage'
+// Types only: the module reads the questionnaire definitions, which this sheet has no use for.
+import type { SearchRecord, SourceCategory } from '@/lib/sourceSearch'
 
 const H = ({ children }: { children: React.ReactNode }) => (
   <h3 className="font-sans text-[11px] font-bold uppercase tracking-[0.12em] text-gray-400 mt-10 mb-3 break-after-avoid">
@@ -89,10 +91,16 @@ function Fact({ f }: { f: LedgerFact }) {
 export default function FactualDocument({
   brief,
   ledger = [],
+  searched,
 }: {
   brief: FactualBrief
   /** The facts themselves, for the status map, the log and the digest. */
   ledger?: LedgerFact[]
+  /**
+   * What the extraction behind these facts searched. Null when the ledger was
+   * read before searches were recorded; undefined when not loaded.
+   */
+  searched?: SearchRecord | null
 }) {
   const missing = (key: string) => brief.absent.find(a => a.key === key)?.why
   const statuses = evidenceStatusMap(ledger)
@@ -418,6 +426,13 @@ export default function FactualDocument({
           </tbody>
         </table>
 
+        {searched !== undefined && (
+          <>
+            <H>What this reading searched</H>
+            <Searched record={searched} />
+          </>
+        )}
+
         <H>Open development plan</H>
         <ul className="text-[15px] leading-[1.7] text-gray-800 list-disc pl-5 space-y-1">
           {brief.development.map((d, i) => (
@@ -426,5 +441,88 @@ export default function FactualDocument({
         </ul>
       </div>
     </div>
+  )
+}
+
+/**
+ * The sources behind the facts above, and the ones not behind them.
+ *
+ * Four lists kept apart, because each means something different to a reader
+ * weighing "nothing corroborates this": read, looked for and absent, present
+ * but outside what this reading reads, and tried and could not be opened.
+ */
+function Searched({ record }: { record: SearchRecord | null | undefined }) {
+  if (record === undefined) return null
+  if (record === null) {
+    return (
+      <p className="text-[15px] leading-[1.75] text-gray-400 italic">
+        These facts were read before the portal recorded what each reading searched. Read the
+        answers again to record it.
+      </p>
+    )
+  }
+  const count = (f: (c: SourceCategory) => number) => record.categories.reduce((n, c) => n + f(c), 0)
+  const inaccessible = count(c => c.inaccessible.length)
+  return (
+    <>
+      <p className="text-[13px] text-gray-500 mb-3">
+        Read {new Date(record.ranAt).toLocaleString()} · {count(c => c.reviewed.length)} reviewed ·{' '}
+        {count(c => c.missing.length)} missing · {count(c => c.notRead.length)} not read ·{' '}
+        <span className={inaccessible ? 'text-red-700 font-semibold' : ''}>{inaccessible} could not be opened</span>
+      </p>
+      {record.categories.map(c => (
+        <div key={c.key} className="mb-4">
+          <Sub>{c.label}</Sub>
+          {c.reviewed.length > 0 && (
+            <ul className="text-[14px] leading-[1.7] text-gray-800 list-disc pl-5 space-y-0.5">
+              {c.reviewed.map((r, i) => (
+                <li key={i}>
+                  {r.label}{' '}
+                  <span className="text-gray-500">
+                    — {r.answered} of {r.asked} answered
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+          {c.missing.length > 0 && (
+            <>
+              <p className="text-[12px] font-semibold text-gray-600 mt-2">Missing</p>
+              <ul className="text-[14px] leading-[1.7] text-gray-700 list-disc pl-5 space-y-0.5">
+                {c.missing.map((m, i) => (
+                  <li key={i}>{m}</li>
+                ))}
+              </ul>
+            </>
+          )}
+          {c.notRead.length > 0 && (
+            <>
+              <p className="text-[12px] font-semibold text-gray-600 mt-2">On file, not read</p>
+              <ul className="text-[14px] leading-[1.7] text-gray-700 list-disc pl-5 space-y-0.5">
+                {c.notRead.map((m, i) => (
+                  <li key={i}>
+                    {m.label}
+                    <span className="block text-[12px] text-gray-500">{m.why}</span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+          {c.inaccessible.length > 0 && (
+            <>
+              <p className="text-[12px] font-semibold text-red-700 mt-2">Could not be opened</p>
+              <ul className="text-[14px] leading-[1.7] text-gray-900 list-disc pl-5 space-y-0.5">
+                {c.inaccessible.map((m, i) => (
+                  <li key={i}>
+                    {m.label}
+                    <span className="block text-[12px] text-gray-500">{m.why}</span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </div>
+      ))}
+    </>
   )
 }

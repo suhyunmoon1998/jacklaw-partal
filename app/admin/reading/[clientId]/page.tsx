@@ -21,7 +21,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { StoredReading, allClaims } from '@/lib/caseReadingShape'
 import { Finding, buildBrief } from '@/lib/caseBrief'
-import BriefDocument from '@/components/admin/BriefDocument'
+import BriefDocument, { VersionLine } from '@/components/admin/BriefDocument'
 import { releaseTest } from '@/lib/releaseTest'
 import { Changes, FactSnapshot } from '@/lib/briefChanges'
 import { defenceRecords } from '@/lib/defenceRecord'
@@ -48,6 +48,8 @@ export default function ReadingSheetPage() {
   const [ledger, setLedger] = useState<FactSnapshot[]>([])
   /** What moved since the last reading. Null until the comparison comes back. */
   const [changes, setChanges] = useState<Changes | null>(null)
+  /** Every version kept, newest first. Undefined while loading; null if it could not load. */
+  const [versions, setVersions] = useState<VersionLine[] | null | undefined>(undefined)
   const [error, setError] = useState('')
   const [loaded, setLoaded] = useState(false)
   /** null until the server has said. The cookie is what decides, not localStorage. */
@@ -161,16 +163,16 @@ export default function ReadingSheetPage() {
   useEffect(() => {
     if (compared || empty || !loaded) return
     setCompared(true)
-    void fetch(`/api/admin/clients/${clientId}/brief-changes`, {
-      method: 'POST',
-      headers: { ...headers, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ brief, facts: ledger }),
-    })
+    // The server assembles and keeps the brief itself; nothing is sent. The
+    // history is read after, so it includes the version this opening kept.
+    void fetch(`/api/admin/clients/${clientId}/brief-changes`, { method: 'POST', headers })
       .then(r => (r.ok ? r.json() : null))
       .then(body => setChanges(body?.changes ?? null))
       .catch(() => {})
-    // brief is rebuilt every render; the guard above is what makes this once.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+      .then(() => fetch(`/api/admin/clients/${clientId}/brief-changes`, { headers, cache: 'no-store' }))
+      .then(r => (r && r.ok ? r.json() : null))
+      .then(body => setVersions(body?.versions ?? null))
+      .catch(() => setVersions(null))
   }, [compared, empty, loaded, clientId])
 
   if (signedIn === false) {
@@ -220,7 +222,15 @@ export default function ReadingSheetPage() {
         </p>
       )}
 
-      {!empty && <BriefDocument brief={brief} problems={problems} changes={changes} defences={defences} />}
+      {!empty && (
+        <BriefDocument
+          brief={brief}
+          problems={problems}
+          changes={changes}
+          versions={versions}
+          defences={defences}
+        />
+      )}
     </main>
   )
 }

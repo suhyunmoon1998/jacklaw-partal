@@ -13,6 +13,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { LedgerFact, buildFactualBrief } from '@/lib/factualBrief'
 import FactualDocument from '@/components/admin/FactualDocument'
+import type { SearchRecord } from '@/lib/sourceSearch'
 
 export default function FactualSheetPage() {
   const params = useParams<{ clientId: string }>()
@@ -23,6 +24,8 @@ export default function FactualSheetPage() {
   const [ledger, setLedger] = useState<LedgerFact[]>([])
   const [spine, setSpine] = useState<Parameters<typeof buildFactualBrief>[0]['spine']>(null)
   const [readOn, setReadOn] = useState<string | null>(null)
+  /** What the extraction searched. Undefined until the ledger has loaded. */
+  const [searched, setSearched] = useState<SearchRecord | null | undefined>(undefined)
   const [error, setError] = useState('')
   const [loaded, setLoaded] = useState(false)
   const [signedIn, setSignedIn] = useState<boolean | null>(null)
@@ -36,8 +39,9 @@ export default function FactualSheetPage() {
         fetch('/api/admin/clients', { cache: 'no-store' }),
       ])
       if (lRes.ok) {
-        const { snapshot } = await lRes.json()
+        const { snapshot, searched: s } = await lRes.json()
         setLedger(snapshot ?? [])
+        setSearched(s ?? null)
       }
       if (rRes.ok) {
         const body = await rRes.json()
@@ -116,7 +120,7 @@ export default function FactualSheetPage() {
         </p>
       )}
 
-      {!empty && <FactualDocument brief={brief} ledger={ledger} />}
+      {!empty && <FactualDocument brief={brief} ledger={ledger} searched={searched} />}
     </main>
   )
 }

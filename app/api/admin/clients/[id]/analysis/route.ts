@@ -16,6 +16,7 @@ import {
   analysisFingerprint,
   runStage,
 } from '@/lib/caseAnalysis'
+import { snapshotNow } from '@/lib/briefVersions'
 import { AnswerValue } from '@/types'
 
 /**
@@ -143,6 +144,12 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       },
       { status: 409 }
     )
+  }
+
+  // 'baseline' discards the damages reading on file. The brief built on it is
+  // kept first, so the next version can say what the re-read changed.
+  if (stage === 'baseline' && completed((row?.result ?? null) as StoredAnalysis | null)) {
+    await snapshotNow(params.id, 'before the damages were read again')
   }
 
   const started = Date.now()

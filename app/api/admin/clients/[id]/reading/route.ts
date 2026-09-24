@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { isAdmin } from '@/lib/adminAuth'
 import { readLedger } from '@/lib/factStore'
 import { standing } from '@/lib/factLedger'
-import { STAGES, Stage, nextStage, staleStages } from '@/lib/caseReadingShape'
+import { STAGES, Stage, isComplete, nextStage, staleStages } from '@/lib/caseReadingShape'
+import { snapshotNow } from '@/lib/briefVersions'
 import { readingFingerprint, runStage, stampsNow } from '@/lib/caseReading'
 import { clearReading, readReading, saveStage } from '@/lib/caseReadingStore'
 import { WageOrderChoice, checkChoice, isUsable } from '@/lib/wageOrderChoice'
@@ -92,6 +93,14 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     }
   }
 
+  // A whole reading is about to be written over, in part or from the start.
+  // Kept first, so the brief it produced is still there to compare against.
+  // Taken before every stage of a re-walk, not only the first; a version that
+  // did not change is not kept twice, and one caught mid-walk says which stage.
+  if (row && isComplete(row.reading)) {
+    await snapshotNow(params.id, `before "${stage}" was read again`)
+  }
+
   let patch
   try {
     patch = await runStage(stage, entries, stage === 'wage order' ? {} : stored)
@@ -127,6 +136,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
   if (!isAdmin(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   try {
+    await snapshotNow(params.id, 'before the reading was cleared')
     await clearReading(params.id)
     return NextResponse.json({ ok: true })
   } catch (err) {

@@ -16,11 +16,11 @@
  * would paraphrase findings whose exact wording a lawyer may have to stand
  * behind. Composition cannot invent a claim the readings did not find.
  *
- * WHAT IT CANNOT DO YET. Section 7 asks for what changed since the last
- * reading. Readings are replaced rather than kept — a stale one is re-read
- * from the beginning, because stages read against different ledgers must not
- * be stitched together — so there is nothing to compare against. The section
- * says so rather than being left out.
+ * WHAT CHANGED is not computed here. Readings are replaced rather than kept —
+ * a stale one is re-read from the beginning, because stages read against
+ * different ledgers must not be stitched together — so each version of this
+ * brief is kept whole in brief_snapshots (lib/briefVersions.ts, before
+ * anything replaces it) and compared by lib/briefChanges.ts.
  */
 
 import { Analysis, Issue } from '@/lib/caseAnalysisShape'

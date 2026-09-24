@@ -13,9 +13,14 @@
 --
 -- One row per client per snapshot, newest read last. Kept, not rotated: "what
 -- did we tell the client in September" is a question a firm gets asked.
-create table if not exists brief_snapshots (
+--
+-- Schema-qualified after the fact: as first written, the unqualified CREATE
+-- landed in the `eleanor` schema (first on this database's search_path), where
+-- PostgREST does not look, and no snapshot was ever kept. 0019 creates the
+-- table in public for databases that ran the original.
+create table if not exists public.brief_snapshots (
   id           uuid primary key default gen_random_uuid(),
-  client_id    text not null references clients(id) on delete cascade,
+  client_id    text not null references public.clients(id) on delete cascade,
   -- The assembled brief, as lib/caseBrief.ts built it.
   brief        jsonb not null,
   -- The ledger it was read against: id, status, verbatim, provenance.
@@ -26,4 +31,4 @@ create table if not exists brief_snapshots (
 );
 
 create index if not exists brief_snapshots_client_idx
-  on brief_snapshots (client_id, created_at desc);
+  on public.brief_snapshots (client_id, created_at desc);
