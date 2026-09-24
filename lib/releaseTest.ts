@@ -102,6 +102,19 @@ export function citationsIn(text: string): string[] {
   return out
 }
 
+/**
+ * A fact id with the client off the front.
+ *
+ * The ledger stores ids as `client-1789103134380:f001` and the readings cite
+ * them both ways — whole in an element's `facts`, bare in prose. The client id
+ * is identical on every one of them and carries nothing, so both sides are
+ * reduced to the part that identifies the fact before they are compared.
+ */
+export function bareFactId(id: string): string {
+  const at = id.lastIndexOf(':')
+  return at < 0 ? id : id.slice(at + 1)
+}
+
 /** Fact ids as the readings write them: f068, or client-123:f068. */
 export function factIdsIn(text: string): string[] {
   const out: string[] = []
@@ -197,6 +210,8 @@ export function releaseTest(
   const authorities = onFile()
   const seenCitation = new Set<string>()
   const seenFact = new Set<string>()
+  // Compared bare on both sides — see bareFactId.
+  const ledger = new Set(Array.from(known.factIds).map(bareFactId))
 
   for (const { text, where } of proseOf(brief)) {
     for (const key of citationsIn(text)) {
@@ -215,9 +230,9 @@ export function releaseTest(
 
     // Only when the ledger is known. An empty set means the facts were not
     // loaded, and treating that as "no id is on file" would be noise.
-    if (known.factIds.size > 0) {
+    if (ledger.size > 0) {
       for (const id of factIdsIn(text)) {
-        if (known.factIds.has(id) || seenFact.has(id)) continue
+        if (ledger.has(id) || seenFact.has(id)) continue
         seenFact.add(id)
         problems.push({
           rule: 'fact not in ledger',
@@ -229,14 +244,15 @@ export function releaseTest(
     }
   }
 
-  if (known.factIds.size > 0) {
+  if (ledger.size > 0) {
     for (const { id, where } of citedFactIds(brief)) {
-      if (known.factIds.has(id) || seenFact.has(id)) continue
-      seenFact.add(id)
+      const bare = bareFactId(id)
+      if (ledger.has(bare) || seenFact.has(bare)) continue
+      seenFact.add(bare)
       problems.push({
         rule: 'fact not in ledger',
         severity: 'block',
-        what: `Fact ${id} is cited but is not in this client's ledger.`,
+        what: `Fact ${bare} is cited but is not in this client's ledger.`,
         where,
       })
     }

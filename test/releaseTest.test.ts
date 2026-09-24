@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { Brief } from '@/lib/caseBrief'
-import { blocked, citationsIn, factIdsIn, readsAsEstimated, releaseTest } from '@/lib/releaseTest'
+import { bareFactId, blocked, citationsIn, factIdsIn, readsAsEstimated, releaseTest } from '@/lib/releaseTest'
 
 /**
  * The office already refuses a follow-up question written in legal jargon, and
@@ -51,7 +51,22 @@ const issue = (over: Record<string, unknown> = {}) =>
     ...over,
   }) as never
 
-const LEDGER = { factIds: new Set(['f068', 'f136', 'f163']) }
+/**
+ * The ledger as it actually is.
+ *
+ * case_facts stores `client-1789103134380:f001`, and the readings cite the
+ * same fact both ways — whole in an element's `facts`, bare in prose. This
+ * shipped once comparing a bare id against a prefixed set, which reported
+ * every one of a real client's 204 facts as missing. The fixture carries the
+ * prefix so that cannot pass again.
+ */
+const LEDGER = {
+  factIds: new Set([
+    'client-1789103134380:f068',
+    'client-1789103134380:f136',
+    'client-1789103134380:f163',
+  ]),
+}
 const NO_LEDGER = { factIds: new Set<string>() }
 
 describe('finding citations in prose', () => {
@@ -205,5 +220,55 @@ describe('a document this test has no objection to', () => {
 describe('reading fact ids out of prose', () => {
   it('takes them with or without the client prefix', () => {
     expect(factIdsIn('client-1789103134380:f068 and f136')).toEqual(['f068', 'f136'])
+  })
+
+  it('reduces an id to the part that identifies the fact', () => {
+    expect(bareFactId('client-1789103134380:f068')).toBe('f068')
+    expect(bareFactId('f068')).toBe('f068')
+  })
+})
+
+describe('the two forms a fact id is written in', () => {
+  it('matches a prefixed ledger against a bare citation', () => {
+    const problems = releaseTest(
+      brief({ overview: { summary: 'She said so at f068.', baseline: [] }, questions: [{ text: 'q' }] }),
+      LEDGER
+    )
+    expect(problems.filter(p => p.rule === 'fact not in ledger')).toEqual([])
+  })
+
+  it('matches a prefixed ledger against a prefixed citation', () => {
+    const problems = releaseTest(
+      brief({
+        claims: [
+          {
+            claimId: 'meal-periods',
+            standing: 'supported',
+            elements: [
+              {
+                key: 'relieved',
+                state: 'supported',
+                reasoning: '',
+                wouldSettleIt: '',
+                facts: ['client-1789103134380:f068'],
+              },
+            ],
+            adverse: [],
+            defense: '',
+          },
+        ],
+        questions: [{ text: 'q' }],
+      }),
+      LEDGER
+    )
+    expect(problems.filter(p => p.rule === 'fact not in ledger')).toEqual([])
+  })
+
+  it('still catches one that is genuinely absent, whichever form it is in', () => {
+    const problems = releaseTest(
+      brief({ overview: { summary: 'See client-1789103134380:f999.', baseline: [] }, questions: [{ text: 'q' }] }),
+      LEDGER
+    )
+    expect(problems.some(p => p.rule === 'fact not in ledger' && p.what.includes('f999'))).toBe(true)
   })
 })

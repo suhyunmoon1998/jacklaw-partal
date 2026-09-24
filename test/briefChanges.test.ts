@@ -90,14 +90,24 @@ describe('both sides of a change are kept', () => {
 })
 
 describe('only what rests on a changed fact is read again', () => {
+  // Prefixed, as the ledger and an element's `facts` actually store them.
   const b = brief({
     claims: [
-      claim('meal-periods', 'supported', [{ key: 'relieved of duty', state: 'supported', facts: ['f068'] }]),
-      claim('rest-breaks', 'supported', [{ key: 'ten minutes', state: 'supported', facts: ['f501'] }]),
+      claim('meal-periods', 'supported', [
+        { key: 'relieved of duty', state: 'supported', facts: ['client-1789103134380:f068'] },
+      ]),
+      claim('rest-breaks', 'supported', [
+        { key: 'ten minutes', state: 'supported', facts: ['client-1789103134380:f501'] },
+      ]),
     ],
   })
 
-  it('picks out the claims that cite it, and leaves the rest alone', () => {
+  it('matches a prefixed element against a prefixed change', () => {
+    const { affected } = affectedBy(b, new Set(['client-1789103134380:f068']))
+    expect(affected.claims).toEqual(['meal-periods'])
+  })
+
+  it('picks out the claims that cite it whichever form the id is in', () => {
     const { affected, unaffected } = affectedBy(b, new Set(['f068']))
     expect(affected.claims).toEqual(['meal-periods'])
     expect(unaffected.claims).toEqual(['rest-breaks'])
@@ -122,7 +132,11 @@ describe('only what rests on a changed fact is read again', () => {
         missingInputs: [],
       },
     })
-    expect(affectedBy(withDamages, new Set(['f068'])).affected.damages).toEqual(['Meal periods'])
+    // The damages reading writes bare ids in prose; the change carries the
+    // prefixed ledger id. Both sides are reduced before they are matched.
+    expect(
+      affectedBy(withDamages, new Set(['client-1789103134380:f068'])).affected.damages
+    ).toEqual(['Meal periods'])
     expect(factsUnder(withDamages).damages.get('Overtime')).toEqual(new Set(['f900']))
   })
 })

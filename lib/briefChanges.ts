@@ -30,6 +30,7 @@
  */
 
 import { Brief } from '@/lib/caseBrief'
+import { bareFactId } from '@/lib/releaseTest'
 
 /** One fact, as much of it as a change needs to show. */
 export interface FactSnapshot {
@@ -129,12 +130,20 @@ export function factChanges(before: FactSnapshot[], after: FactSnapshot[]): Fact
   return out
 }
 
-/** Every fact id a claim or a damages category rests on. */
+/**
+ * Every fact id a claim or a damages category rests on, compared bare.
+ *
+ * The ledger stores `client-1789103134380:f001`; an element's `facts` carries
+ * the whole thing and the damages reading writes the bare id into its prose.
+ * Both are reduced before anything is matched, because comparing the two forms
+ * against each other finds nothing and quietly reports that nothing depends on
+ * a fact that everything depends on.
+ */
 export function factsUnder(brief: Brief): { claims: Map<string, Set<string>>; damages: Map<string, Set<string>> } {
   const claims = new Map<string, Set<string>>()
   for (const f of brief.claims) {
     const ids = new Set<string>()
-    for (const e of f.elements) for (const id of e.facts ?? []) ids.add(id)
+    for (const e of f.elements) for (const id of e.facts ?? []) ids.add(bareFactId(id))
     claims.set(f.claimId, ids)
   }
 
@@ -146,7 +155,7 @@ export function factsUnder(brief: Brief): { claims: Map<string, Set<string>>; da
     const re = /\b(?:[\w-]+:)?(f\d{2,})\b/g
     for (const line of [...i.because, i.why, i.math]) {
       let m: RegExpExecArray | null
-      while ((m = re.exec(line ?? '')) !== null) ids.add(m[1])
+      while ((m = re.exec(line ?? '')) !== null) ids.add(bareFactId(m[1]))
     }
     damages.set(i.category, ids)
   }
@@ -160,7 +169,8 @@ export function affectedBy(
   changedIds: ReadonlySet<string>
 ): { affected: Changes['affected']; unaffected: Changes['unaffected'] } {
   const { claims, damages } = factsUnder(brief)
-  const touches = (ids: Set<string>) => Array.from(ids).some(id => changedIds.has(id))
+  const changed = new Set(Array.from(changedIds).map(bareFactId))
+  const touches = (ids: Set<string>) => Array.from(ids).some(id => changed.has(id))
 
   const affectedClaims: string[] = []
   const unaffectedClaims: string[] = []
@@ -193,7 +203,8 @@ export function conclusionChanges(
       out.push({ what: `Claim ${now.claimId}`, from: 'not read', to: now.standing, because: [] })
       continue
     }
-    const drove = Array.from(claims.get(now.claimId) ?? []).filter(id => changedIds.has(id))
+    const changed = new Set(Array.from(changedIds).map(bareFactId))
+    const drove = Array.from(claims.get(now.claimId) ?? []).filter(id => changed.has(id))
 
     if (then.standing !== now.standing) {
       out.push({ what: `Claim ${now.claimId}`, from: then.standing, to: now.standing, because: drove })
@@ -207,7 +218,7 @@ export function conclusionChanges(
           what: `${now.claimId} · ${el.key}`,
           from: prev.state,
           to: el.state,
-          because: (el.facts ?? []).filter(id => changedIds.has(id)),
+          because: (el.facts ?? []).map(bareFactId).filter(id => changed.has(id)),
         })
       }
     }
