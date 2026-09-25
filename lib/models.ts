@@ -39,10 +39,19 @@
  * Every one is an env var. The way to move another is the way these were
  * moved: run it against a client whose reading is already on file and compare
  * the findings.
+ *
+ * OPUS 5.5 — every Opus job moved from Opus 5 on 2026-09-25, at the office's
+ * request, for the price: $4 / $20 per million tokens against $5 / $25, cache
+ * reads $0.20, same tokenizer. Every call here already sets its effort and
+ * runs adaptive thinking, so neither 5.5's lower default effort nor its
+ * refusal of disabled thinking changes anything. It is measured the way the
+ * others were: DAYEON KIM's claims 1, read by both on the same facts. The model is
+ * in every stage's stamp and the damages fingerprint, so readings taken on
+ * Opus 5 show as stale until they are read again.
  */
 
 /** The models this codebase knows about. */
-export const OPUS = 'claude-opus-5'
+export const OPUS = 'claude-opus-5-5'
 export const SONNET = 'claude-sonnet-5'
 export const HAIKU = 'claude-haiku-4-5-20251001'
 
