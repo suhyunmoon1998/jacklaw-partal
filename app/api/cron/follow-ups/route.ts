@@ -67,14 +67,33 @@ function authorised(req: NextRequest): boolean {
 /** Who has finished Module 2 and is owed something. */
 async function waitingFor(): Promise<Waiting[]> {
   const db = getSupabase()
-  const [{ data: states }, { data: clients }, { data: plans }, { data: facts }, { data: readings }] =
+  const [{ data: states }, { data: clients }, { data: plans }, { data: readings }] =
     await Promise.all([
       db.from('questionnaire_states').select('client_id, m2_submitted'),
       db.from('clients').select('id, name, portal_lang'),
       db.from('follow_up_plans').select('client_id'),
-      db.from('case_facts').select('client_id'),
       db.from('case_readings').select('client_id, result'),
     ])
+  const finishedModule2 = (states ?? []).filter(s => s.m2_submitted).map(s => s.client_id as string)
+
+  // Counted per client, not read off the whole table. This was one select of
+  // every fact's client_id, and a select stops at 1000 rows: the table held
+  // 758 with five clients read, so the sixth or seventh would have pushed
+  // someone's facts past the cut. That client would then look unread, and the
+  // night would extract them a second time into the same ledger. A count that
+  // fails stops the run rather than being taken for none.
+  const haveFacts = (
+    await Promise.all(
+      finishedModule2.map(async id => {
+        const { count, error } = await db
+          .from('case_facts')
+          .select('client_id', { count: 'exact', head: true })
+          .eq('client_id', id)
+        if (error) throw new Error(`Could not count facts for ${id}: ${error.message}`)
+        return count ? id : null
+      })
+    )
+  ).filter((id): id is string => id !== null)
 
   // Complete means every stage is on the row. Whether those stages are still
   // true of the facts is a question only the ledger can answer, so it is asked
@@ -90,8 +109,8 @@ async function waitingFor(): Promise<Waiting[]> {
       name: (c.name as string) ?? '',
       lang: ((c.portal_lang as Lang) ?? 'en') as Lang,
     })),
-    finishedModule2: (states ?? []).filter(s => s.m2_submitted).map(s => s.client_id as string),
-    haveFacts: (facts ?? []).map(f => f.client_id as string),
+    finishedModule2,
+    haveFacts,
     haveReading: finishedReading,
     haveRound: (plans ?? []).map(p => p.client_id as string),
   })
