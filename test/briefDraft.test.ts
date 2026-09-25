@@ -46,6 +46,20 @@ describe('a sentence that is on file', () => {
   })
 })
 
+describe('the voice of a brief a court reads', () => {
+  // The first DAYEON KIM trial drafts said "the file does not resolve which is
+  // right" — the office talking to itself.
+  it('flags the office\'s file named in a trial section', () => {
+    expect(check('trial-facts', s({ text: 'The file does not resolve which is right.' }), ctx).join(' ')).toMatch(/"The file"/)
+    expect(check('trial-intro', s({ text: 'According to her intake, she worked six days.' }), ctx).join(' ')).toMatch(/"her intake"/)
+  })
+
+  it('leaves the internal factual summary, and words she is quoted as saying, alone', () => {
+    expect(check('factual-summary', s({ text: 'The file does not show her hours.' }), ctx)).toEqual([])
+    expect(check('trial-facts', s({ text: 'Her manager told her "it is on file somewhere".' }), ctx)).toEqual([])
+  })
+})
+
 describe('law that was not handed', () => {
   it('strikes a provision on file in the library but not handed to this draft', () => {
     // GOV 12940 and LAB 2699 are both in the library; neither was quoted to the model.

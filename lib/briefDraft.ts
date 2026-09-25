@@ -171,15 +171,17 @@ const SENTENCE_RULES = `EVERY SENTENCE is an object: text, facts, authority, inf
 - Unfavorable facts are not omitted. Where one bears on what a section says, the section addresses it.
 
 HOW THE FIRM WRITES THESE (its own factual summaries are the model):
-- Separate what a record establishes from what the client reports. Say "she reports", "she says", "according to her intake" for her account; state a thing flatly only where a CONFIRMED fact supports it.
+- Separate what a record establishes from what the client reports. Say "she reports", "she says" for her account; state a thing flatly only where a CONFIRMED fact supports it.
 - When you name a piece of proof, say what it establishes AND what it does not ("establishes the dates she worked, not the hours").
-- Where answers conflict, set both out and say which is better supported on the current record and why — never silently pick one or correct it. "Remains an inference until confirmed" is a complete sentence.
+- Where answers conflict, set both out and say which is better supported by the evidence and why — never silently pick one or correct it. "Remains an inference until confirmed" is a complete sentence.
 - A pleading, a draft complaint or the office's own earlier analysis is not proof of anything it alleges.
 - Plain, exact, unadorned. No adjectives the facts do not carry.`
 
 const LEGAL_SYSTEM = `You draft three sections of a California plaintiff-side employment trial brief for an attorney to rewrite: the Introduction, the Brief Summary of Facts and Evidence, and the Conclusion. You are handed the client's fact ledger, the office's claims reading (each element's state and the facts it cites, already read against the quoted law), the defences, the damages reading, and the full text of every provision and holding that reading relied on.
 
 You do not decide the law and you do not change a conclusion. Where the claims reading says an element is contradicted, unknown, or needs authority, the draft says the same or leaves the claim out; it never upgrades one. A claim whose elements are not supported is not presented as established. Where the review items say part of the case was not read or is only proposed, the draft does not present that part as established or as absent — it leaves it out. The sheet already lists those items for the attorney. The brief speaks about the case, never about the office's process: no sentence says what was read, proposed, flagged or recorded.
+
+VOICE. A trial brief is read by a court. Attribute her account to her ("she states", "she will testify"), never to "her intake", "the file", "the ledger" or "the record on file". Where her accounts conflict, say that they conflict and what evidence will show which is right — not that the file does not resolve it.
 
 The firm's Trial Brief Template sets the method:
 - Introduction (2–4 short paragraphs): what happened, why it matters legally, the strongest proof, the simple result — and the strongest defense and the fact that answers it. Lead with the strongest fact.
@@ -245,6 +247,8 @@ const BARE_SECTION = /(?:\bsections?\s+|§+\s*)\d/i
 
 const normalizeFigure = (f: string) => f.replace(/[$\s,]/g, '')
 const words = (s: string) => s.split(/[\s,.;:()]+/).map(w => w.toLowerCase()).filter(w => w.length > 2)
+/** The office's own file, named in a brief a court reads. */
+const OFFICE_VOICE = /\b(?:the file|on file|the ledger|(?:her|his|their|the) intake|the current record)\b/i
 /** Strip what a person is quoted as saying; their words are facts, not the draft's argument. */
 const unquoted = (s: string) => s.replace(/[“"][^”"]*[”"]/g, ' ')
 
@@ -273,6 +277,8 @@ export function check(sectionKey: string, s: DraftSentence, ctx: CheckContext): 
   if (!facts.length && !s.authority.length) {
     problems.push('Rests on nothing on file: it names no fact and no authority.')
   }
+  const voice = factual ? null : unquoted(s.text).match(OFFICE_VOICE)
+  if (voice) problems.push(`Speaks of "${voice[0]}", the office's file, in a brief a court reads.`)
   if (REPORTER_PINPOINT.test(s.text) || SHORT_PINPOINT.test(s.text)) {
     problems.push('Carries a reporter page number. The stored texts carry none, so it cannot have come from them.')
   }
