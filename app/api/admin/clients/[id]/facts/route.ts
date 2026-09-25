@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
 import { isAdmin } from '@/lib/adminAuth'
-import { detectLanguage, machineTranslate } from '@/lib/machineTranslate'
+import { toEnglishCached } from '@/lib/translationCache'
 import { ExtractionInput, extractAdditions, extractFacts } from '@/lib/factExtraction'
 import { unreadRows } from '@/lib/factAdditions'
 import { loadAssignedSets } from '@/lib/assignedSets'
@@ -69,17 +69,14 @@ async function gather(clientId: string) {
 }
 
 /**
- * The same sentence in English, or '' when it already is.
+ * Each fact's verbatim in English, or '' where it already is.
  *
  * Empty rather than a copy, so a reader can tell a translation from an
  * original at a glance and nothing in the document claims to be her words
- * when it is not.
+ * when it is not. From the cache: this ran every verbatim through the free
+ * endpoint on every load, two hundred calls for one Korean file.
  */
-async function inEnglish(text: string): Promise<string> {
-  const from = detectLanguage(text ?? '')
-  if (!from) return ''
-  return (await machineTranslate(text, from, 'en').catch(() => '')) || ''
-}
+const withEnglish = (entries: { verbatim: string }[]) => toEnglishCached(entries.map(e => e.verbatim ?? ''))
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   if (!isAdmin(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -120,15 +117,15 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
        * on 68 and the open loop on 163 all arrived empty — and the brief drew
        * the sections that depend on them as though the record had none.
        */
-      snapshot: await Promise.all(
-        entries.map(async e => ({
+      snapshot: await withEnglish(entries).then(english =>
+        entries.map((e, i) => ({
           id: e.id,
           proposition: e.proposition,
           verbatim: e.verbatim,
           // Her own words are evidence and are never replaced. An English
           // rendering rides alongside, because the office reads case files in
           // English and half of this client's answers are in Korean.
-          verbatimEnglish: await inEnglish(e.verbatim),
+          verbatimEnglish: english[i],
           status: e.status,
           provenance: e.provenance,
           period: e.period,

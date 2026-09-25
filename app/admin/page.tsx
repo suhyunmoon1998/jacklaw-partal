@@ -64,7 +64,8 @@ import { ModuleProgress, ModuleSend } from '@/lib/moduleSteps'
 import PasteQuestionsDialog from '@/components/admin/PasteQuestionsDialog'
 import SendAssignmentDialog from '@/components/admin/SendAssignmentDialog'
 import { LANGUAGES, LANG_ENGLISH_NAME, Lang, toLang } from '@/lib/langs'
-import { submissionLanguage, translateAnswersToEnglish } from '@/lib/machineTranslate'
+import { submissionLanguage } from '@/lib/machineTranslate'
+import { englishFromServer } from '@/lib/translateInBrowser'
 
 const DEFAULT_QUESTION_COUNT = QUESTIONNAIRE_SECTIONS.reduce((n, s) => n + s.questions.length, 0)
 
@@ -211,7 +212,7 @@ function ClientDetailModal({
 
   const handleTranslate = useCallback(async () => {
     setTranslating(true)
-    setTranslatedAnswers(await translateAnswersToEnglish(qState.answers))
+    setTranslatedAnswers(await englishFromServer(qState.answers))
     setTranslating(false)
   }, [qState.answers])
 

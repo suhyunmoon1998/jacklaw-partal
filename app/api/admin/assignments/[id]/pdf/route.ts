@@ -4,7 +4,7 @@ import { isAdmin } from '@/lib/adminAuth'
 import { getAssignmentDetail } from '@/lib/questionSets'
 import { generateAnswersPdfForOffice } from '@/lib/generateAnswersPdf'
 import { formatPhone } from '@/lib/auth'
-import { translateAnswersToEnglish } from '@/lib/machineTranslate'
+import { translateAnswersCached } from '@/lib/translationCache'
 
 /**
  * Putting a client's own words into English takes longer than drawing a PDF.
@@ -28,7 +28,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 
   // English for the office, and the only text the PDF font can draw — see the
   // note in the default questionnaire's PDF route.
-  const answers = await translateAnswersToEnglish(assignment.answers)
+  const answers = await translateAnswersCached(assignment.answers)
 
   const pdf = await generateAnswersPdfForOffice(
     client?.name ?? assignment.clientName,

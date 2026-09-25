@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
 import { generateAnswersPdfForOffice } from '@/lib/generateAnswersPdf'
 import { formatPhone } from '@/lib/auth'
-import { translateAnswersToEnglish } from '@/lib/machineTranslate'
+import { translateAnswersCached } from '@/lib/translationCache'
 import { isAdmin } from '@/lib/adminAuth'
 
 /**
@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
   // The office reads case files in English, and the PDF's built-in font cannot
   // draw Chinese or Korean at all. Answers already in English cost nothing here:
   // the translator only calls out for text it detects as another language.
-  const answers = await translateAnswersToEnglish(qState?.answers ?? {})
+  const answers = await translateAnswersCached(qState?.answers ?? {})
 
   const pdf = await generateAnswersPdfForOffice(
     client.name,

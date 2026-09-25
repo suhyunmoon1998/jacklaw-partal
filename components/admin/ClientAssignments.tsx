@@ -11,7 +11,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { AnswerValue, Assignment, AssignmentDetail, QuestionSet, QuestionnaireState } from '@/types'
 import { LANG_ENGLISH_NAME, Lang, toLang } from '@/lib/langs'
-import { submissionLanguage, translateAnswersToEnglish } from '@/lib/machineTranslate'
+import { submissionLanguage } from '@/lib/machineTranslate'
+import { englishFromServer } from '@/lib/translateInBrowser'
 import PasteQuestionsDialog from '@/components/admin/PasteQuestionsDialog'
 import SendAssignmentDialog from '@/components/admin/SendAssignmentDialog'
 import ModalPortal from '@/components/ModalPortal'
@@ -191,7 +192,7 @@ export default function ClientAssignments({
     if (!viewing || !viewAnsweredIn || viewTranslated || viewTranslating) return
     let live = true
     setViewTranslating(true)
-    translateAnswersToEnglish(viewing.answers).then(result => {
+    englishFromServer(viewing.answers).then(result => {
       if (!live) return
       setViewTranslated(result)
       setViewTranslating(false)
