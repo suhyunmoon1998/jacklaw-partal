@@ -267,7 +267,7 @@ export async function proposeWageOrder(entries: LedgerEntry[], meter?: Meter): P
       })
       .finalMessage()
   } catch (err) {
-    throw plainly(err, 'Wage Order reading')
+    throw plainly(err, 'Wage Order')
   }
   meter?.add(response.usage)
   if (response.stop_reason === 'max_tokens') {

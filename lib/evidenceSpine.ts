@@ -382,7 +382,7 @@ async function read<T extends z.ZodTypeAny>(
       })
       .finalMessage()
   } catch (err) {
-    throw plainly(err, `${what} reading`)
+    throw plainly(err, what)
   }
   meter?.add(response.usage)
   if (response.stop_reason === 'max_tokens') {
