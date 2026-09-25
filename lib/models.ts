@@ -44,10 +44,28 @@
  * request, for the price: $4 / $20 per million tokens against $5 / $25, cache
  * reads $0.20, same tokenizer. Every call here already sets its effort and
  * runs adaptive thinking, so neither 5.5's lower default effort nor its
- * refusal of disabled thinking changes anything. It is measured the way the
- * others were: DAYEON KIM's claims 1, read by both on the same facts. The model is
- * in every stage's stamp and the damages fingerprint, so readings taken on
- * Opus 5 show as stale until they are read again.
+ * refusal of disabled thinking changes anything. The model is in every
+ * stage's stamp and the damages fingerprint, so readings taken on Opus 5 show
+ * as stale until they are read again.
+ *
+ * MEASURED on DAYEON KIM's file, 218 facts, same input for every model:
+ *
+ *   MATRIX, Opus 5 against 5.5 (claims 1) — all five standings the same, 17
+ *   of 20 elements the same. Two of the three that moved went more careful,
+ *   not less: 5.5 would not place 1101 Vermont inside the City of Los Angeles
+ *   from a mailing address, where Opus 5 had. It wrote 27.2k tokens to Opus
+ *   5's 21.7k, so this stage cost about the same; the spine wrote less.
+ *
+ *   DAMAGES — Opus 5.5. Sonnet 5 stretched the alternating-week tip duty from
+ *   July 2025 to the end of employment in August 2026, which no fact says,
+ *   and priced about 100 unpaid hours where the file supports about 40. Its
+ *   baseline had 12 rows to Opus's 25. Haiku 4.5 wrote a basis outside the
+ *   four allowed and the reading stopped at the second stage.
+ *
+ *   DRAFTS — Opus 5.5. Sonnet 5 wrote every section at half the price, with
+ *   one flagged sentence and a factual summary a quarter over length; usable,
+ *   not better. Haiku 4.5 left daily overtime — a claim the reading supports
+ *   — out of the trial draft, and ran the factual summary half again over.
  */
 
 /** The models this codebase knows about. */
