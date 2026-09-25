@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { ADMIN_COOKIE, correctAdminPassword, isAdmin, mintAdminSession } from '@/lib/adminAuth'
+import { clientIp, mayTry, recordAttempt } from '@/lib/loginThrottle'
 
 /**
  * The one place the admin password is checked.
@@ -27,7 +28,26 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  if (!correctAdminPassword(password)) {
+  // Checked before the password is, so a shut door says nothing about whether
+  // the guess would have been right.
+  const ip = clientIp(req)
+  const verdict = await mayTry(ip)
+  if (!verdict.allowed) {
+    const when = `Try again in ${verdict.retryInMinutes} minute${verdict.retryInMinutes === 1 ? '' : 's'}.`
+    return NextResponse.json(
+      {
+        error:
+          verdict.by === 'connection'
+            ? `Too many wrong passwords from this connection. ${when}`
+            : `Sign-in is paused after too many wrong passwords. ${when}`,
+      },
+      { status: 429, headers: { 'Retry-After': String(verdict.retryInMinutes * 60) } }
+    )
+  }
+
+  const right = correctAdminPassword(password)
+  await recordAttempt(ip, right)
+  if (!right) {
     return NextResponse.json({ error: 'Incorrect password.' }, { status: 401 })
   }
 
