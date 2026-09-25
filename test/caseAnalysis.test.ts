@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest'
-import { analysisFingerprint, buildTranscript, LATER_ANSWERS, MIN_ANSWERS } from '@/lib/caseAnalysis'
+import { analysisFingerprint, buildTranscript, LATER_ANSWERS, MIN_ANSWERS, PASSES } from '@/lib/caseAnalysis'
 import {
   completed, mergeFindings, nextStage, AnalysisInput, ANALYSIS_SHAPE_VERSION,
-  STAGES, STAGE_LABEL,
+  CATEGORIES, STAGES, STAGE_LABEL,
 } from '@/lib/caseAnalysisShape'
-import { DAMAGES_SOURCE, LAW_VERSION, LEGAL_SOURCE, STATUTORY_MAP } from '@/lib/caLaw'
+import { DAMAGES_SOURCE, LAW_VERSION, LEGAL_SOURCE, QUOTED_PROVISIONS, STATUTORY_MAP } from '@/lib/caLaw'
 
 const input = (over: Partial<AnalysisInput> = {}): AnalysisInput => ({
   clientName: 'Test Client',
@@ -60,6 +60,33 @@ describe('the law the reading is grounded on', () => {
   it('sends both halves to the model', () => {
     expect(LEGAL_SOURCE).toContain(DAMAGES_SOURCE)
     expect(LEGAL_SOURCE).toContain(STATUTORY_MAP)
+    expect(LEGAL_SOURCE).toContain(QUOTED_PROVISIONS)
+  })
+
+  it('quotes the minimum-wage provisions from the library rather than summarising them', () => {
+    // Given only a line saying sec. 1194.2 exists, the reading supplied the
+    // rest from memory, and priced liquidated damages on 40 hours where its
+    // own minimum wage figure used 16.8.
+    const flat = QUOTED_PROVISIONS.replace(/\s+/g, ' ')
+    expect(flat).toContain(
+      'Nothing in this subdivision shall be construed to authorize the recovery of liquidated damages for failure to pay overtime compensation.'
+    )
+    expect(flat).toContain('The minimum wage standard applies to each hour worked by respondents for which they were not paid.')
+    expect(QUOTED_PROVISIONS).not.toContain('NOT ON FILE')
+  })
+})
+
+describe('how the categories are divided between readings', () => {
+  const passOf = (category: string) => PASSES.find(p => p.categories.includes(category))?.key
+
+  it('reads every category exactly once', () => {
+    expect(PASSES.flatMap(p => p.categories).sort()).toEqual([...CATEGORIES].sort())
+  })
+
+  it('prices liquidated damages in the reading that counts the unpaid hours', () => {
+    for (const c of ['Minimum wage', 'Liquidated damages', 'Overtime']) {
+      expect(passOf(c)).toBe(passOf('Off-the-clock work'))
+    }
   })
 })
 

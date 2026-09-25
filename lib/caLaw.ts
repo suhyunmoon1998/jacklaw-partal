@@ -17,8 +17,11 @@
  * Nothing here is advice and none of it is shown to a client.
  */
 
+import { quote } from '@/lib/authority'
+import { HOLDINGS, render } from '@/lib/authority/cases'
+
 /** Bump on every substantive edit below. Stored analyses older than this show as stale. */
-export const LAW_VERSION = '2026-09-16.1'
+export const LAW_VERSION = '2026-09-24.1'
 
 /**
  * CALIFORNIA WAGE & HOUR DAMAGES SOURCE 1.0 — the office's own document,
@@ -735,7 +738,8 @@ work location, and many local ordinances exceed the state rate. CONFIRM the rate
 for each period and location; do not assume the state figure.
 
 Liquidated damages equal to the unpaid minimum wages plus interest are available
-under sec. 1194.2, and are distinct from the unpaid wages themselves.
+under sec. 1194.2, and are distinct from the unpaid wages themselves. Secs. 1197
+and 1194.2 are quoted in full at the end of this source.
 
 ---
 
@@ -856,9 +860,34 @@ drilling, mining). Where the industry is not established by the answers, say
 which Order you assumed and that it needs confirming.
 `
 
+/**
+ * The provisions a minimum-wage figure turns on, in their own words.
+ *
+ * The map above says only that sec. 1194.2 liquidated damages exist. Read
+ * against that, the reading went to what it remembered for the rest: that
+ * minimum wage is owed hour by hour, and which hours liquidated damages cover.
+ * So the text comes from the library, where it is fetched and tested, and the
+ * reading is left to apply it — including sec. 1194.2's sentence excluding
+ * overtime compensation.
+ */
+export const QUOTED_PROVISIONS = `# PROVISIONS QUOTED IN FULL
+
+${quote([
+  { law: 'LAB', num: '1197' },
+  { law: 'LAB', num: '1194.2' },
+])}
+
+${HOLDINGS.filter(h => h.id === 'armenta-no-averaging')
+  .map(render)
+  .join('\n\n')}`
+
 /** Everything the reading is grounded on, in the order it should be read. */
 export const LEGAL_SOURCE = `${DAMAGES_SOURCE}
 
 ---
 
-${STATUTORY_MAP}`
+${STATUTORY_MAP}
+
+---
+
+${QUOTED_PROVISIONS}`

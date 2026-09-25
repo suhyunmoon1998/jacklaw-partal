@@ -216,8 +216,15 @@ export const MIN_ANSWERS = 8
  * of the wait was one branch carrying six categories while another carried two.
  * Splitting that branch in half took the whole stage from 110 seconds to the
  * length of its longest remaining piece. Keep them even when adding a category.
+ *
+ * Liquidated damages sit with the hours because they are priced on the same
+ * hours as the minimum wage. In the records branch they were counted again from
+ * the answers: on DAYEON KIM's file the minimum wage was 16.8 hours and the
+ * liquidated damages about 40, the same off-the-clock work counted twice two
+ * different ways. Split shifts went the other way to keep the branches even —
+ * the premium is one hour a day at the minimum wage and prices no hours worked.
  */
-const PASSES: { key: string; title: string; categories: string[] }[] = [
+export const PASSES: { key: string; title: string; categories: string[] }[] = [
   {
     key: 'time',
     title: 'Hours and pay',
@@ -227,7 +234,7 @@ const PASSES: { key: string; title: string; categories: string[] }[] = [
       'Overtime',
       'Double time',
       'Minimum wage',
-      'Reporting time / split shift',
+      'Liquidated damages',
       'Seventh day of rest',
       'Piece rate',
     ],
@@ -240,7 +247,7 @@ const PASSES: { key: string; title: string; categories: string[] }[] = [
   {
     key: 'records',
     title: 'Pay records and separation',
-    categories: ['Wage statements', 'Waiting-time penalties', 'Liquidated damages'],
+    categories: ['Wage statements', 'Waiting-time penalties', 'Reporting time / split shift'],
   },
   {
     key: 'expenses',
@@ -295,7 +302,8 @@ const PASSES: { key: string; title: string; categories: string[] }[] = [
  * off-the-clock work and overtime. Unpaid hours are recovered at the GREATER of
  * the contract rate or the minimum wage, never both, and a branch that cannot
  * see the hours it is pricing cannot apply that rule. Ten seconds is not worth
- * moving a load-bearing rule across a seam.
+ * moving a load-bearing rule across a seam. Liquidated damages are the same
+ * rule's other half, and stay with it for the same reason.
  */
 
 /** The law, sent as a cached prefix so the parallel passes pay for it once. */
