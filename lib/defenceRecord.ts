@@ -68,6 +68,20 @@ export function isEmployerStatement(f: LedgerFact): boolean {
  * on each claim, the adverse facts recorded under it, and what each element's
  * reading said would settle it.
  */
+/**
+ * The word a tag has to carry to be about this claim.
+ *
+ * The first word of the id did for the wage claims ('meal', 'overtime'). All
+ * seven FEHA ids begin 'feha-', so one manager's remark tagged "FEHA
+ * accommodation" marked every FEHA defence as stated by the employer. For
+ * those the rest of the id is the term: 'accommodation', 'harassment',
+ * 'interactive process', 'retaliation'.
+ */
+export function matchTerm(claimId: string): string {
+  if (claimId.startsWith('feha-')) return claimId.slice('feha-'.length).replace(/-/g, ' ')
+  return claimId.split('-')[0]
+}
+
 export function defenceRecords(brief: Brief, ledger: LedgerFact[]): DefenceRecord[] {
   const statements = ledger.filter(isEmployerStatement)
 
@@ -78,7 +92,7 @@ export function defenceRecords(brief: Brief, ledger: LedgerFact[]): DefenceRecor
     // A statement the employer actually made about this claim's subject beats
     // a prediction about it, so it is looked for first.
     const onPoint = statements.filter(f =>
-      (f.legalTags ?? []).some(t => t.toLowerCase().includes(claim.claimId.split('-')[0]))
+      (f.legalTags ?? []).some(t => t.toLowerCase().includes(matchTerm(claim.claimId)))
     )
 
     out.push({

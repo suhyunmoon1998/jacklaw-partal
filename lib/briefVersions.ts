@@ -20,7 +20,7 @@ import { readLedger } from '@/lib/factStore'
 import { LedgerEntry, standing } from '@/lib/factLedger'
 import { readingFingerprint, stampsNow } from '@/lib/caseReading'
 import { readReading } from '@/lib/caseReadingStore'
-import { STAGES, allClaims, staleStages } from '@/lib/caseReadingShape'
+import { STAGES, allClaims, fehaNotRead, staleStages } from '@/lib/caseReadingShape'
 import { planQuestions, readPlans } from '@/lib/followUpStore'
 import { keepSnapshot, listSnapshots } from '@/lib/briefSnapshots'
 import { baselineFor } from '@/lib/briefHistory'
@@ -87,6 +87,8 @@ export async function assembleBrief(
     readOn: row?.updatedAt ?? null,
     stale: row?.stale ?? false,
     staleStages: row?.stale ? STAGES.slice() : staleStages(stored, stampsNow(entries, stored ?? {})),
+    // Mirrors the sheet, as everything here must.
+    fehaNotRead: fehaNotRead(reading),
   }
   return { brief: buildBrief(input), facts: entries.map(toSnapshot) }
 }

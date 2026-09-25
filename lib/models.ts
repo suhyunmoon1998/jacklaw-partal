@@ -74,3 +74,11 @@ export const TRANSLATION_MODEL = pick('MODEL_TRANSLATION', SONNET)
 
 /** Drafting questions for an admin to edit before they are used. */
 export const QUESTION_MODEL = pick('MODEL_QUESTIONS', SONNET)
+
+/**
+ * Drafting the four template sections that are prose rather than assembly.
+ * Opus, untested against another model: a draft is persuasive writing about a
+ * real client, every sentence of it is checked in code after, and an attorney
+ * rewrites it before anything leaves the office.
+ */
+export const DRAFT_MODEL = pick('MODEL_DRAFT', OPUS)

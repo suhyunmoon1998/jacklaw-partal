@@ -22,13 +22,22 @@
 import { z } from 'zod'
 import { Spend } from '@/lib/spend'
 
-export const STAGES = ['wage order', 'claims 1', 'claims 2', 'spine'] as const
+/**
+ * 'claims 3' is the FEHA claims — discrimination, harassment, accommodation,
+ * retaliation and failure to prevent. Its own stage so the wage-and-hour
+ * stages read exactly what they read before. It comes after 'claims 2' rather
+ * than being folded into it: a reading already on file then needs only this
+ * one stage, not the whole walk again. And on a file whose facts raise nothing
+ * under FEHA it records "not raised" without calling the model at all.
+ */
+export const STAGES = ['wage order', 'claims 1', 'claims 2', 'claims 3', 'spine'] as const
 export type Stage = (typeof STAGES)[number]
 
 export const STAGE_LABEL: Record<Stage, string> = {
   'wage order': 'Working out which Wage Order governs this employer',
   'claims 1': 'Reading the first half of the claims',
-  'claims 2': 'Reading the rest of the claims',
+  'claims 2': 'Reading the rest of the wage-and-hour claims',
+  'claims 3': 'Reading the FEHA claims',
   spine: 'Building the chronology and the evidence spine',
 }
 
@@ -68,6 +77,9 @@ export interface StoredReading {
   wageOrder?: unknown
   claims1?: unknown[]
   claims2?: unknown[]
+  /** The FEHA claims. Empty, with `fehaSkipped` saying why, when the facts raise none. */
+  claims3?: unknown[]
+  fehaSkipped?: string
   /** Claims that could not be read, by id, with why. */
   failed?: { claimId: string; why: string }[]
   spine?: unknown
@@ -90,6 +102,7 @@ export function isRead(stored: StoredReading | null | undefined, stage: Stage): 
   if (stage === 'wage order') return Boolean(stored.wageOrder)
   if (stage === 'claims 1') return Boolean(stored.claims1)
   if (stage === 'claims 2') return Boolean(stored.claims2)
+  if (stage === 'claims 3') return Boolean(stored.claims3)
   return Boolean(stored.spine)
 }
 
@@ -123,6 +136,32 @@ export function nextStage(
   return STAGES.find(s => !isRead(stored, s) || stale.has(s)) ?? null
 }
 
+/**
+ * Whether every stage but the FEHA one is read.
+ *
+ * What the nightly queue asks. Every reading taken before 'claims 3' existed
+ * lacks it, and counting those as unfinished put four existing clients back
+ * in the queue and had the night spend on FEHA readings nobody asked for.
+ * FEHA on a file already read is a person's decision, from the panel; a new
+ * reading walks through 'claims 3' in its turn like any other stage.
+ */
+export function isReadExceptFeha(stored: StoredReading | null | undefined): boolean {
+  return STAGES.every(s => s === 'claims 3' || isRead(stored, s))
+}
+
+/**
+ * Why the FEHA claims are not on this reading, or undefined when they are.
+ *
+ * Said in the brief rather than left out: a brief with no FEHA section reads
+ * as a case with no FEHA claim, when the claims may simply not have been read.
+ */
+export function fehaNotRead(stored: StoredReading | null | undefined): string | undefined {
+  if (!stored || !isReadExceptFeha(stored)) return undefined
+  if (!stored.claims3) return 'This file was read before the FEHA claims existed, and they have not been read on it since.'
+  if (!stored.claims3.length && stored.fehaSkipped) return stored.fehaSkipped
+  return undefined
+}
+
 /** Whether every stage has been read, and is still read under today's inputs. */
 export function isComplete(
   stored: StoredReading | null | undefined,
@@ -133,7 +172,11 @@ export function isComplete(
 
 /** Every claim read so far, in the order the claims are defined. */
 export function allClaims<T>(stored: StoredReading | null | undefined): T[] {
-  return [...((stored?.claims1 ?? []) as T[]), ...((stored?.claims2 ?? []) as T[])]
+  return [
+    ...((stored?.claims1 ?? []) as T[]),
+    ...((stored?.claims2 ?? []) as T[]),
+    ...((stored?.claims3 ?? []) as T[]),
+  ]
 }
 
 /**
@@ -144,12 +187,7 @@ export function allClaims<T>(stored: StoredReading | null | undefined): T[] {
  */
 export function describe(stored: StoredReading | null | undefined): string {
   if (!stored) return 'Not read yet.'
-  const done = STAGES.filter(s => {
-    if (s === 'wage order') return Boolean(stored.wageOrder)
-    if (s === 'claims 1') return Boolean(stored.claims1)
-    if (s === 'claims 2') return Boolean(stored.claims2)
-    return Boolean(stored.spine)
-  })
+  const done = STAGES.filter(s => isRead(stored, s))
   if (done.length === STAGES.length) return 'Read in full.'
   return `${done.length} of ${STAGES.length} stages read.`
 }

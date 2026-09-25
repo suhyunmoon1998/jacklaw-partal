@@ -83,11 +83,29 @@ export function citationsIn(text: string): string[] {
 
   // Lab. Code § 512 · Labor Code section 512 · Lab Code sec. 226.7
   each(
-    /\b(Lab(?:or)?\.?\s*Code|Bus\.?\s*&\s*Prof\.?\s*Code|Code\s*Civ\.?\s*Proc\.?)\s*(?:§+|sec(?:tion)?s?\.?)?\s*([\d.]+[a-zA-Z]?)/gi,
+    // A comma after "Code" is the California Style Manual form ("Lab. Code,
+    // § 226.7"); the number must start with a digit, or "the Labor Code." at
+    // the end of a sentence reads as a citation to nothing.
+    /\b(Lab(?:or)?\.?\s*Code|Bus\.?\s*&\s*Prof\.?\s*Code|Code\s*Civ\.?\s*Proc\.?),?\s*(?:§+|sec(?:tion)?s?\.?)?\s*(\d[\d.]*[a-zA-Z]?)/gi,
     m => {
       const law = /^lab/i.test(m[1]) ? 'LAB' : /^bus/i.test(m[1]) ? 'BPC' : 'CCP'
       push(`${law} ${m[2].replace(/\.$/, '')}`)
     }
+  )
+
+  // Gov. Code § 12940 · Government Code section 12940(m)
+  each(/\bGov(?:ernment|\.)?\s*Code,?\s*(?:§+|sec(?:tion)?s?\.?)?\s*(\d[\d.]*[a-zA-Z]?)/gi, m =>
+    push(`GOV ${m[1].replace(/\.$/, '')}`)
+  )
+
+  // Cal. Code Regs., tit. 2, § 11068
+  each(/\bCal(?:ifornia|\.)?\s*Code\s*(?:of\s*)?Regs?\.?(?:ulations)?,?\s*tit(?:le|\.)?\s*2,?\s*(?:§+|sec(?:tion)?s?\.?)\s*(\d[\d.]*)/gi, m =>
+    push(`CCR2 ${m[1].replace(/\.$/, '')}`)
+  )
+
+  // L.A. Mun. Code § 187.02 · LAMC section 187.02
+  each(/\b(?:L\.?\s*A\.?\s*Mun(?:icipal|\.)?\s*Code|LAMC),?\s*(?:§+|sec(?:tion)?s?\.?)?\s*(\d[\d.]*)/gi, m =>
+    push(`LAMC ${m[1].replace(/\.$/, '')}`)
   )
 
   // Wage Order 5, § 12 · IWC Wage Order 5 section 11

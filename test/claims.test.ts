@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { CLAIMS, claimById, sectionsUsed } from '@/lib/authority/claims'
+import { ALL_CLAIMS, CLAIMS, FEHA_CLAIMS, claimById, sectionsUsed } from '@/lib/authority/claims'
 import { ORDERS } from '@/lib/wageOrderChoice'
 import { parseKey, section } from '@/lib/authority'
 
@@ -162,5 +162,42 @@ describe('a matrix run that loses a claim', () => {
     expect(shape).toHaveProperty('failed')
     expect(shape.findings).toEqual([])
     expect(shape.failed).toEqual([])
+  })
+})
+
+describe('the FEHA claims', () => {
+  it('reads every element out of the FEHA text on file, and names a CACI instruction the portal holds', () => {
+    for (const c of FEHA_CLAIMS) {
+      expect(c.caci, c.id).toBeTruthy()
+      expect(section('CACI', c.caci!), `${c.id}: CACI ${c.caci} not on file`).toBeTruthy()
+      for (const e of c.elements) {
+        const { law, num } = parseKey(e.from)
+        expect(section(law, num), `${c.id}:${e.key} reads from ${e.from}, not on file`).toBeTruthy()
+      }
+    }
+  })
+
+  it('carries the words its elements use', () => {
+    expect(section('GOV', '12940')).toMatch(/fail to engage in a timely, good faith, interactive process/)
+    expect(section('GOV', '12940')).toMatch(/fail to make reasonable accommodation for the known physical or mental disability/)
+    expect(section('GOV', '12940')).toMatch(/fail to take all reasonable steps necessary to prevent discrimination and harassment/)
+    expect(section('GOV', '12940')).toMatch(/opposed any practices forbidden under this part/)
+    expect(section('GOV', '12923')).toMatch(/severe or pervasive/)
+  })
+
+  it('holds the instructions in their July 2026 form where the supplement revised them', () => {
+    // 2540 and 2512 changed in the words the jury hears; 2521A–2522A replaced
+    // "member of protected group". The 2026 edition text is superseded.
+    expect(section('CACI', '2540')).toMatch(/subjected\s+\[him\/her\/nonbinary pronoun\] to disability discrimination/)
+    expect(section('CACI', '2521A')).toMatch(/protected characteristic or combination of characteristics/)
+    expect(section('CACI', '2521A')).not.toMatch(/member of protected group/)
+    expect(section('CACI', '2740')).toMatch(/another \[sex\/race\/ethnicity\]/)
+    expect(section('CACI', '2740')).not.toMatch(/the opposite sex/)
+  })
+
+  it('keeps the FEHA claims apart from the wage-and-hour stages', () => {
+    const ids = new Set(CLAIMS.map(c => c.id))
+    for (const c of FEHA_CLAIMS) expect(ids.has(c.id)).toBe(false)
+    expect(ALL_CLAIMS).toHaveLength(CLAIMS.length + FEHA_CLAIMS.length)
   })
 })

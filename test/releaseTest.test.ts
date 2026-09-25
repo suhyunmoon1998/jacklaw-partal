@@ -311,3 +311,22 @@ describe('the two forms a fact id is written in', () => {
     expect(problems.some(p => p.rule === 'fact not in ledger' && p.what.includes('f999'))).toBe(true)
   })
 })
+
+describe('citations to the bodies added with FEHA and the LA ordinance', () => {
+  it('reads Government Code, title 2 regulations and the LA Municipal Code', () => {
+    expect(citationsIn('Gov. Code § 12940(m) and Government Code section 12926.1')).toEqual(['GOV 12940', 'GOV 12926.1'])
+    expect(citationsIn('Cal. Code Regs., tit. 2, § 11068')).toEqual(['CCR2 11068'])
+    expect(citationsIn('L.A. Mun. Code § 187.02 and LAMC section 187.01')).toEqual(['LAMC 187.02', 'LAMC 187.01'])
+  })
+})
+
+describe('citations in the forms a California brief writes them', () => {
+  it('reads the Style Manual comma after "Code"', () => {
+    expect(citationsIn('Premium pay is owed. (Lab. Code, § 1198.5.)')).toEqual(['LAB 1198.5'])
+    expect(citationsIn('(Gov. Code, § 12940, subd. (h).)')).toEqual(['GOV 12940'])
+  })
+
+  it('does not read "the Labor Code." at the end of a sentence as a citation', () => {
+    expect(citationsIn('This case arises under the California Labor Code.')).toEqual([])
+  })
+})

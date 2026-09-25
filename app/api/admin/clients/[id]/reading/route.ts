@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { isAdmin } from '@/lib/adminAuth'
 import { readLedger } from '@/lib/factStore'
 import { standing } from '@/lib/factLedger'
-import { STAGES, Stage, isComplete, nextStage, staleStages } from '@/lib/caseReadingShape'
+import { STAGES, Stage, isRead, nextStage, staleStages } from '@/lib/caseReadingShape'
 import { snapshotNow } from '@/lib/briefVersions'
 import { readingFingerprint, runStage, stampsNow } from '@/lib/caseReading'
 import { clearReading, readReading, saveStage } from '@/lib/caseReadingStore'
@@ -97,13 +97,17 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   // Kept first, so the brief it produced is still there to compare against.
   // Taken before every stage of a re-walk, not only the first; a version that
   // did not change is not kept twice, and one caught mid-walk says which stage.
-  if (row && isComplete(row.reading)) {
+  if (row && isRead(row.reading, stage)) {
     await snapshotNow(params.id, `before "${stage}" was read again`)
   }
 
   let patch
   try {
-    patch = await runStage(stage, entries, stage === 'wage order' ? {} : stored)
+    // `force` reads the FEHA claims even where the screen in code found nothing
+    // to read — a person has looked at the facts and decided otherwise.
+    patch = await runStage(stage, entries, stage === 'wage order' ? {} : stored, {
+      forceFeha: stage === 'claims 3' && body?.force === true,
+    })
   } catch (err) {
     return NextResponse.json({ error: (err as Error).message }, { status: 502 })
   }

@@ -8,6 +8,7 @@ import {
   isVerbatim,
   render,
 } from '@/lib/authority/cases'
+import { ALL_CLAIMS } from '@/lib/authority/claims'
 
 describe('the opinions held in full', () => {
   it('holds the cases the wage-and-hour elements actually turn on', () => {
@@ -24,7 +25,10 @@ describe('the opinions held in full', () => {
     expect(caseRecord('augustus')!.text).toMatch(/rest period/i)
     expect(caseRecord('troester')!.text).toMatch(/de minimis/i)
     for (const { key } of caseNames()) {
-      expect(caseRecord(key)!.text.length, key).toBeGreaterThan(40000)
+      // A Court of Appeal opinion runs shorter than a Supreme Court one; either
+      // way a headnote or a summary is a fraction of this.
+      const floor = /Cal\.App\./.test(caseRecord(key)!.citation) ? 20000 : 40000
+      expect(caseRecord(key)!.text.length, key).toBeGreaterThan(floor)
     }
   })
 
@@ -34,7 +38,7 @@ describe('the opinions held in full', () => {
       expect(c.source, key).toMatch(/^https?:\/\/|Caselaw Access Project/)
       expect(c.fetchedOn, key).toMatch(/^\d{4}-\d{2}-\d{2}$/)
       expect(c.pagination.length, key).toBeGreaterThan(20)
-      expect(c.citation, key).toMatch(/Cal\.\s?(4th|5th)/)
+      expect(c.citation, key).toMatch(/Cal\.\s?(App\.\s?)?(4th|5th)/)
     }
   })
 
@@ -71,6 +75,13 @@ describe('the passages the office relies on', () => {
       if (h.case === 'brinker') expect(h.pinpoint, 'Brinker has no page markers at all').toBe('')
       else if (h.pinpoint) expect(h.pinpoint, `${h.id}`).toMatch(/^slip op\. p\. \d+$/)
     }
+  })
+
+  it('quotes a passage, not a page', () => {
+    // A quote cut between two phrases once ran on for 7,445 characters — the
+    // start matched the court's holding, the end matched the trial court's,
+    // and everything between rode along. A holding is a few sentences.
+    for (const h of HOLDINGS) expect(h.quote.length, `${h.id} quotes ${h.quote.length} characters`).toBeLessThan(900)
   })
 
   it('writes down the edge of every holding', () => {
@@ -117,6 +128,17 @@ describe('the passages the office relies on', () => {
         appliedTo: 'x',
       })
     ).toBe(false)
+  })
+
+  it('attaches every holding to a claim or element that exists', () => {
+    // The matrix finds a holding by the key it bears on. A typo here —
+    // 'feha-retaliation:adverse-actions' — would leave the holding on file and
+    // never in front of the model, and nothing else would notice.
+    const real = new Set(ALL_CLAIMS.flatMap(c => [c.id, ...c.elements.map(e => `${c.id}:${e.key}`)]))
+    for (const h of HOLDINGS) {
+      expect(h.bearsOn.length, `${h.id} bears on nothing`).toBeGreaterThan(0)
+      for (const key of h.bearsOn) expect(real.has(key), `${h.id} -> ${key} is not a claim or element`).toBe(true)
+    }
   })
 
   it('finds the holdings that bear on an element', () => {

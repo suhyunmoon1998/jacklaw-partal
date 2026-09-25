@@ -15,6 +15,8 @@ import { LedgerFact, buildFactualBrief } from '@/lib/factualBrief'
 import FactualDocument from '@/components/admin/FactualDocument'
 import type { SearchRecord } from '@/lib/sourceSearch'
 import { BaselineRow, FactualTemplateInput, byTemplate } from '@/lib/factualTemplate'
+import DraftedSections from '@/components/admin/DraftedSections'
+import type { StoredDraft } from '@/lib/briefDraftShape'
 
 export default function FactualSheetPage() {
   const params = useParams<{ clientId: string }>()
@@ -86,6 +88,47 @@ export default function FactualSheetPage() {
     return () => { live = false }
   }, [load])
 
+  /** The model-written sections. Loaded with the sheet; written only on request. */
+  const [draft, setDraft] = useState<StoredDraft | null>(null)
+  const [draftStale, setDraftStale] = useState(false)
+  const [drafting, setDrafting] = useState(false)
+  const [draftError, setDraftError] = useState('')
+  useEffect(() => {
+    if (!clientId || signedIn !== true) return
+    void fetch(`/api/admin/clients/${clientId}/draft`, { cache: 'no-store' })
+      .then(r => (r.ok ? r.json() : null))
+      .then(b => {
+        setDraft(b?.drafts?.factual ?? null)
+        setDraftStale(Boolean(b?.stale?.factual))
+        if (b?.error) setDraftError(b.error)
+      })
+      .catch(() => {})
+  }, [clientId, signedIn])
+  const writeDraft = async () => {
+    // One model call; said on the button, asked again here.
+    if (!window.confirm('Write the final factual summary (XI) with the model? It takes a minute or two and costs money, and replaces the draft of these sections shown here.')) return
+    setDrafting(true)
+    setDraftError('')
+    try {
+      const r = await fetch(`/api/admin/clients/${clientId}/draft`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ which: 'factual' }),
+      })
+      const b = await r.json().catch(() => ({}))
+      // A draft that was written but not stored is still shown: it was paid for.
+      if (b?.draft) {
+        setDraft(b.draft)
+        setDraftStale(false)
+      }
+      if (!r.ok) throw new Error(b?.error || 'The draft could not be written.')
+    } catch (err) {
+      setDraftError((err as Error).message)
+    } finally {
+      setDrafting(false)
+    }
+  }
+
   if (signedIn === false) {
     return (
       <main className="min-h-screen bg-gray-100 flex items-center justify-center p-8">
@@ -140,6 +183,18 @@ export default function FactualSheetPage() {
       )}
 
       {!empty && <FactualDocument brief={brief} view={view} ledger={ledger} searched={searched} />}
+      {!empty && (
+        <div className="px-0 sm:px-6 pb-6">
+          <DraftedSections
+            draft={draft}
+            stale={draftStale}
+            keys={['factual-summary']}
+            busy={drafting}
+            error={draftError}
+            onWrite={writeDraft}
+          />
+        </div>
+      )}
     </main>
   )
 }

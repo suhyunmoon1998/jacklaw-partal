@@ -19,7 +19,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
-import { StoredReading, allClaims } from '@/lib/caseReadingShape'
+import { StoredReading, allClaims, fehaNotRead } from '@/lib/caseReadingShape'
 import { Finding, buildBrief } from '@/lib/caseBrief'
 import BriefDocument, { VersionLine } from '@/components/admin/BriefDocument'
 import { releaseTest } from '@/lib/releaseTest'
@@ -27,6 +27,8 @@ import { Changes, FactSnapshot } from '@/lib/briefChanges'
 import { defenceRecords } from '@/lib/defenceRecord'
 import { LedgerFact } from '@/lib/factualBrief'
 import { trialReadiness } from '@/lib/trialReadiness'
+import DraftedSections from '@/components/admin/DraftedSections'
+import type { StoredDraft } from '@/lib/briefDraftShape'
 
 const headers = {}
 
@@ -144,6 +146,7 @@ export default function ReadingSheetPage() {
     readOn: updatedAt,
     stale,
     staleStages,
+    fehaNotRead: fehaNotRead(reading),
   })
   /** Nothing has been read at all — not one section has anything to show. */
   const empty = !analysis && findings.length === 0 && !reading?.spine
@@ -162,6 +165,47 @@ export default function ReadingSheetPage() {
    * is what records a reading, so the office is not asked to remember to.
    * A failure costs a comparison next time and nothing on this screen.
    */
+  /** The model-written sections. Loaded with the sheet; written only on request. */
+  const [draft, setDraft] = useState<StoredDraft | null>(null)
+  const [draftStale, setDraftStale] = useState(false)
+  const [drafting, setDrafting] = useState(false)
+  const [draftError, setDraftError] = useState('')
+  useEffect(() => {
+    if (!clientId || signedIn !== true) return
+    void fetch(`/api/admin/clients/${clientId}/draft`, { cache: 'no-store' })
+      .then(r => (r.ok ? r.json() : null))
+      .then(b => {
+        setDraft(b?.drafts?.trial ?? null)
+        setDraftStale(Boolean(b?.stale?.trial))
+        if (b?.error) setDraftError(b.error)
+      })
+      .catch(() => {})
+  }, [clientId, signedIn])
+  const writeDraft = async () => {
+    // One model call; said on the button, asked again here.
+    if (!window.confirm('Write the trial brief sections (I, IV, XII) with the model? It takes a minute or two and costs money, and replaces the draft of these sections shown here.')) return
+    setDrafting(true)
+    setDraftError('')
+    try {
+      const r = await fetch(`/api/admin/clients/${clientId}/draft`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ which: 'trial' }),
+      })
+      const b = await r.json().catch(() => ({}))
+      // A draft that was written but not stored is still shown: it was paid for.
+      if (b?.draft) {
+        setDraft(b.draft)
+        setDraftStale(false)
+      }
+      if (!r.ok) throw new Error(b?.error || 'The draft could not be written.')
+    } catch (err) {
+      setDraftError((err as Error).message)
+    } finally {
+      setDrafting(false)
+    }
+  }
+
   const [compared, setCompared] = useState(false)
   useEffect(() => {
     if (compared || empty || !loaded) return
@@ -234,6 +278,18 @@ export default function ReadingSheetPage() {
           defences={defences}
           readiness={readiness}
         />
+      )}
+      {!empty && (
+        <div className="px-0 sm:px-6 pb-6">
+          <DraftedSections
+            draft={draft}
+            stale={draftStale}
+            keys={['trial-intro', 'trial-facts', 'trial-conclusion']}
+            busy={drafting}
+            error={draftError}
+            onWrite={writeDraft}
+          />
+        </div>
       )}
     </main>
   )

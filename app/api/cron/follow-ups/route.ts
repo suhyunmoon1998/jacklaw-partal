@@ -7,9 +7,10 @@ import { standing } from '@/lib/factLedger'
 import { readContradictions, readLedger } from '@/lib/factStore'
 import { askFollowUps } from '@/lib/followUp'
 import { savePlan } from '@/lib/followUpStore'
-import { STAGES, Stage, StoredReading, allClaims, isComplete, nextStage } from '@/lib/caseReadingShape'
+import { STAGES, Stage, StoredReading, allClaims, isRead, isReadExceptFeha, nextStage } from '@/lib/caseReadingShape'
+import { snapshotNow } from '@/lib/briefVersions'
 import { WageOrderChoice, checkChoice, isUsable } from '@/lib/wageOrderChoice'
-import { readingFingerprint, runStage, stampsNow } from '@/lib/caseReading'
+import { readingFingerprint, runStage } from '@/lib/caseReading'
 import { readReading, saveStage } from '@/lib/caseReadingStore'
 import { ClaimFinding } from '@/lib/claimMatrix'
 import { SpineReading } from '@/lib/evidenceSpine'
@@ -80,7 +81,7 @@ async function waitingFor(): Promise<Waiting[]> {
   // later, for the one client picked — hashing sixteen ledgers to choose one
   // would cost more than the choosing is worth.
   const finishedReading = (readings ?? [])
-    .filter(r => isComplete((r.result ?? {}) as StoredReading))
+    .filter(r => isReadExceptFeha((r.result ?? {}) as StoredReading))
     .map(r => r.client_id as string)
 
   return whoIsWaiting({
@@ -168,7 +169,13 @@ export async function GET(req: NextRequest) {
       const row = await readReading(next.clientId, fingerprint)
       let stored = row && !row.stale ? row.reading : {}
       const ran: Stage[] = []
-      let stage = nextStage(stored, stampsNow(entries, stored))
+      // Only stages never read. A stage that is merely stale — its model, its
+      // Order, its claims or its authority moved since — is shown as stale on
+      // the panel and re-read when somebody asks. Unprompted, the night would
+      // otherwise re-read every Module 2 client's claims the first time a
+      // holding was added to the library, and nobody would have decided to
+      // spend that.
+      let stage = nextStage(stored)
       let stoppedFor = ''
 
       while (stage) {
@@ -193,10 +200,16 @@ export async function GET(req: NextRequest) {
           }
         }
 
+        // A stage already on the row is about to be written over — a reading
+        // whose facts moved restarts from the Wage Order. Kept first, as the
+        // panel keeps it, so the brief it produced can still be compared.
+        if (row && isRead(row.reading, stage)) {
+          await snapshotNow(next.clientId, `before the night read "${stage}" again`)
+        }
         const patch = await runStage(stage, entries, stage === 'wage order' ? {} : stored)
         stored = await saveStage(next.clientId, fingerprint, { ...stored, ...patch })
         ran.push(stage)
-        stage = nextStage(stored, stampsNow(entries, stored))
+        stage = nextStage(stored)
       }
 
       if (!ran.length) {

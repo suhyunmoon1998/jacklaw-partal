@@ -42,6 +42,21 @@ export const FETCHED_ON: Record<string, { on: string; from: string }> = {
   statutes: { on: '2026-09-19', from: 'leginfo.legislature.ca.gov — California Legislative Information' },
   wageOrders: { on: '2026-09-18', from: 'dir.ca.gov — Industrial Welfare Commission Wage Orders' },
   caci: { on: '2026-09-18', from: "Judicial Council of California Civil Jury Instructions 2026 — the firm's own copy" },
+  // The firm's copy is byte-identical to the Judicial Council's 2026 PDF. The
+  // July 2026 supplement then revised eleven of the instructions held here —
+  // 2740–2742 in the words the jury hears — and those are held as revised.
+  caciSupplement: { on: '2026-09-24', from: 'Judicial Council of California Civil Jury Instructions (July 2026 supp.) — courts.ca.gov' },
+  feha: { on: '2026-09-24', from: 'leginfo.legislature.ca.gov — Gov. Code §§ 12923, 12926, 12926.1, 12940, 12960, 12965' },
+  // Opened in a real browser: the host serves the text only after JavaScript
+  // runs, which is why an automated fetch saw an error page. Current through
+  // Register 2026, No. 37 (9/11/26), as the page itself states.
+  // Opened in a real browser from the City's official code host (American
+  // Legal Publishing), "2026 Rev. 9 — current through legislation effective
+  // June 30, 2026". The 2016 enacting ordinance the first fetch used had been
+  // amended twice since (Ord. 187,456 in 2022, Ord. 188,111 in 2024), and its
+  // scan carried OCR errors; neither is in the text held here.
+  laMinimumWage: { on: '2026-09-24', from: 'codelibrary.amlegal.com — LAMC §§ 187.01, 187.02 (2026 Rev. 9); wagesla.lacity.gov — 2024–2026 rate notices' },
+  fehaRegs: { on: '2026-09-24', from: 'govt.westlaw.com/calregs — Barclays Official California Code of Regulations, 2 CCR §§ 11065, 11068, 11069' },
 }
 
 type Keyed = { sections: Record<string, string> }
@@ -61,6 +76,10 @@ export const LAW_NAME: Record<string, string> = {
   LAB: 'Lab. Code',
   BPC: 'Bus. & Prof. Code',
   CCP: 'Code Civ. Proc.',
+  GOV: 'Gov. Code',
+  CCR2: 'Cal. Code Regs., tit. 2,',
+  LAMC: 'L.A. Mun. Code',
+  LAMW: 'L.A. Office of Wage Standards, minimum wage notice',
   IWC: 'IWC Wage Order',
   CACI: 'CACI No.',
 }
@@ -93,6 +112,7 @@ export function cite(law: string, num: string): string {
     return sec ? `IWC Wage Order ${order}, § ${sec}` : `IWC Wage Order ${order}`
   }
   if (law === 'CACI') return `CACI No. ${num}`
+  if (law === 'LAMW') return `${LAW_NAME.LAMW} (eff. ${num})`
   return `${LAW_NAME[law] ?? law} § ${num}`
 }
 

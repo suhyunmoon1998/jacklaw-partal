@@ -10,7 +10,7 @@ import {
   nextStage,
   staleStages,
 } from '@/lib/caseReadingShape'
-import { claimsFor, readingFingerprint, stampFor, stampsNow } from '@/lib/caseReading'
+import { fehaRaised, claimsFor, readingFingerprint, stampFor, stampsNow } from '@/lib/caseReading'
 import { CLAIMS } from '@/lib/authority/claims'
 import { LedgerEntry } from '@/lib/factLedger'
 
@@ -41,6 +41,8 @@ describe('walking a reading through its stages', () => {
     walk.claims1 = []
     expect(nextStage(walk)).toBe('claims 2')
     walk.claims2 = []
+    expect(nextStage(walk)).toBe('claims 3')
+    walk.claims3 = []
     expect(nextStage(walk)).toBe('spine')
     walk.spine = {}
     expect(nextStage(walk)).toBeNull()
@@ -59,12 +61,18 @@ describe('walking a reading through its stages', () => {
 
   it('says how far along it is, because half-read is not the same as thin', () => {
     expect(describeReading(null)).toBe('Not read yet.')
-    expect(describeReading({ wageOrder: {} })).toBe('1 of 4 stages read.')
-    expect(describeReading({ wageOrder: {}, claims1: [], claims2: [], spine: {} })).toBe('Read in full.')
+    expect(describeReading({ wageOrder: {} })).toBe('1 of 5 stages read.')
+    expect(describeReading({ wageOrder: {}, claims1: [], claims2: [], claims3: [], spine: {} })).toBe('Read in full.')
+  })
+
+  it('asks a reading already on file for the FEHA stage alone, not the whole walk', () => {
+    // Every reading taken before the FEHA claims existed has the other four.
+    expect(nextStage({ wageOrder: {}, claims1: [], claims2: [], spine: {} })).toBe('claims 3')
   })
 
   it('joins the two claim halves back into one list', () => {
     expect(allClaims<string>({ claims1: ['a', 'b'], claims2: ['c'] })).toEqual(['a', 'b', 'c'])
+    expect(allClaims<string>({ claims1: ['a'], claims2: ['b'], claims3: ['c'] })).toEqual(['a', 'b', 'c'])
     expect(allClaims({})).toEqual([])
   })
 
@@ -113,7 +121,7 @@ describe('knowing when a reading has gone stale', () => {
 describe('staleness, one stage at a time', () => {
   const ledger = [fact()]
   const read = (over: Partial<StoredReading> = {}): StoredReading => {
-    const base: StoredReading = { wageOrder: { proposal: { order: '5' } }, claims1: [], claims2: [], spine: {}, ...over }
+    const base: StoredReading = { wageOrder: { proposal: { order: '5' } }, claims1: [], claims2: [], claims3: [], spine: {}, ...over }
     return { ...base, stamps: Object.fromEntries(STAGES.map(s => [s, stampFor(ledger, s, base)])) }
   }
 
@@ -144,7 +152,7 @@ describe('staleness, one stage at a time', () => {
   it('treats a stage read before stamps existed as stale rather than current', () => {
     // Saying a reading is up to date when nothing recorded what it was read
     // under is a claim nobody can check.
-    const old: StoredReading = { wageOrder: { proposal: { order: '5' } }, claims1: [], claims2: [], spine: {} }
+    const old: StoredReading = { wageOrder: { proposal: { order: '5' } }, claims1: [], claims2: [], claims3: [], spine: {} }
     expect(staleStages(old, stampsNow(ledger, old))).toEqual([...STAGES])
   })
 
@@ -158,5 +166,47 @@ describe('staleness, one stage at a time', () => {
     const now = stampsNow(ledger, stored)
     expect(isComplete(stored, now)).toBe(true)
     expect(isComplete(stored, { ...now, spine: 'moved' })).toBe(false)
+  })
+})
+
+describe('whether the FEHA claims are worth reading', () => {
+  it('reads nothing on a file with no protected characteristic, accommodation or harassment in it', () => {
+    expect(fehaRaised([fact({ proposition: 'She was not paid for two hours of tip sorting.', legalTags: ['off-the-clock work'] })]).raised).toBe(false)
+  })
+
+  it('reads them when a fact names one, and says which fact', () => {
+    const r = fehaRaised([fact({ id: 'c1:f010', proposition: 'She asked for a lighter duty after her back injury, citing her disability.', legalTags: [] })])
+    expect(r.raised).toBe(true)
+    expect(r.because[0]).toMatch(/^c1:f010: disab/i)
+  })
+
+  it('reads a tag the extraction wrote even when the sentence does not use the word', () => {
+    expect(fehaRaised([fact({ proposition: 'Her manager mocked her accent.', legalTags: ['national origin'] })]).raised).toBe(true)
+  })
+
+  it('does not read FEHA off the extraction’s hedges — the three it wrote on real files', () => {
+    expect(fehaRaised([fact({ proposition: 'The client’s date of birth is September 2, 1998.', legalTags: ['party identification', 'age — potential FEHA age protection threshold'] })]).raised).toBe(false)
+    expect(fehaRaised([fact({ proposition: 'The employer had no HR department.', legalTags: ['harassment/retaliation — reporting channel'] })]).raised).toBe(false)
+    expect(fehaRaised([fact({ proposition: 'For hours over eight in a day or over 40 in a week, the pay record did not show overtime.', legalTags: ['unpaid overtime'] })]).raised).toBe(false)
+    expect(fehaRaised([fact({ proposition: 'He supervised front-of-house staff.', legalTags: ['supervisor status (tip pooling / harassment liability)'] })]).raised).toBe(false)
+  })
+
+  it('reads it when the client says the firing was discriminatory and the tag says so plainly', () => {
+    expect(fehaRaised([fact({ proposition: 'Client believes the employer ended his job for an unlawful reason.', legalTags: ['wrongful termination', 'discrimination'] })]).raised).toBe(true)
+  })
+
+  it('ignores a superseded fact', () => {
+    expect(fehaRaised([fact({ proposition: 'She is pregnant.', supersededBy: 'c1:f099' })]).raised).toBe(false)
+  })
+})
+
+describe('what is not a FEHA fact', () => {
+  it('does not read a State Disability Insurance deduction as a disability', () => {
+    expect(fehaRaised([fact({ proposition: 'Her pay stubs show a State Disability Insurance (SDI) deduction every period.', legalTags: ['wage statements — deductions'] })]).raised).toBe(false)
+  })
+
+  it('still reads a work injury with restrictions, and a hedged accommodation tag', () => {
+    expect(fehaRaised([fact({ proposition: 'After she was injured at work her doctor gave her lifting restrictions.', legalTags: [] })]).raised).toBe(true)
+    expect(fehaRaised([fact({ proposition: 'She gave the manager a note from her doctor.', legalTags: ['possible disability accommodation'] })]).raised).toBe(true)
   })
 })

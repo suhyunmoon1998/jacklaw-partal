@@ -110,6 +110,32 @@ export default function CaseReading({ clientId, clientName }: { clientId: string
     void load()
   }
 
+  /**
+   * The FEHA claims alone, one request. Offered where the stage is unread on a
+   * reading taken before it existed, or where the screen in code skipped it —
+   * a person who has read the facts can overrule the screen, and pays for it
+   * knowingly.
+   */
+  const readFeha = async (force: boolean) => {
+    if (!window.confirm('Read the seven FEHA claims against this file? One model stage — about as long and as costly as one half of the wage claims.')) return
+    setError('')
+    setRunning('claims 3')
+    try {
+      const res = await fetch(`/api/admin/clients/${clientId}/reading`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ stage: 'claims 3', force }),
+      })
+      const body = await res.json()
+      if (!res.ok) throw new Error(body?.error || 'The FEHA stage failed.')
+      setReading(body.reading)
+    } catch (err) {
+      setError((err as Error).message)
+    }
+    setRunning(null)
+    void load()
+  }
+
   const start = async () => {
     // A stale reading is read again from the beginning: stages read against
     // different ledgers must not be stitched into one reading true of neither.
@@ -192,9 +218,26 @@ export default function CaseReading({ clientId, clientName }: { clientId: string
 
       {!stale && outdated.length > 0 && !running && (
         <p className="text-xs rounded-lg px-3 py-2 mb-3 bg-blue-50 border border-blue-200 text-blue-800">
-          {outdated.join(' and ')} would be read differently now — the model changed, or the Wage
-          Order they were read under did. Everything else stands and will not be run again.
+          {outdated.join(' and ')} would be read differently now — the model, the Wage Order, the
+          claim definitions or the authority they were read against changed since. Everything else
+          stands and will not be run again.
         </p>
+      )}
+
+      {!stale && !running && reading && Boolean(reading.wageOrder) && (!reading.claims3 || Boolean(reading.fehaSkipped)) && (
+        <div className="text-xs rounded-lg px-3 py-2 mb-3 bg-gray-50 border border-gray-200 text-gray-700 flex items-start gap-3">
+          <p className="flex-1">
+            {reading.claims3
+              ? `FEHA claims not read: ${reading.fehaSkipped}`
+              : 'The FEHA claims have not been read on this file. It was read before they existed.'}
+          </p>
+          <button
+            onClick={() => readFeha(Boolean(reading.claims3))}
+            className="shrink-0 font-semibold px-2.5 py-1 rounded-md border border-gray-300 bg-white hover:bg-gray-100"
+          >
+            {reading.claims3 ? 'Read them anyway' : 'Read the FEHA claims'}
+          </button>
+        </div>
       )}
 
       {running && (

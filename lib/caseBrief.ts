@@ -77,6 +77,11 @@ export interface BriefInput {
   stale: boolean
   /** Readings whose own model or wage order moved since. */
   staleStages: string[]
+  /**
+   * Why the FEHA claims were not read, or that they never were on a reading
+   * taken before they existed. Absent when they were read.
+   */
+  fehaNotRead?: string
 }
 
 /** A heading with the things under it, or a stated reason there are none. */
@@ -226,6 +231,14 @@ export function reviewItems(input: BriefInput): ReviewItem[] {
     items.push({
       what: `"${stage}" would be read differently now`,
       why: 'The model changed, or the wage order it was read under did.',
+      from: 'Claims reading',
+    })
+  }
+
+  if (input.fehaNotRead) {
+    items.push({
+      what: 'The FEHA claims were not read',
+      why: `${input.fehaNotRead} Nothing below says anything about discrimination, harassment, accommodation or FEHA retaliation.`,
       from: 'Claims reading',
     })
   }
