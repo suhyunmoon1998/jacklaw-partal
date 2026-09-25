@@ -10,11 +10,13 @@ export async function GET(req: NextRequest) {
   const clientId = req.nextUrl.searchParams.get('clientId')
   if (!clientId) return NextResponse.json({ documents: [] }, { status: 400 })
 
-  const { data } = await getSupabase()
+  const { data, error } = await getSupabase()
     .from('documents')
     .select('id, name, category, uploaded_at, storage_path, downloaded_at, download_count')
     .eq('client_id', clientId)
     .order('uploaded_at', { ascending: false })
+  // Otherwise a failed read is drawn as "Documents (0)".
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   return NextResponse.json({
     documents: (data ?? []).map(d => ({

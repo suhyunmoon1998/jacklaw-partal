@@ -73,7 +73,7 @@ const DEFAULT_QUESTION_COUNT = QUESTIONNAIRE_SECTIONS.reduce((n, s) => n + s.que
 
 
 // ─── Admin Login ──────────────────────────────────────────────────────────────
-function AdminLogin({ onLogin }: { onLogin: () => void }) {
+function AdminLogin({ onLogin, notice }: { onLogin: () => void; notice?: string }) {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -126,6 +126,9 @@ function AdminLogin({ onLogin }: { onLogin: () => void }) {
         <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
           <p className="text-white font-semibold text-lg mb-1">Sign In</p>
           <p className="text-white/40 text-xs mb-5">Internal access only · Law Offices of Jack D. Josephson, APC</p>
+          {notice && (
+            <p className="text-amber-300 text-xs bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2 mb-4">{notice}</p>
+          )}
 
 
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -1135,18 +1138,39 @@ export default function AdminPage() {
   const [selectedSubmission, setSelectedSubmission] = useState<IntakeSubmission | null>(null)
   const [submissionNotes, setSubmissionNotes] = useState('')
   const router = useRouter()
+  const [sessionEnded, setSessionEnded] = useState(false)
+
+  /**
+   * The cookie ran out while the panel was open.
+   *
+   * Signing in was checked once, when the page loaded, and the session lasts
+   * eight hours — while this tab is left open for days. After that every call
+   * came back 401 and nothing said so: the list kept whatever it last had, and
+   * opening a client drew its empty default, so a client who had finished both
+   * modules showed as Not Started at 0%. A screen that turns "I could not ask"
+   * into "there is nothing" is the one the office cannot trust, so the first
+   * 401 puts the login form back up and says why.
+   */
+  const endSession = useCallback(() => {
+    clearAdminSession()
+    setSelectedClient(null)
+    setClientData(null)
+    setSessionEnded(true)
+    setAuthenticated(false)
+  }, [])
 
   const fetchClients = useCallback(async () => {
     const res = await fetch('/api/admin/clients', {
             // Never the browser's copy. This panel is left open for days, and a
       // cached reply is a client list from whenever the tab was first opened.
       cache: 'no-store',
-    })
-    if (res.ok) {
+    }).catch(() => null)
+    if (res?.status === 401) return endSession()
+    if (res?.ok) {
       const { clients } = await res.json()
       setAllClients(clients ?? [])
     }
-  }, [])
+  }, [endSession])
 
   /**
    * Bring the list up to date without being asked.
@@ -1391,6 +1415,15 @@ export default function AdminPage() {
       fetch(`/api/admin/questionnaire?clientId=${client.id}`, undefined),
       fetch(`/api/admin/documents?clientId=${client.id}`, undefined),
     ])
+    if (qRes.status === 401 || docsRes.status === 401) return endSession()
+    // Anything else that failed is said, not drawn: an empty state here reads
+    // as a client who never started.
+    if (!qRes.ok || !docsRes.ok) {
+      const failed = !qRes.ok ? qRes : docsRes
+      const { error } = await failed.json().catch(() => ({ error: '' }))
+      alert(`Could not load ${client.name}'s file${error ? `: ${error}` : ''}. Try again.`)
+      return
+    }
     const { state } = await qRes.json()
     const { documents } = await docsRes.json()
     setClientData({
@@ -1456,7 +1489,13 @@ export default function AdminPage() {
       </main>
     </div>
   )
-  if (!authenticated) return <AdminLogin onLogin={() => { setAuthenticated(true); fetchClients() }} />
+  if (!authenticated)
+    return (
+      <AdminLogin
+        notice={sessionEnded ? 'You were signed out after 8 hours. Sign in again to see current answers.' : undefined}
+        onLogin={() => { setSessionEnded(false); setAuthenticated(true); fetchClients() }}
+      />
+    )
 
   const submitted = allClients.filter(c => c.questionnaire.submitted).length
   const inProgress = allClients.filter(c => !c.questionnaire.submitted && c.questionnaire.completedSections.length > 0).length

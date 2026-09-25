@@ -10,11 +10,14 @@ export async function GET(req: NextRequest) {
   const clientId = req.nextUrl.searchParams.get('clientId')
   if (!clientId) return NextResponse.json({ state: null }, { status: 400 })
 
-  const { data } = await getSupabase()
+  const { data, error } = await getSupabase()
     .from('questionnaire_states')
     .select('*')
     .eq('client_id', clientId)
     .maybeSingle()
+  // A read that failed is not a client who never started, which is what the
+  // empty state below would tell the panel.
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   /**
    * Both modules, not just the first.
