@@ -416,7 +416,14 @@ record said before and what she says now. A new fact settles a standing fact whe
 - it answers what an UNKNOWN fact said was not known.
 
 Replace nothing merely because a new fact is related or adds detail. A detail that leaves the
-old fact true replaces nothing. Never replace a fact with one that says less. A client changing
+old fact true replaces nothing. Never replace a fact with one that says less.
+
+A hedged answer replaces nothing. "Probably", "I think", "I don't remember well" — or an answer
+that still does not know what the old fact said was not known — leaves the specific earlier
+answer standing. Both stay, and the contradiction check that follows records the conflict.
+DAYEON KIM said she did not remember when or how many times her rest breaks were interrupted,
+but probably rested fully; that did not make her earlier answer, that she answered a work phone
+during them, untrue, and it did not tell anyone on how many days a break was lost. A client changing
 an answer is itself a fact the office must see, so the reason must name both versions; the old
 fact stays in the record, marked replaced. If no standing fact is settled, return an empty list.`,
     `${header}\n\n=== STANDING FACTS (${standing(input.ledger).length}) ===\n\n${listed(standing(input.ledger))}` +
