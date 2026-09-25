@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { whoIsWaiting } from '@/lib/followUpQueue'
+import { Waiting, drain, whoIsWaiting } from '@/lib/followUpQueue'
 
 const who = (id: string, lang: 'en' | 'ko' | 'es' | 'zh' = 'en') => ({ id, name: id, lang })
 
@@ -81,5 +81,82 @@ describe('choosing who the nightly run reads next', () => {
   it('is empty when nobody is owed anything', () => {
     expect(ask({ clients: [who('a')] })).toEqual([])
     expect(ask({ finishedModule2: ['ghost'] })).toEqual([])
+  })
+})
+
+describe('draining the queue in one run', () => {
+  const w = (clientId: string, needs: Waiting['needs']): Waiting => ({
+    clientId,
+    name: clientId,
+    lang: 'en',
+    needs,
+  })
+  const startBy = { facts: 120, reading: 145, questions: 170 }
+
+  /** A queue that moves each client one step along whenever it is stepped. */
+  function fakeNight(initial: Waiting[], secondsPerStep: number) {
+    const state = new Map(initial.map(x => [x.clientId, x.needs as string]))
+    const order = ['facts', 'reading', 'questions', 'done']
+    let clock = 0
+    return {
+      waiting: async () =>
+        initial
+          .filter(x => state.get(x.clientId) !== 'done')
+          .map(x => w(x.clientId, state.get(x.clientId) as Waiting['needs'])),
+      step: async (next: Waiting) => {
+        clock += secondsPerStep
+        state.set(next.clientId, order[order.indexOf(next.needs) + 1])
+        return { ran: true, client: next.clientId, did: next.needs }
+      },
+      elapsed: () => clock,
+    }
+  }
+
+  it('keeps going while there is time, across steps and clients', async () => {
+    const night = fakeNight([w('a', 'questions'), w('b', 'facts')], 40)
+    const { done, left } = await drain({ ...night, startBy })
+    expect(done.map(d => `${d.client}:${d.did}`)).toEqual(['a:questions', 'b:facts', 'b:reading', 'b:questions'])
+    expect(left).toEqual([])
+  })
+
+  it('does not begin a step it has no room for, but always begins the first', async () => {
+    const night = fakeNight([w('a', 'facts')], 130)
+    const { done, left } = await drain({ ...night, startBy })
+    // The first step runs whatever the clock says; at 130s a reading may not
+    // begin (145 is the limit, so it could), but at 260s nothing may.
+    expect(done.map(d => d.did)).toEqual(['facts', 'reading'])
+    expect(left.map(x => x.needs)).toEqual(['questions'])
+  })
+
+  it('passes over a client whose step did not advance, and serves the next', async () => {
+    let bRead = false
+    const { done } = await drain({
+      waiting: async () => (bRead ? [w('stuck', 'reading')] : [w('stuck', 'reading'), w('b', 'facts')]),
+      step: async next => {
+        if (next.clientId === 'b') bRead = true
+        return next.clientId === 'stuck'
+          ? { ran: false, client: 'stuck', reason: 'the Wage Order proposal contradicts itself' }
+          : { ran: true, client: 'b', did: 'facts' }
+      },
+      elapsed: () => 0,
+      startBy,
+    })
+    expect(done.map(d => `${d.client}:${d.ran}`)).toEqual(['stuck:false', 'b:true'])
+  })
+
+  it('records a step that throws and moves on', async () => {
+    const { done } = await drain({
+      waiting: async () => [w('a', 'facts'), w('b', 'questions')],
+      step: async next => {
+        if (next.clientId === 'a') throw new Error('terminated')
+        return { ran: false, client: 'b', reason: 'The reading found nothing worth asking.' }
+      },
+      elapsed: () => 0,
+      startBy,
+    })
+    expect(done).toEqual([
+      { ran: false, client: 'a', error: 'terminated' },
+      { ran: false, client: 'b', reason: 'The reading found nothing worth asking.' },
+    ])
   })
 })

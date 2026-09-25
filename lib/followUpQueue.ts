@@ -63,3 +63,59 @@ export function whoIsWaiting(input: {
   // gets it tonight rather than queueing behind somebody else's extraction.
   return out.sort((a, b) => STEPS.indexOf(b.needs) - STEPS.indexOf(a.needs))
 }
+
+/** What one step of the run did, as the night reports it. */
+export interface Outcome {
+  ran: boolean
+  client: string
+  did?: string
+  reason?: string
+  error?: string
+  [detail: string]: unknown
+}
+
+/**
+ * As many steps as the run has time for, not one.
+ *
+ * The night used to take the first client in the queue, do one step, and
+ * stop — so a client who finished Module 2 waited a night for facts, a night
+ * or two for the reading and another for a round, behind everyone ahead of
+ * them. Jingwen Du and Xilong Wang finished on 2026-09-17 and had nothing
+ * eight days later. The 300-second ceiling still rules: a step is begun only
+ * while there is room for the longest one of its kind ever measured, and the
+ * first step of a run is always begun, as before.
+ *
+ * A client whose step did not advance — nothing to read, a proposal that
+ * contradicts itself, an error — is passed over for the rest of the run, so it
+ * is neither retried in a loop nor left holding up everyone behind it.
+ */
+export async function drain(opts: {
+  waiting: () => Promise<Waiting[]>
+  step: (next: Waiting) => Promise<Outcome>
+  /** Seconds since the run began. */
+  elapsed: () => number
+  /** The latest second at which a step of each kind may still be begun. */
+  startBy: Record<Step, number>
+}): Promise<{ done: Outcome[]; left: Waiting[] }> {
+  const done: Outcome[] = []
+  const passedOver = new Set<string>()
+  let queue = await opts.waiting()
+
+  for (;;) {
+    const next = queue.find(w => !passedOver.has(w.clientId))
+    if (!next) break
+    if (done.length && opts.elapsed() > opts.startBy[next.needs]) break
+
+    let outcome: Outcome
+    try {
+      outcome = await opts.step(next)
+    } catch (err) {
+      outcome = { ran: false, client: next.name, error: (err as Error).message }
+    }
+    done.push(outcome)
+    if (!outcome.ran) passedOver.add(next.clientId)
+    queue = await opts.waiting()
+  }
+
+  return { done, left: queue }
+}

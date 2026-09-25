@@ -7,7 +7,27 @@
     },
     {
       "path": "/api/cron/follow-ups",
+      "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/cron/follow-ups",
+      "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/cron/follow-ups",
       "schedule": "0 8 * * *"
+    },
+    {
+      "path": "/api/cron/follow-ups",
+      "schedule": "0 10 * * *"
+    },
+    {
+      "path": "/api/cron/follow-ups",
+      "schedule": "0 12 * * *"
+    },
+    {
+      "path": "/api/cron/follow-ups",
+      "schedule": "0 14 * * *"
     }
   ]
 }
