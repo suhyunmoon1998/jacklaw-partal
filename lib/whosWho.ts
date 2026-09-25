@@ -104,12 +104,44 @@ export function alignmentOf(name: string, clientName: string | string[]): Alignm
  * next step says to check.
  */
 export function maybeTheClient(name: string, clientName: string | string[]): boolean {
+  // "manager Kim (김매니져)" shares only a surname, and the record calls them by
+  // a role over her. The ledger writes the client by name or as "client",
+  // never as somebody's manager or boss.
+  if (COMPANY.test(name)) return false
   const parts = (s: string) => s.toLowerCase().split(/\s+/).filter(w => w.length > 1)
   const mine = new Set(namesOf(clientName).flatMap(parts))
   if (mine.size === 0) return false
   const theirs = parts(name)
   if (theirs.length === 0) return false
   return theirs.some(w => mine.has(w)) && !namesOf(clientName).includes(name.trim().toLowerCase())
+}
+
+/** A fact that says, in so many words, that the client went by another name. */
+const OTHER_NAME = /\b(other name|another name|also known as|a\.?k\.?a\.?|goes by|went by|known at work as)\b/i
+
+/**
+ * Names the record itself says are hers.
+ *
+ * DAYEON KIM's f003 reads "The other name the client used at the job was Dani
+ * Kim", with both names as its actors — and the brief, handed only her own
+ * name, put Dani Kim on the witness map to be checked. That is the record's
+ * statement of who she is, not a guess from a surname, so it is taken: the
+ * fact has to say another name was hers, name the client among its actors,
+ * and carry the other name in its own words.
+ */
+export function namesOnRecord(facts: FactForPeople[], clientName: string | string[]): string[] {
+  const mine = namesOf(clientName)
+  const found: string[] = []
+  for (const f of facts) {
+    if (!OTHER_NAME.test(f.proposition)) continue
+    const actors = (f.actors ?? []).map(a => String(a ?? '').trim()).filter(Boolean)
+    if (!actors.some(a => mine.includes(a.toLowerCase()))) continue
+    for (const a of actors) {
+      const n = a.toLowerCase()
+      if (!mine.includes(n) && !found.includes(a) && f.proposition.toLowerCase().includes(n)) found.push(a)
+    }
+  }
+  return found
 }
 
 /**
@@ -163,6 +195,8 @@ export function whosWho(
   limit = 25
 ): Person[] {
   const byKey = new Map<string, Person>()
+  const given = Array.isArray(clientName) ? clientName : [clientName]
+  clientName = [...given, ...namesOnRecord(facts, given)]
 
   for (const fact of facts) {
     for (const raw of fact.actors ?? []) {

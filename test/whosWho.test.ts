@@ -141,6 +141,23 @@ describe('the client under another name', () => {
     expect(people[0].nextStep).toContain('confirm whether this is her')
   })
 
+  it('takes a name the record itself says was hers', () => {
+    // DAYEON KIM's f003, word for word, with both names as its actors.
+    const alias = { ...fact('f003', ['Dayeon Kim', 'Dani Kim']), proposition: 'The other name the client used at the job was Dani Kim.' }
+    const people = whosWho([alias, fact('f010', ['Dani Kim'])], 'Dayeon Kim')
+    expect(people.map(p => p.name)).not.toContain('Dani Kim')
+  })
+
+  it('does not take a name the record only mentions beside hers', () => {
+    const together = { ...fact('f004', ['Dayeon Kim', 'Dani Kim']), proposition: 'Dani Kim covered her shift on Sunday.' }
+    expect(whosWho([together], 'Dayeon Kim').map(p => p.name)).toContain('Dani Kim')
+  })
+
+  it('does not ask whether her manager is her, over a shared surname', () => {
+    expect(maybeTheClient('manager Kim (김매니져)', 'Dayeon Kim')).toBe(false)
+    expect(maybeTheClient('boss Kim', 'Dayeon Kim')).toBe(false)
+  })
+
   it('does not warn about somebody with no name in common', () => {
     expect(maybeTheClient('manager', 'Dayeon Kim')).toBe(false)
     expect(maybeTheClient('Dani Kim', 'Dayeon Kim')).toBe(true)
