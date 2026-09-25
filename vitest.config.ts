@@ -2,9 +2,11 @@ import path from 'node:path'
 import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
-  // Next compiles JSX with the automatic runtime; esbuild has to be told, or a
-  // render test fails with "React is not defined".
-  esbuild: { jsx: 'automatic' },
+  // Next compiles JSX with the automatic runtime; the transformer has to be
+  // told, or a render test fails with "React is not defined". Vite 8 transforms
+  // with oxc, not esbuild — the old `esbuild: { jsx }` is ignored there, and
+  // the render tests failed to parse.
+  oxc: { jsx: { runtime: 'automatic' } },
   resolve: {
     // The same '@/' the app uses, so a test imports a module by the path the
     // application code imports it by.
