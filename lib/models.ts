@@ -86,7 +86,8 @@
  *   fact or an element, so their answers would have nowhere to go back to.
  *   Opus: 0 refused. The saving was about $0.25 a round.
  *
- *   PASTED QUESTIONS — Sonnet 5. A 21-item sheet into Chinese, Xilong Wang's
+ *   PASTED QUESTIONS — Haiku 4.5, the office's choice over Sonnet 5 on
+ *   2026-09-25, made with what follows in front of it. A 21-item sheet into Chinese, Xilong Wang's
  *   vehicle, DOT and termination questions. Both translated every question,
  *   kept every gate and dropped nothing. Haiku 4.5 turned the five-part DOT
  *   requirement (CDL, medical card, logs, inspection) into one yes/no, so a
@@ -131,8 +132,11 @@ export const ANALYSIS_MODEL = pick('MODEL_ANALYSIS', OPUS)
 /** Language work with the source text in front of it. */
 export const TRANSLATION_MODEL = pick('MODEL_TRANSLATION', SONNET)
 
-/** Drafting questions for an admin to edit before they are used. */
-export const QUESTION_MODEL = pick('MODEL_QUESTIONS', SONNET)
+/**
+ * Drafting questions for an admin to edit before they are used. Haiku, by the
+ * office's decision — see PASTED QUESTIONS above for what to read for.
+ */
+export const QUESTION_MODEL = pick('MODEL_QUESTIONS', HAIKU)
 
 /**
  * Drafting the four template sections that are prose rather than assembly.
