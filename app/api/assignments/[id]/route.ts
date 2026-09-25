@@ -19,7 +19,8 @@ function authorize(req: NextRequest, assignmentClientId: string): boolean {
 }
 
 // GET /api/assignments/[id]?clientId=xxx
-export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params
   const clientId = req.nextUrl.searchParams.get('clientId')
 
   const assignment = await getAssignmentDetail(params.id, { forClient: true })
@@ -37,7 +38,8 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 
 // POST /api/assignments/[id]  { clientId, answers, submitted? }
 // `answers` carries only the questions that changed since the last save.
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params
   const { clientId, answers, submitted } = await req.json()
 
   const supabase = getSupabase()

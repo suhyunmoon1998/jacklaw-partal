@@ -3,10 +3,8 @@ import { getSupabase } from '@/lib/supabase'
 import { denyClient } from '@/lib/clientAuth'
 
 // GET /api/documents/[id]/view  → redirect to signed URL
-export async function GET(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function GET(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params
   const { data: doc } = await getSupabase()
     .from('documents')
     .select('storage_path, name, client_id')

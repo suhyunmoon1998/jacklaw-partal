@@ -10,7 +10,7 @@
  * questionnaire clients already know.
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, use } from 'react'
 import { useRouter } from 'next/navigation'
 import Header from '@/components/Header'
 import MascotWatermark from '@/components/MascotWatermark'
@@ -20,11 +20,12 @@ import { getSession, serverSessionAgrees } from '@/lib/auth'
 import { useLanguage } from '@/lib/i18n'
 import { AnswerValue, AssignmentDetail, Session } from '@/types'
 
-export default function AssignmentQuestionnairePage({
-  params,
-}: {
-  params: { assignmentId: string }
-}) {
+export default function AssignmentQuestionnairePage(
+  props: {
+    params: Promise<{ assignmentId: string }>
+  }
+) {
+  const params = use(props.params)
   const [session, setSession] = useState<Session | null>(null)
   const [assignment, setAssignment] = useState<AssignmentDetail | null>(null)
   const [answers, setAnswers] = useState<Record<string, AnswerValue>>({})

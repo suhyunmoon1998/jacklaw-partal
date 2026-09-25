@@ -6,7 +6,8 @@ import { advancesTo, getAssignmentDetail, STATUS_TIMESTAMP } from '@/lib/questio
 import { AssignmentStatus } from '@/types'
 
 // GET /api/admin/assignments/[id] — one assignment with its questions + answers
-export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params
   if (!isAdmin(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const assignment = await getAssignmentDetail(params.id)
@@ -16,7 +17,8 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 }
 
 // PATCH /api/admin/assignments/[id]  { status }
-export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params
   if (!isAdmin(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { status } = await req.json()

@@ -14,7 +14,8 @@ export const maxDuration = 120
 
 // GET /api/admin/assignments/[id]/pdf — that one assignment's answers, as a PDF.
 // Same generator and layout the default intake download already uses.
-export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params
   if (!isAdmin(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const assignment = await getAssignmentDetail(params.id)

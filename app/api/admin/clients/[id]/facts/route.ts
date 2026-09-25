@@ -78,7 +78,8 @@ async function gather(clientId: string) {
  */
 const withEnglish = (entries: { verbatim: string }[]) => toEnglishCached(entries.map(e => e.verbatim ?? ''))
 
-export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params
   if (!isAdmin(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   try {
     const [entries, contradictions, searched, input] = await Promise.all([
@@ -146,7 +147,8 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   }
 }
 
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params
   if (!isAdmin(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const existing = await readLedger(params.id)
@@ -291,7 +293,8 @@ async function addAnswers(clientId: string, existing: Awaited<ReturnType<typeof 
 }
 
 /** Throws the ledger away. Everything read from it goes too. */
-export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params
   if (!isAdmin(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   try {
     await snapshotNow(params.id, 'before the facts were cleared')

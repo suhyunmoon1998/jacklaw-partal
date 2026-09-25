@@ -11,7 +11,8 @@ import { lookupClientEmail, lookupClientLanguage, sendAssignmentEmail } from '@/
 import { AssignmentStatus } from '@/types'
 
 // GET /api/admin/assignments/[id]/send — the link plus the email we would use
-export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params
   if (!isAdmin(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const assignment = await getAssignmentDetail(params.id)
@@ -48,7 +49,8 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
  * people would never see.
  */
 // POST /api/admin/assignments/[id]/send  { email?, phone?, lang?, sms? }
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params
   if (!isAdmin(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   // forClient: the count in the email has to match the questionnaire they open.

@@ -17,7 +17,8 @@ import { baselineFor, summarise, versionsOf } from '@/lib/briefHistory'
  * against the last version that DIFFERS from it: opening the sheet a second
  * time used to compare the brief with itself and report that nothing moved.
  */
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params
   if (!isAdmin(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   try {
@@ -51,7 +52,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
  * Every version kept, newest first, each with what it changed from the one
  * before. Read-only: looking at the history does not add to it.
  */
-export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params
   if (!isAdmin(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   try {
     const versions = versionsOf(await listSnapshots(params.id)).map(v => ({
