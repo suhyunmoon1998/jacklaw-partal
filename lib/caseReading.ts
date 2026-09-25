@@ -251,14 +251,37 @@ export async function runStage(
       })
     }
     const matrix = await buildMatrix(entries, FEHA_CLAIMS, { wageOrder: settledOrder(stored), meter })
-    return took({ claims3: matrix.findings, fehaSkipped: undefined, failed: [...(stored.failed ?? []), ...matrix.failed] })
+    return claimsRead(stage, { claims3: matrix.findings, fehaSkipped: undefined }, matrix)
   }
 
   if (stage === 'claims 1' || stage === 'claims 2') {
     const matrix = await buildMatrix(entries, claimsFor(stage), { wageOrder: settledOrder(stored), meter })
-    const failed = [...(stored.failed ?? []), ...matrix.failed]
-    return took(stage === 'claims 1' ? { claims1: matrix.findings, failed } : { claims2: matrix.findings, failed })
+    return claimsRead(stage, stage === 'claims 1' ? { claims1: matrix.findings } : { claims2: matrix.findings }, matrix)
   }
 
   return took({ spine: await buildSpine(entries, meter) })
+
+  /**
+   * A claims stage, as far as it got.
+   *
+   * On DAYEON KIM's file the account ran out of credit mid-reading: all five
+   * claims of a stage failed, and the stage was stored as read, empty, and
+   * stamped current. Nothing shows the failures, so the panel called it done
+   * and the night would never have read it again. Now a stage that read
+   * nothing stores nothing and says why, and one that read some claims is
+   * kept but stamped incomplete, which the panel shows as stale.
+   */
+  function claimsRead(
+    stage: 'claims 1' | 'claims 2' | 'claims 3',
+    patch: StoredReading,
+    matrix: { findings: unknown[]; failed: { claimId: string; why: string }[] }
+  ): StoredReading {
+    if (!matrix.findings.length && matrix.failed.length) throw new Error(matrix.failed[0].why)
+    // This stage's claims were read again, so their old failures are over.
+    const mine = new Set(claimsFor(stage).map(c => c.id))
+    const failed = [...(stored.failed ?? []).filter(f => !mine.has(f.claimId)), ...matrix.failed]
+    const read = took({ ...patch, failed })
+    if (!matrix.failed.length) return read
+    return { ...read, stamps: { ...read.stamps, [stage]: `incomplete: ${matrix.failed.length} failed` } }
+  }
 }

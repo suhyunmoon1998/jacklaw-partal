@@ -7,7 +7,14 @@ vi.mock('@/lib/wageOrderChoice', async importOriginal => ({
   proposeWageOrder: vi.fn(async () => ({ proposal: { order: '5' } })),
 }))
 
-import { runStage, stampsNow } from '@/lib/caseReading'
+// The matrix is a model call too. Each test says what it came back with.
+const matrixResult = vi.hoisted(() => ({ current: { findings: [] as unknown[], failed: [] as { claimId: string; why: string }[] } }))
+vi.mock('@/lib/claimMatrix', async importOriginal => ({
+  ...(await importOriginal<typeof import('@/lib/claimMatrix')>()),
+  buildMatrix: vi.fn(async () => matrixResult.current),
+}))
+
+import { claimsFor, runStage, stampsNow } from '@/lib/caseReading'
 import { StoredReading, staleStages } from '@/lib/caseReadingShape'
 import { LedgerEntry } from '@/lib/factLedger'
 
@@ -38,5 +45,43 @@ describe('reading the Wage Order again', () => {
     expect(merged.took?.spine).toBe(116)
     expect(merged.spent?.spine?.calls).toBe(3)
     expect(merged.took?.['wage order']).toBeTypeOf('number')
+  })
+})
+
+describe('a claims stage that did not read every claim', () => {
+  // On DAYEON KIM's file the account ran out of credit mid-reading. All five
+  // claims of claims 2 failed, and the stage was stored as read, empty, and
+  // stamped current — so the panel called it done and the night skipped it.
+  const entries = [fact]
+  const before: StoredReading = { wageOrder: { proposal: { order: '5' } } }
+  const ids = claimsFor('claims 2').map(c => c.id)
+  const outOfCredit = "The firm's Anthropic account is out of credit, so the reading could not run."
+
+  it('stores nothing, and says why, when no claim came back', async () => {
+    matrixResult.current = { findings: [], failed: ids.map(claimId => ({ claimId, why: outOfCredit })) }
+    await expect(runStage('claims 2', entries, before)).rejects.toThrow(/out of credit/)
+  })
+
+  it('keeps what came back but shows the stage as stale when some failed', async () => {
+    matrixResult.current = {
+      findings: [{ claimId: ids[0], standing: 'gaps to close', elements: [], defense: '', adverse: [], damagesInputs: [], damagesMissing: [] }],
+      failed: ids.slice(1).map(claimId => ({ claimId, why: outOfCredit })),
+    }
+    const patch = await runStage('claims 2', entries, before)
+    const merged = { ...before, ...patch }
+    expect(merged.claims2).toHaveLength(1)
+    expect(merged.failed).toHaveLength(ids.length - 1)
+    expect(staleStages(merged, stampsNow(entries, merged))).toContain('claims 2')
+  })
+
+  it('clears the stage\'s old failures once its claims are read again', async () => {
+    matrixResult.current = {
+      findings: ids.map(claimId => ({ claimId, standing: 'gaps to close', elements: [], defense: '', adverse: [], damagesInputs: [], damagesMissing: [] })),
+      failed: [],
+    }
+    const earlier = { ...before, failed: [{ claimId: ids[0], why: outOfCredit }, { claimId: 'meal-periods', why: 'other stage' }] }
+    const merged = { ...earlier, ...(await runStage('claims 2', entries, earlier)) }
+    expect(merged.failed).toEqual([{ claimId: 'meal-periods', why: 'other stage' }])
+    expect(staleStages(merged, stampsNow(entries, merged))).not.toContain('claims 2')
   })
 })
