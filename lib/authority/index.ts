@@ -57,6 +57,10 @@ export const FETCHED_ON: Record<string, { on: string; from: string }> = {
   // scan carried OCR errors; neither is in the text held here.
   laMinimumWage: { on: '2026-09-24', from: 'codelibrary.amlegal.com — LAMC §§ 187.01, 187.02 (2026 Rev. 9); wagesla.lacity.gov — 2024–2026 rate notices' },
   fehaRegs: { on: '2026-09-24', from: 'govt.westlaw.com/calregs — Barclays Official California Code of Regulations, 2 CCR §§ 11065, 11068, 11069' },
+  // Wage Order 5 § 4(E) sets the fast food minimum "in accordance with Labor
+  // Code Section 1475", and the readings, told fast food carries its own
+  // minimum, cited a section that was not here.
+  fastFood: { on: '2026-09-25', from: 'leginfo.legislature.ca.gov — Lab. Code §§ 1474–1477 (Div. 2, Part 4.5.5, Fast Food)' },
 }
 
 type Keyed = { sections: Record<string, string> }

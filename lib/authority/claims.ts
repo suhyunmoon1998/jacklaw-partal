@@ -205,13 +205,13 @@ export const CLAIMS: Claim[] = [
     // Section 1182.12 fixes the state rate only up to 2022 and leaves the rest
     // to annual adjustment; the Wage Order's section 4 prints each year's
     // figure. Without it the readings reported the state rates not on file.
-    sections: ['LAB 1197', 'LAB 1194', 'LAB 1194.2', 'LAB 1182.12', 'IWC {order} sec 4', 'LAB 1182.14', 'LAB 1182.15', 'LAMC 187.01', 'LAMC 187.02', 'LAMW 2024-07-01', 'LAMW 2025-07-01', 'LAMW 2026-07-01'],
+    sections: ['LAB 1197', 'LAB 1194', 'LAB 1194.2', 'LAB 1182.12', 'IWC {order} sec 4', 'LAB 1474', 'LAB 1475', 'LAB 1182.14', 'LAB 1182.15', 'LAMC 187.01', 'LAMC 187.02', 'LAMW 2024-07-01', 'LAMW 2025-07-01', 'LAMW 2026-07-01'],
     caci: '2701',
     elements: [
       {
         key: 'applicable-minimum',
         says:
-          'The minimum wage applicable to this employee for this period and work location: the state rate under section 1182.12, in the figure section 4 of the governing Wage Order gives for each year, and — for an employee who worked within the City of Los Angeles as LAMC 187.01 defines it — the City rate set under LAMC 187.02 and announced in the Office of Wage Standards notices on file. Health-care employers carry their own minimums under sections 1182.14 and 1182.15, which are quoted. Nothing else is on file: where the facts do not place the work within the City, place it in another city or unincorporated county territory, or put the employer in another industry with its own minimum (fast food among them), the element is unknown until that is established.',
+          'The minimum wage applicable to this employee for this period and work location: the state rate under section 1182.12, in the figure section 4 of the governing Wage Order gives for each year, and — for an employee who worked within the City of Los Angeles as LAMC 187.01 defines it — the City rate set under LAMC 187.02 and announced in the Office of Wage Standards notices on file. Health-care employers carry their own minimums under sections 1182.14 and 1182.15, and a fast food restaurant as section 1474 defines it carries the minimum set under section 1475; all three are quoted. Nothing else is on file: where the facts do not place the work within the City, place it in another city or unincorporated county territory, or put the employer in another industry with its own minimum, the element is unknown until that is established.',
         from: 'LAB 1182.12',
       },
       {
