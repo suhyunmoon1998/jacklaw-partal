@@ -240,4 +240,9 @@ export interface AnalysisInput {
   answers: Record<string, AnswerValue>
   /** Titles only — the reading says what to look for in them, never their contents. */
   documents: string[]
+  /**
+   * Answers to question sets the office assigned after the questionnaire —
+   * follow-up rounds, mostly. Absent or empty for a client who has none.
+   */
+  sets?: { title: string; rows: { id: string; label: string; answer: string }[] }[]
 }

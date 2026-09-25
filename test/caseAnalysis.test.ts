@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { analysisFingerprint, buildTranscript, MIN_ANSWERS } from '@/lib/caseAnalysis'
+import { analysisFingerprint, buildTranscript, LATER_ANSWERS, MIN_ANSWERS } from '@/lib/caseAnalysis'
 import {
   completed, mergeFindings, nextStage, AnalysisInput, ANALYSIS_SHAPE_VERSION,
   STAGES, STAGE_LABEL,
@@ -89,6 +89,43 @@ describe('the transcript the model reads', () => {
     )
     expect(text).toContain('ANSWER: No')
     expect(text).not.toContain('ANSWER: 2')
+  })
+})
+
+describe('follow-up answers', () => {
+  // DAYEON KIM gave the restaurant's address in a follow-up set. The reading
+  // read only the questionnaire, so it went on calling the address unknown,
+  // and re-running it read exactly what it had read before.
+  const followUp = {
+    title: 'Question set: A few more questions about your job',
+    rows: [
+      { id: 'q18_address', label: 'What is the street address of the restaurant where you worked?', answer: '1101 Vermont Ave #103, Los Angeles, CA 90006' },
+      { id: 'q17_rest', label: 'Tell us about one shift.', answer: '' },
+    ],
+  }
+
+  it('are read after the questionnaire, marked as later, and counted', () => {
+    const { text, answered } = buildTranscript(input({ answers: { m2_meal_given: 'No' }, sets: [followUp] }))
+    expect(answered).toBe(2)
+    expect(text).toContain(LATER_ANSWERS)
+    expect(text.indexOf('ANSWER: No')).toBeLessThan(text.indexOf(LATER_ANSWERS))
+    expect(text).toContain('## Question set: A few more questions about your job')
+    expect(text).toContain('ANSWER: 1101 Vermont Ave #103, Los Angeles, CA 90006')
+  })
+
+  it('leave the transcript as it was for a client who has none', () => {
+    const plain = buildTranscript(input({ answers: { m2_meal_given: 'No' } }))
+    expect(buildTranscript(input({ answers: { m2_meal_given: 'No' }, sets: [] }))).toEqual(plain)
+    expect(plain.text).not.toContain(LATER_ANSWERS)
+  })
+
+  it('move the fingerprint when they arrive or change, and only then', () => {
+    const none = analysisFingerprint(input())
+    expect(analysisFingerprint(input({ sets: [] }))).toBe(none)
+    const withSet = analysisFingerprint(input({ sets: [followUp] }))
+    expect(withSet).not.toBe(none)
+    const changed = { ...followUp, rows: [{ ...followUp.rows[0], answer: '1102 Vermont Ave' }] }
+    expect(analysisFingerprint(input({ sets: [changed] }))).not.toBe(withSet)
   })
 })
 

@@ -17,6 +17,7 @@ import {
   runStage,
 } from '@/lib/caseAnalysis'
 import { snapshotNow } from '@/lib/briefVersions'
+import { loadAssignedSets } from '@/lib/assignedSets'
 import { AnswerValue } from '@/types'
 
 /**
@@ -31,12 +32,15 @@ import { AnswerValue } from '@/types'
 export const maxDuration = 300
 
 /** Everything the reading is built from, gathered in one place. */
-async function gather(clientId: string): Promise<AnalysisInput | null> {
+async function gather(clientId: string): Promise<(AnalysisInput & { setsError: string | null }) | null> {
   const db = getSupabase()
-  const [{ data: client }, { data: state }, { data: docs }] = await Promise.all([
+  const [{ data: client }, { data: state }, { data: docs }, assigned] = await Promise.all([
     db.from('clients').select('id, name, case_type, case_name').eq('id', clientId).maybeSingle(),
     db.from('questionnaire_states').select('answers').eq('client_id', clientId).maybeSingle(),
     db.from('documents').select('name').eq('client_id', clientId),
+    // Follow-up answers too. Without them a reading re-run after a client
+    // answered a round reads exactly what it read before.
+    loadAssignedSets(clientId),
   ])
   if (!client) return null
 
@@ -48,6 +52,8 @@ async function gather(clientId: string): Promise<AnalysisInput | null> {
     // Titles only. What a document says is not read here; the reading says what
     // to look for in them, which is a job for whoever opens the file.
     documents: (docs ?? []).map(d => String(d.name ?? '')).filter(Boolean),
+    sets: assigned.sets,
+    setsError: assigned.error,
   }
 }
 
@@ -128,6 +134,14 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   const input = await gather(params.id)
   if (!input) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  // A reading taken without the follow-up answers would be stored as current
+  // and read as whole. Refuse rather than pay for that.
+  if (input.setsError) {
+    return NextResponse.json(
+      { error: `The client's question sets could not be read (${input.setsError}), so nothing was run.` },
+      { status: 502 }
+    )
+  }
 
   const row = await load(params.id)
   const fingerprint = analysisFingerprint(input)

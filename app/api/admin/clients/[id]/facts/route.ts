@@ -4,7 +4,7 @@ import { isAdmin } from '@/lib/adminAuth'
 import { detectLanguage, machineTranslate } from '@/lib/machineTranslate'
 import { ExtractionInput, extractAdditions, extractFacts } from '@/lib/factExtraction'
 import { unreadRows } from '@/lib/factAdditions'
-import { getAssignmentDetail } from '@/lib/questionSets'
+import { loadAssignedSets } from '@/lib/assignedSets'
 import {
   addFacts,
   clearContradictions,
@@ -18,13 +18,9 @@ import { standing, unsettled } from '@/lib/factLedger'
 import { clearReading } from '@/lib/caseReadingStore'
 import { AnswerValue } from '@/types'
 import { Meter, describeSpend } from '@/lib/spend'
-import { AssignmentFound, READ_STATUSES, recordSearch } from '@/lib/sourceSearch'
+import { recordSearch } from '@/lib/sourceSearch'
 import { keepSearch, lastSearch } from '@/lib/sourceSearchStore'
 import { snapshotNow } from '@/lib/briefVersions'
-
-/** One answer as a line of text, arrays flattened. */
-const shown = (v: AnswerValue | undefined): string =>
-  Array.isArray(v) ? v.filter(Boolean).join('; ') : String(v ?? '').trim()
 
 /**
  * Turning one client's answers into the fact ledger everything else stands on.
@@ -45,63 +41,26 @@ async function gather(clientId: string) {
   const [{ data: client }, { data: state }, assigned, docs] = await Promise.all([
     db.from('clients').select('id, name').eq('id', clientId).maybeSingle(),
     db.from('questionnaire_states').select('answers').eq('client_id', clientId).maybeSingle(),
-    // Every status, not only the answered ones: an assigned set nobody has
-    // opened is not a source, but it is something the record is missing.
-    // A plain select, not a join: this query also decides which answers the
-    // extraction reads, and it must not fail over a set's display name.
-    db
-      .from('client_question_set_assignments')
-      .select('id, status, question_set_id')
-      .eq('client_id', clientId),
+    // Everything else the office has asked this client and had answered. These
+    // live in their own table, outside the questionnaire's structure, so
+    // nothing reading `answers` alone would ever see them.
+    loadAssignedSets(clientId),
     db.from('documents').select('name, category').eq('client_id', clientId),
   ])
   if (!client) return null
   // The raw record. extractFacts runs it through answersForReading itself, so
   // that a question the client retracted is read as retracted here too rather
   // than twice or not at all.
-  // Everything else the office has asked this client and had answered. These
-  // live in their own table, outside the questionnaire's structure, so nothing
-  // reading `answers` alone would ever see them.
-  const extra: NonNullable<ExtractionInput['extra']> = []
-  const found: AssignmentFound[] = []
-  // Names only label the record, so a failure here costs a label and nothing else.
-  const setIds = Array.from(new Set((assigned.data ?? []).map(a => String(a.question_set_id))))
-  const { data: sets } = setIds.length
-    ? await db.from('question_sets').select('id, name').in('id', setIds)
-    : { data: [] }
-  const names = new Map((sets ?? []).map(s => [String(s.id), String(s.name ?? '')]))
-  for (const a of assigned.data ?? []) {
-    const name = names.get(String(a.question_set_id)) || 'Unnamed question set'
-    const status = String(a.status ?? '')
-    if (!(READ_STATUSES as readonly string[]).includes(status)) {
-      found.push({ name, status, detail: null })
-      continue
-    }
-    // A set that would not load used to be skipped without a word, and the
-    // facts it held were simply absent. It is now named as inaccessible.
-    const detail = await getAssignmentDetail(a.id as string).catch((err: Error) => {
-      found.push({ name, status, detail: null, error: err.message })
-      return undefined
-    })
-    if (detail === undefined) continue
-    found.push({ name, status, detail })
-    if (!detail) continue
-    const rows = detail.questions
-      .map(q => ({ id: q.id, label: q.label, answer: shown(detail.answers[q.id]) }))
-      .filter(r => r.answer.trim())
-    if (rows.length) extra.push({ title: `Question set: ${detail.questionSetName}`, rows })
-  }
-
   const answers = (state?.answers ?? {}) as Record<string, AnswerValue>
   return {
     clientId,
     clientName: client.name ?? '',
     answers,
-    extra,
+    extra: assigned.sets as NonNullable<ExtractionInput['extra']>,
     searched: recordSearch({
       ranAt: new Date().toISOString(),
       answers: state ? answers : null,
-      assignments: assigned.error ? { error: assigned.error.message } : found,
+      assignments: assigned.error ? { error: assigned.error } : assigned.found,
       documents: docs.error
         ? { error: docs.error.message }
         : (docs.data ?? []).map(d => ({ name: String(d.name ?? ''), category: String(d.category ?? '') })),

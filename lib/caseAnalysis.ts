@@ -120,6 +120,16 @@ export function analysisFingerprint(input: AnalysisInput): string {
     h.update(key)
     h.update(JSON.stringify(input.answers[key]))
   }
+  // Only when there are any, so a client with no question sets keeps the
+  // fingerprint their reading was stored under and is not marked stale for
+  // nothing.
+  for (const set of input.sets ?? []) {
+    h.update(set.title)
+    for (const r of set.rows) {
+      h.update(r.id)
+      h.update(r.answer)
+    }
+  }
   return h.digest('hex').slice(0, 32)
 }
 
@@ -149,8 +159,26 @@ export function buildTranscript(input: AnalysisInput): { text: string; answered:
     if (rows.length) lines.push(`## ${section.title}\n${rows.join('\n')}`)
   }
 
+  // Asked later, and often to settle what the questionnaire left open or
+  // contradictory, so the reading is told which answers came after which.
+  const later = (input.sets ?? []).filter(s => s.rows.some(r => r.answer.trim()))
+  if (later.length) {
+    lines.push(LATER_ANSWERS)
+    for (const set of later) {
+      const rows = set.rows.filter(r => r.answer.trim()).map(r => `- ${r.label}\n  ANSWER: ${r.answer.trim()}`)
+      answered += rows.length
+      lines.push(`## ${set.title}\n${rows.join('\n')}`)
+    }
+  }
+
   return { text: lines.join('\n\n'), answered }
 }
+
+/** Put in front of the follow-up answers, so a correction is read as one. */
+export const LATER_ANSWERS = `=== LATER ANSWERS — follow-up question sets ===
+These were asked after the questionnaire above, usually to settle what it left open or
+contradictory. Where one corrects or clarifies an earlier answer, it is the client's current
+account: use it, and say that the earlier answer differed rather than silently dropping it.`
 
 /** What the deterministic flags already noticed, so the model starts where staff would. */
 function flagSummary(answers: Record<string, AnswerValue>): string {
