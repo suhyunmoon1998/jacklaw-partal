@@ -85,6 +85,17 @@
  *   happened". Four of Haiku's questions pointed at "element" rather than a
  *   fact or an element, so their answers would have nowhere to go back to.
  *   Opus: 0 refused. The saving was about $0.25 a round.
+ *
+ *   PASTED QUESTIONS — Sonnet 5. A 21-item sheet into Chinese, Xilong Wang's
+ *   vehicle, DOT and termination questions. Both translated every question,
+ *   kept every gate and dropped nothing. Haiku 4.5 turned the five-part DOT
+ *   requirement (CDL, medical card, logs, inspection) into one yes/no, so a
+ *   "yes" says nothing about which; folded "what were you told" and "did you
+ *   refuse" into one box; offered no "Other" for how he was paid; and wrote
+ *   遣送 — the word for deportation — for "sent away", which a reviewer
+ *   reading only the English would never see. Sonnet asked the DOT
+ *   item as a checklist with "None" and "Not sure". Half the price, a few
+ *   cents a paste.
  */
 
 /** The models this codebase knows about. */
@@ -136,8 +147,9 @@ export const DRAFT_MODEL = pick('MODEL_DRAFT', OPUS)
  *
  * Haiku 4.5 predates adaptive thinking and the effort control: it takes a
  * fixed thinking budget and rejects `effort`. Every other model here takes
- * adaptive thinking and an effort. Only the damages reading, the drafts and
- * the follow-ups use this, because they are the ones compared against Haiku;
+ * adaptive thinking and an effort. Only the damages reading, the drafts, the
+ * follow-ups and pasted questions use this, because they are the ones
+ * compared against Haiku;
  * the matrix and the spine lost findings even on Sonnet and do not run on it.
  */
 export function thinkingFor(model: string, effort: 'low' | 'medium' | 'high', maxTokens: number) {

@@ -20,7 +20,7 @@
  * the slowest one rather than the sum of them.
  */
 
-import { QUESTION_MODEL } from '@/lib/models'
+import { QUESTION_MODEL, thinkingFor } from '@/lib/models'
 import Anthropic from '@anthropic-ai/sdk'
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod'
 import { z } from 'zod'
@@ -467,15 +467,17 @@ interface BatchResult {
 
 /** One model call over one batch of the paste. */
 async function readBatch(client: Anthropic, source: string, target: Lang): Promise<BatchResult> {
+  const maxTokens = 16000
+  // Extraction and classification rather than deep reasoning, and a person is
+  // waiting on the result — 'medium' keeps a batch inside the function's time
+  // limit. Raise it if the questions come back too literal.
+  const { thinking, effort } = thinkingFor(QUESTION_MODEL, 'medium', maxTokens)
   const response = await client.messages.parse({
     model: QUESTION_MODEL,
-    max_tokens: 16000,
+    max_tokens: maxTokens,
     system: systemPrompt(target, MAX_QUESTIONS_PER_BATCH),
-    thinking: { type: 'adaptive' },
-    // Extraction and classification rather than deep reasoning, and a person is
-    // waiting on the result — 'medium' keeps a batch inside the function's time
-    // limit. Raise it if the questions come back too literal.
-    output_config: { effort: 'medium', format: zodOutputFormat(GeneratedSet) },
+    thinking,
+    output_config: { ...effort, format: zodOutputFormat(GeneratedSet) },
     messages: [{ role: 'user', content: source }],
   })
 
