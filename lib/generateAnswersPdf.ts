@@ -50,6 +50,26 @@ function formatAnswer(val: AnswerValue | undefined, question: Question): string 
 }
 
 /**
+ * What gets printed: the answers the client stands behind, what they took
+ * back, and the sections to print them under.
+ *
+ * An assigned question set brings its own sections, and its answers are
+ * printed as they were given — which is what View Answers shows. The modules'
+ * reading (their branches, their retractions) belongs to the default
+ * questionnaire and knows none of a set's question ids: run over a set, it
+ * filed nothing, and Jingwen Du's "Vehicle, DOT & July 31 Termination" printed
+ * "No answers submitted yet." over thirty-five answers.
+ */
+export function answersToPrint(
+  rawAnswers: Record<string, AnswerValue>,
+  ownSections?: QuestionnaireSection[]
+): { sections: QuestionnaireSection[]; filed: Record<string, AnswerValue>; retracted: Record<string, AnswerValue> } {
+  if (ownSections) return { sections: ownSections, filed: rawAnswers, retracted: {} }
+  const reading = answersForReading(rawAnswers)
+  return { sections: reading.sections, filed: reading.filed, retracted: reading.retracted }
+}
+
+/**
  * Renders a client's answers as a PDF.
  *
  * `options` lets an assigned question set reuse this exact layout by passing its
@@ -71,8 +91,7 @@ export async function generateAnswersPdfForOffice(
   rawAnswers: Record<string, AnswerValue>,
   options: { sections?: QuestionnaireSection[]; title?: string } = {}
 ): Promise<Buffer> {
-  const reading = answersForReading(rawAnswers)
-  const sections = options.sections ?? reading.sections
+  const { sections, filed } = answersToPrint(rawAnswers, options.sections)
   const labelFor = (id: string) => {
     for (const section of sections) {
       const q = section.questions.find(x => x.id === id)
@@ -81,7 +100,7 @@ export async function generateAnswersPdfForOffice(
     return id
   }
 
-  const { english } = await toEnglishForOffice(reading.filed, labelFor)
+  const { english } = await toEnglishForOffice(filed, labelFor)
   if (Object.keys(english).length === 0) {
     return generateAnswersPdf(clientName, caseType, phone, rawAnswers, options)
   }
@@ -92,7 +111,9 @@ export async function generateAnswersPdfForOffice(
   for (const [id, text] of Object.entries(english)) {
     translated[id] = `${text}  [translated from the client's own words]`
   }
-  return generateAnswersPdf(clientName, caseType, phone, translated, { ...options, sections })
+  // Laid out under the sections the client's own answers open, whatever the
+  // English does to them.
+  return drawAnswersPdf(clientName, caseType, phone, { ...answersToPrint(translated, options.sections), sections }, options.title)
 }
 
 export function generateAnswersPdf(
@@ -107,11 +128,18 @@ export function generateAnswersPdf(
   // What the client stands behind, and what they took back — kept apart. Both
   // modules, with this client's repeating branches expanded, so a wage-and-hour
   // answer prints under its own heading rather than as an unrecognised leftover.
-  const reading = answersForReading(rawAnswers)
-  const answers = reading.filed
-  const retracted = reading.retracted
-  const sections = options.sections ?? reading.sections
-  const title = options.title ?? 'CLIENT INTAKE QUESTIONNAIRE'
+  return drawAnswersPdf(clientName, caseType, phone, answersToPrint(rawAnswers, options.sections), options.title)
+}
+
+function drawAnswersPdf(
+  clientName: string,
+  caseType: string,
+  phone: string,
+  printed: ReturnType<typeof answersToPrint>,
+  heading?: string
+): Promise<Buffer> {
+  const { sections, filed: answers, retracted } = printed
+  const title = heading ?? 'CLIENT INTAKE QUESTIONNAIRE'
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ margin: 50, size: 'LETTER', bufferPages: true })
     const chunks: Buffer[] = []
