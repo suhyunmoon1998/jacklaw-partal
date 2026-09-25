@@ -47,7 +47,7 @@ import {
 } from '@/lib/caseAnalysisShape'
 import { AnswerValue } from '@/types'
 
-import { ANALYSIS_MODEL } from '@/lib/models'
+import { ANALYSIS_MODEL, thinkingFor } from '@/lib/models'
 
 export { ANALYSIS_MODEL }
 
@@ -343,10 +343,10 @@ async function ask<T>(
       // for want of room to write the answer down.
       max_tokens: 24000,
       system: systemBlocks(system),
-      thinking: { type: 'adaptive' },
+      thinking: thinkingFor(ANALYSIS_MODEL, 'medium', 24000).thinking,
       // The passes are narrow enough that the reasoning is bounded; 'high' on
       // the undivided job took six minutes and the office is waiting on this.
-      output_config: { effort: 'medium', format: zodOutputFormat(schema) },
+      output_config: { ...thinkingFor(ANALYSIS_MODEL, 'medium', 24000).effort, format: zodOutputFormat(schema) },
       messages: [{ role: 'user', content: user }],
     })
     .finalMessage()

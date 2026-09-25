@@ -91,3 +91,23 @@ export const QUESTION_MODEL = pick('MODEL_QUESTIONS', SONNET)
  * rewrites it before anything leaves the office.
  */
 export const DRAFT_MODEL = pick('MODEL_DRAFT', OPUS)
+
+/**
+ * How hard a call thinks, in the form its model takes.
+ *
+ * Haiku 4.5 predates adaptive thinking and the effort control: it takes a
+ * fixed thinking budget and rejects `effort`. Every other model here takes
+ * adaptive thinking and an effort. Only the damages reading and the drafts
+ * use this, because they are the two being compared against Haiku; the
+ * matrix and the spine lost findings even on Sonnet and do not run on it.
+ */
+export function thinkingFor(model: string, effort: 'low' | 'medium' | 'high', maxTokens: number) {
+  if (model.startsWith('claude-haiku-4-5')) {
+    // A third of the ceiling, so the answer keeps room after the thinking.
+    return {
+      thinking: { type: 'enabled' as const, budget_tokens: Math.min(6000, Math.floor(maxTokens / 3)) },
+      effort: {},
+    }
+  }
+  return { thinking: { type: 'adaptive' as const }, effort: { effort } }
+}

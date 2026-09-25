@@ -38,7 +38,7 @@ import { bareFactId, citationsIn, factIdsIn, readsAsEstimated } from '@/lib/rele
 import { canonical } from '@/lib/briefHistory'
 import { plainly } from '@/lib/modelErrors'
 import { Meter } from '@/lib/spend'
-import { DRAFT_MODEL } from '@/lib/models'
+import { DRAFT_MODEL, thinkingFor } from '@/lib/models'
 import {
   CheckedSection,
   DRAFT_KEYS,
@@ -423,8 +423,8 @@ async function call(client: Anthropic, system: string, facts: string, rest: stri
           // the deadline, not room the draft needs.
           max_tokens: 16000,
           system,
-          thinking: { type: 'adaptive' },
-          output_config: { effort: 'medium', format: zodOutputFormat(DraftOutput) },
+          thinking: thinkingFor(DRAFT_MODEL, 'medium', 16000).thinking,
+          output_config: { ...thinkingFor(DRAFT_MODEL, 'medium', 16000).effort, format: zodOutputFormat(DraftOutput) },
           messages: [{ role: 'user', content: [{ type: 'text', text: `=== FACTS ON FILE ===\n\n${facts}` }, { type: 'text', text: rest }] }],
         },
         { signal: AbortSignal.timeout(DEADLINE_MS) }
