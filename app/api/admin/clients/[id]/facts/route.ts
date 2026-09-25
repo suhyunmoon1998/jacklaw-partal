@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
 import { isAdmin } from '@/lib/adminAuth'
 import { detectLanguage, machineTranslate } from '@/lib/machineTranslate'
-import { ExtractionInput, extractFacts } from '@/lib/factExtraction'
+import { ExtractionInput, extractAdditions, extractFacts } from '@/lib/factExtraction'
+import { unreadRows } from '@/lib/factAdditions'
 import { getAssignmentDetail } from '@/lib/questionSets'
 import {
   addFacts,
@@ -11,6 +12,7 @@ import {
   readContradictions,
   readLedger,
   saveContradictions,
+  supersede,
 } from '@/lib/factStore'
 import { standing, unsettled } from '@/lib/factLedger'
 import { clearReading } from '@/lib/caseReadingStore'
@@ -123,13 +125,18 @@ async function inEnglish(text: string): Promise<string> {
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   if (!isAdmin(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   try {
-    const [entries, contradictions, searched] = await Promise.all([
+    const [entries, contradictions, searched, input] = await Promise.all([
       readLedger(params.id),
       readContradictions(params.id),
       lastSearch(params.id),
+      // Only to count answers the ledger has not read. A failure here costs
+      // the count, not the ledger.
+      gather(params.id).catch(() => null),
     ])
     return NextResponse.json({
       facts: standing(entries).length,
+      /** Answered question-set rows no fact came from — follow-up answers waiting to be added. */
+      unread: entries.length && input ? unreadRows(entries, input.extra).reduce((n, s) => n + s.rows.length, 0) : 0,
       total: entries.length,
       unsettled: unsettled(entries).length,
       contradictions,
@@ -188,6 +195,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   const existing = await readLedger(params.id)
   const body = await req.json().catch(() => ({}))
+  if (body?.add === true) return addAnswers(params.id, existing)
   // Reading again over a ledger that already holds facts would insert a second
   // copy of every one of them — addFacts is deliberately not an upsert, so it
   // would fail, but only after the reading had been paid for. Refuse first.
@@ -253,6 +261,72 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     answered: read.answered,
     contradictions: read.contradictions,
     replaced: existing.length,
+    searched: input.searched,
+    seconds: Math.round((Date.now() - began) / 1000),
+    spent: meter.spent,
+    spentSaid: describeSpend(meter.spent),
+  })
+}
+
+/**
+ * Adds answers that arrived after the ledger was read — a follow-up round's,
+ * usually — without renumbering or replacing anything already on file.
+ *
+ * The facts they correct are marked superseded, not removed. The claims
+ * reading is left in place and goes stale on its own, because its fingerprint
+ * is the standing ledger's. The panel then says to read it again, and the
+ * brief it produced stays comparable.
+ */
+async function addAnswers(clientId: string, existing: Awaited<ReturnType<typeof readLedger>>) {
+  if (!existing.length) {
+    return NextResponse.json(
+      { error: 'There are no facts on file to add to. Read the answers into facts first.' },
+      { status: 409 }
+    )
+  }
+  const input = await gather(clientId)
+  if (!input) return NextResponse.json({ error: 'No such client.' }, { status: 404 })
+  const sets = unreadRows(existing, input.extra)
+  if (!sets.length) {
+    return NextResponse.json({ error: 'Every answer on file is already in the facts.' }, { status: 409 })
+  }
+
+  const began = Date.now()
+  const meter = new Meter()
+  let read
+  try {
+    read = await extractAdditions({ clientId, clientName: input.clientName, sets, ledger: existing, meter })
+  } catch (err) {
+    return NextResponse.json({ error: (err as Error).message }, { status: 502 })
+  }
+  if (!read.entries.length) {
+    return NextResponse.json(
+      { error: 'The new answers produced no facts. Nothing was changed.', answered: read.answered },
+      { status: 502 }
+    )
+  }
+
+  try {
+    await snapshotNow(clientId, 'before follow-up answers were added to the facts')
+    // Facts first: a supersession must point at a fact that exists.
+    await addFacts(clientId, read.entries)
+    for (const s of read.kept) await supersede(s.oldId, s.newId, s.why)
+    // The contradictions were found again over the ledger as it now stands.
+    await clearContradictions(clientId)
+    await saveContradictions(clientId, read.contradictions)
+    await keepSearch(clientId, input.searched)
+  } catch (err) {
+    // Paid for and only partly stored. Loud, so nobody reads a half-updated
+    // ledger as whole.
+    return NextResponse.json({ error: (err as Error).message }, { status: 500 })
+  }
+
+  return NextResponse.json({
+    added: read.entries.length,
+    answered: read.answered,
+    superseded: read.kept,
+    setAside: read.setAside,
+    contradictions: read.contradictions,
     searched: input.searched,
     seconds: Math.round((Date.now() - began) / 1000),
     spent: meter.spent,

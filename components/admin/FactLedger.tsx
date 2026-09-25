@@ -47,6 +47,8 @@ export default function FactLedger({
 }) {
   const [facts, setFacts] = useState<number | null>(null)
   const [unsettled, setUnsettled] = useState(0)
+  /** Follow-up answers no fact came from yet. */
+  const [unread, setUnread] = useState(0)
   const [contradictions, setContradictions] = useState<Contradiction[]>([])
   const [running, setRunning] = useState(false)
   const [error, setError] = useState('')
@@ -59,6 +61,7 @@ export default function FactLedger({
       if (!res.ok) throw new Error(body?.error || 'Could not read the ledger.')
       setFacts(body.facts ?? 0)
       setUnsettled(body.unsettled ?? 0)
+      setUnread(body.unread ?? 0)
       setContradictions(body.contradictions ?? [])
     } catch (err) {
       setError((err as Error).message)
@@ -99,6 +102,36 @@ export default function FactLedger({
     }
   }
 
+  /**
+   * Adds the answers that came in after the facts were read. Nothing on file is
+   * replaced or renumbered; a fact they correct is marked replaced, with why.
+   */
+  const add = async () => {
+    setRunning(true)
+    setError('')
+    setNote('')
+    try {
+      const res = await fetch(`/api/admin/clients/${clientId}/facts`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ add: true }),
+      })
+      const body = await res.json()
+      if (!res.ok) throw new Error(body?.error || 'The new answers could not be added.')
+      setNote(
+        `${body.added} facts added from ${body.answered} new answers in ${body.seconds}s` +
+          (body.superseded?.length ? `, ${body.superseded.length} earlier facts replaced` : '') +
+          '. Read the case again: it was read against the facts before these.'
+      )
+      await load()
+      onChange?.()
+    } catch (err) {
+      setError((err as Error).message)
+    } finally {
+      setRunning(false)
+    }
+  }
+
   return (
     <section className="px-5 py-4 border-t border-gray-100">
       <div className="flex items-center gap-2 flex-wrap mb-3">
@@ -110,10 +143,20 @@ export default function FactLedger({
               ? `${facts} facts${unsettled ? `, ${unsettled} not settled` : ''}`
               : 'None yet — nothing above this can run.'}
         </span>
+        {Boolean(facts) && unread > 0 && (
+          <button
+            onClick={add}
+            disabled={running}
+            title="Reads only the answers not yet in the facts. Nothing on file is replaced or renumbered."
+            className="ml-auto text-xs font-semibold px-3 py-1.5 rounded-lg bg-black text-white hover:bg-gray-800 disabled:opacity-40 transition-colors"
+          >
+            {running ? 'Reading…' : `Add ${unread} new answer${unread === 1 ? '' : 's'}`}
+          </button>
+        )}
         <button
           onClick={() => run(Boolean(facts))}
           disabled={running}
-          className={`ml-auto text-xs font-semibold px-3 py-1.5 rounded-lg disabled:opacity-40 transition-colors ${
+          className={`${facts && unread > 0 ? '' : 'ml-auto '}text-xs font-semibold px-3 py-1.5 rounded-lg disabled:opacity-40 transition-colors ${
             facts
               ? 'border border-gray-300 text-gray-700 hover:bg-gray-50'
               : 'bg-black text-white hover:bg-gray-800'
@@ -123,6 +166,12 @@ export default function FactLedger({
         </button>
       </div>
 
+      {Boolean(facts) && unread > 0 && !running && (
+        <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3">
+          {unread} answer{unread === 1 ? '' : 's'} from question sets {unread === 1 ? 'is' : 'are'} not in the
+          facts yet, so nothing read from the facts knows {unread === 1 ? 'it' : 'them'}.
+        </p>
+      )}
       {error && (
         <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-3">
           {error}

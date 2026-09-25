@@ -23,7 +23,8 @@ import Anthropic from '@anthropic-ai/sdk'
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod'
 import { z } from 'zod'
 import { answersForReading } from '@/lib/modules'
-import { FactNugget, LedgerEntry } from '@/lib/factLedger'
+import { FactNugget, LedgerEntry, standing } from '@/lib/factLedger'
+import { SetRows, Supersession, afterAdditions, checkSupersessions, nextFactNumber } from '@/lib/factAdditions'
 import { plainly } from '@/lib/modelErrors'
 import { Meter } from '@/lib/spend'
 import { AnswerValue } from '@/types'
@@ -131,6 +132,8 @@ export interface ExtractionInput {
   extra?: { title: string; rows: { id: string; label: string; answer: string }[] }[]
   /** Counts what the run used, when the caller wants to know. */
   meter?: Meter
+  /** Set by extractAdditions, which runs the check once over the whole ledger instead. */
+  skipContradictions?: boolean
 }
 
 const shown = (v: AnswerValue | undefined): string =>
@@ -299,12 +302,28 @@ sense alongside something elsewhere, say so in the fact's openLoop rather than g
     supersededWhy: null,
   }))
 
-  if (!entries.length) return { entries, contradictions: [], answered }
+  if (!entries.length || input.skipContradictions) return { entries, contradictions: [], answered }
 
-  const brief = entries
-    .map(e => `${e.id} [${e.status}] ${e.proposition}  (from ${e.provenance.pinpoint})`)
-    .join('\n')
+  const contradictions = await findContradictions(client, header, entries, input.meter)
+  return { entries, contradictions, answered }
+}
 
+/** One fact per line, as the passes over the whole ledger read it. */
+const listed = (entries: LedgerEntry[]) =>
+  entries.map(e => `${e.id} [${e.status}] ${e.proposition}  (from ${e.provenance.pinpoint})`).join('\n')
+
+/**
+ * Where the facts cannot all be true.
+ *
+ * Run over the whole ledger, not a section, because a contradiction is rarely
+ * inside one section.
+ */
+async function findContradictions(
+  client: Anthropic,
+  header: string,
+  entries: LedgerEntry[],
+  meter?: Meter
+): Promise<Contradiction[]> {
   const { contradictions } = await ask(
     client,
     'contradiction check',
@@ -323,9 +342,90 @@ sensible margin, or two facts about different periods. Do not manufacture one. I
 are consistent, return an empty list — that is a real and useful answer.
 
 For each, say why it matters and the single question that would resolve it.`,
-    `${header}\n\n=== FACTS (${entries.length}) ===\n\n${brief}`,
+    `${header}\n\n=== FACTS (${entries.length}) ===\n\n${listed(entries)}`,
+    meter
+  )
+  return contradictions
+}
+
+const Supersessions = z.object({
+  supersessions: z.array(z.object({ oldId: z.string(), newId: z.string(), why: z.string() })),
+})
+
+/**
+ * Reads answers that arrived after the ledger was built, and reconciles them
+ * with it.
+ *
+ * Three passes:
+ * - The new answers are read the way any section is, and numbered after the
+ *   highest id on file.
+ * - The new facts are read beside the standing ledger, to find which old
+ *   facts they correct or settle.
+ * - The contradiction check runs again over the ledger as it will stand,
+ *   because answers written to resolve a conflict should leave it resolved.
+ *
+ * Nothing is stored here. The route stores the facts first, then the
+ * supersessions, because both ids of a supersession must already exist.
+ */
+export async function extractAdditions(input: {
+  clientId: string
+  clientName: string
+  sets: SetRows[]
+  ledger: LedgerEntry[]
+  meter?: Meter
+}): Promise<{
+  entries: LedgerEntry[]
+  kept: Supersession[]
+  setAside: { proposed: Supersession; why: string }[]
+  contradictions: Contradiction[]
+  answered: number
+}> {
+  const read = await extractFacts({
+    clientId: input.clientId,
+    clientName: input.clientName,
+    answers: {},
+    extra: input.sets,
+    meter: input.meter,
+    // The contradiction check below is run once over the whole ledger.
+    skipContradictions: true,
+  })
+  const first = nextFactNumber(input.ledger)
+  const entries = read.entries.map((e, i) => ({
+    ...e,
+    id: `${input.clientId}:f${String(first + i).padStart(3, '0')}`,
+  }))
+  if (!entries.length) return { entries, kept: [], setAside: [], contradictions: [], answered: read.answered }
+
+  const client = new Anthropic({ maxRetries: 2 })
+  const header = `CLIENT: ${input.clientName}`
+  const { supersessions } = await ask(
+    client,
+    'reconciliation',
+    Supersessions,
+    `${SYSTEM}
+
+This pass does not extract. The client has answered follow-up questions, sent to settle what
+her first answers left open or contradictory. NEW FACTS were read from those answers. STANDING
+FACTS are the record as it stood before them.
+
+For each new fact that corrects, clarifies or settles a standing fact, name the standing fact it
+replaces: oldId the standing fact, newId the new one, and why in one sentence that says what the
+record said before and what she says now. A new fact settles a standing fact when:
+- it answers the same question differently or more exactly,
+- it resolves a DISPUTED fact or a recorded contradiction, or
+- it answers what an UNKNOWN fact said was not known.
+
+Replace nothing merely because a new fact is related or adds detail. A detail that leaves the
+old fact true replaces nothing. Never replace a fact with one that says less. A client changing
+an answer is itself a fact the office must see, so the reason must name both versions; the old
+fact stays in the record, marked replaced. If no standing fact is settled, return an empty list.`,
+    `${header}\n\n=== STANDING FACTS (${standing(input.ledger).length}) ===\n\n${listed(standing(input.ledger))}` +
+      `\n\n=== NEW FACTS (${entries.length}) ===\n\n${listed(entries)}`,
     input.meter
   )
+  const { kept, setAside } = checkSupersessions(supersessions, input.ledger, entries, input.clientId)
 
-  return { entries, contradictions, answered }
+  const after = standing(afterAdditions(input.ledger, entries, kept))
+  const contradictions = await findContradictions(client, header, after, input.meter)
+  return { entries, kept, setAside, contradictions, answered: read.answered }
 }
