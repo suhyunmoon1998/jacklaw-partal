@@ -66,7 +66,16 @@ export async function saveStage(
 ): Promise<StoredReading> {
   const existing = await readReading(clientId, fingerprint)
   const base = existing && !existing.stale ? existing.reading : {}
-  const merged: StoredReading = { ...base, ...patch, took: { ...(base.took ?? {}), ...(patch.took ?? {}) } }
+  // Per-stage bookkeeping is merged, not replaced. A patch that carried only
+  // its own stage's stamp once wiped the others', and a chronology current a
+  // minute before showed as stale.
+  const merged: StoredReading = {
+    ...base,
+    ...patch,
+    took: { ...(base.took ?? {}), ...(patch.took ?? {}) },
+    stamps: { ...(base.stamps ?? {}), ...(patch.stamps ?? {}) },
+    spent: { ...(base.spent ?? {}), ...(patch.spent ?? {}) },
+  }
 
   const { error } = await getSupabase()
     .from('case_readings')

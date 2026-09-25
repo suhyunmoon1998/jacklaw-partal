@@ -105,7 +105,11 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   try {
     // `force` reads the FEHA claims even where the screen in code found nothing
     // to read — a person has looked at the facts and decided otherwise.
-    patch = await runStage(stage, entries, stage === 'wage order' ? {} : stored, {
+    // The Wage Order is handed the reading too. It reads nothing from it, but
+    // the patch carries every stage's stamp forward from it: handed {}, a
+    // re-read Order wiped the spine's stamp and a current chronology showed as
+    // stale, inviting three Opus calls to read it again unchanged.
+    patch = await runStage(stage, entries, stored, {
       forceFeha: stage === 'claims 3' && body?.force === true,
     })
   } catch (err) {

@@ -206,7 +206,9 @@ export async function GET(req: NextRequest) {
         if (row && isRead(row.reading, stage)) {
           await snapshotNow(next.clientId, `before the night read "${stage}" again`)
         }
-        const patch = await runStage(stage, entries, stage === 'wage order' ? {} : stored)
+        // Handed the reading even for the Wage Order, so the other stages'
+        // stamps survive it — see the panel's route.
+        const patch = await runStage(stage, entries, stored)
         stored = await saveStage(next.clientId, fingerprint, { ...stored, ...patch })
         ran.push(stage)
         stage = nextStage(stored)
