@@ -74,6 +74,17 @@
  *   one flagged sentence and a factual summary a quarter over length; usable,
  *   not better. Haiku 4.5 left daily overtime — a claim the reading supports
  *   — out of the trial draft, and ran the factual summary half again over.
+ *
+ *   FOLLOW-UPS — Opus 5.5. Twenty questions each, same gaps. Haiku 4.5 had 8
+ *   of 20 refused by vet() (two legal terms, six too long to read once) and
+ *   more that vet() cannot see: questions asking three things at once, one
+ *   asking whether she believes it was about her national origin — the legal
+ *   conclusion — and her pay rate asked again when she has already said she
+ *   does not know it and that it changed (Opus asked for the stubs). It checked
+ *   none of the eleven contradictions; Opus checked six, each offering "both
+ *   happened". Four of Haiku's questions pointed at "element" rather than a
+ *   fact or an element, so their answers would have nowhere to go back to.
+ *   Opus: 0 refused. The saving was about $0.25 a round.
  */
 
 /** The models this codebase knows about. */
@@ -125,9 +136,9 @@ export const DRAFT_MODEL = pick('MODEL_DRAFT', OPUS)
  *
  * Haiku 4.5 predates adaptive thinking and the effort control: it takes a
  * fixed thinking budget and rejects `effort`. Every other model here takes
- * adaptive thinking and an effort. Only the damages reading and the drafts
- * use this, because they are the two being compared against Haiku; the
- * matrix and the spine lost findings even on Sonnet and do not run on it.
+ * adaptive thinking and an effort. Only the damages reading, the drafts and
+ * the follow-ups use this, because they are the ones compared against Haiku;
+ * the matrix and the spine lost findings even on Sonnet and do not run on it.
  */
 export function thinkingFor(model: string, effort: 'low' | 'medium' | 'high', maxTokens: number) {
   if (model.startsWith('claude-haiku-4-5')) {

@@ -44,7 +44,7 @@ import { FollowUpSet, FollowUpSetShape } from '@/lib/followUpShape'
 
 export * from '@/lib/followUpShape'
 
-import { FOLLOWUP_MODEL } from '@/lib/models'
+import { FOLLOWUP_MODEL, thinkingFor } from '@/lib/models'
 
 export { FOLLOWUP_MODEL }
 
@@ -246,15 +246,17 @@ export async function askFollowUps(req: FollowUpRequest): Promise<FollowUpSet> {
   }
 
   const client = new Anthropic({ maxRetries: 2 })
+  const maxTokens = 32000
+  const { thinking, effort } = thinkingFor(FOLLOWUP_MODEL, 'medium', maxTokens)
   let response
   try {
     response = await client.messages
       .stream({
         model: FOLLOWUP_MODEL,
-        max_tokens: 32000,
+        max_tokens: maxTokens,
         system: SYSTEM,
-        thinking: { type: 'adaptive' },
-        output_config: { effort: 'medium', format: zodOutputFormat(FollowUpSetShape) },
+        thinking,
+        output_config: { ...effort, format: zodOutputFormat(FollowUpSetShape) },
         messages: [{ role: 'user', content: brief(g, req.entries, req.lang, limit) }],
       })
       .finalMessage()
