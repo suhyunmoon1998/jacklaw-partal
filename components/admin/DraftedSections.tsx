@@ -27,7 +27,19 @@ export function DraftedParagraphs({ section }: { section: CheckedSection }) {
                   </span>
                 </span>
               ) : (
-                <span className={s.inference ? 'italic' : ''}>{s.text}</span>
+                <>
+                  {/* The firm's own summaries lead a statement with its footing. */}
+                  {s.label && s.label !== 'LAW' && (
+                    <span
+                      className={`font-sans text-[9px] font-bold tracking-wider mr-1 ${
+                        s.label === 'CONFIRMED' ? 'text-green-700' : s.label === 'UNRESOLVED' ? 'text-red-600' : 'text-gray-400'
+                      }`}
+                    >
+                      {s.label}
+                    </span>
+                  )}
+                  <span className={s.inference ? 'italic' : ''}>{s.text}</span>
+                </>
               )}
               <sup className="font-sans text-[9px] text-gray-400 ml-0.5">
                 {[...s.facts, ...s.authority].join(', ')}

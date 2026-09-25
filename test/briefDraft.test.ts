@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { CheckContext, authorityForDrafting, check, checkDraft } from '@/lib/briefDraft'
+import { CheckContext, authorityForDrafting, check, checkDraft, labelOf } from '@/lib/briefDraft'
 import { DraftSentence } from '@/lib/briefDraftShape'
 import { Brief } from '@/lib/caseBrief'
 
@@ -12,9 +12,9 @@ import { Brief } from '@/lib/caseBrief'
 
 const ctx: CheckContext = {
   facts: new Map([
-    ['f069', 'She took a meal break at 5:00 p.m. every day.'],
-    ['f012', 'She was paid $18 an hour.'],
-    ['f067', 'She does not believe the employer still owes her wages.'],
+    ['f069', { proposition: 'She took a meal break at 5:00 p.m. every day.', status: 'REPORTED' }],
+    ['f012', { proposition: 'She was paid $18 an hour.', status: 'CONFIRMED' }],
+    ['f067', { proposition: 'She does not believe the employer still owes her wages.', status: 'DISPUTED' }],
   ]),
   authority: new Set(['LAB 226.7', 'LAB 512', 'IWC 5 sec 11', 'brinker-provide-means-relieve']),
   authorityText: new Map([['LAB 226.7', 'one additional hour of pay'], ['LAB 512', 'not less than 30 minutes']]),
@@ -159,5 +159,15 @@ describe('what the model is handed', () => {
 
   it('hands no law for a claim the reading found nothing on', () => {
     expect(authorityForDrafting(brief).keys).not.toContain('LAB 2802')
+  })
+})
+
+describe('the firm\'s evidence labels', () => {
+  it('labels a sentence by the weakest fact under it, and an inference as one', () => {
+    expect(labelOf(s({ facts: ['f012'] }), ctx)).toBe('CONFIRMED')
+    expect(labelOf(s({ facts: ['f012', 'f069'] }), ctx)).toBe('CLIENT-REPORTED')
+    expect(labelOf(s({ facts: ['f069', 'f067'] }), ctx)).toBe('UNRESOLVED')
+    expect(labelOf(s({ facts: ['f012'], inference: true }), ctx)).toBe('INFERENCE')
+    expect(labelOf(s({ facts: [], authority: ['LAB 512'] }), ctx)).toBe('LAW')
   })
 })

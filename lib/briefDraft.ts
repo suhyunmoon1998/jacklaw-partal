@@ -45,6 +45,7 @@ import {
   DraftKind,
   DraftOutput,
   DraftSentence,
+  EvidenceLabel,
   KEYS_OF,
   StoredDraft,
 } from '@/lib/briefDraftShape'
@@ -167,16 +168,24 @@ const SENTENCE_RULES = `EVERY SENTENCE is an object: text, facts, authority, inf
 - Write fact ids and keys ONLY in those arrays, never in the text.
 - A dollar figure comes from the damages reading, a fact you cite, or a provision you cite — nowhere else — and an estimate is written as an estimate.
 - Never cite a case, statute, regulation or instruction you were not handed, and never add reporter page numbers or "at p." pinpoints.
-- Unfavorable facts are not omitted. Where one bears on what a section says, the section addresses it.`
+- Unfavorable facts are not omitted. Where one bears on what a section says, the section addresses it.
+
+HOW THE FIRM WRITES THESE (its own factual summaries are the model):
+- Separate what a record establishes from what the client reports. Say "she reports", "she says", "according to her intake" for her account; state a thing flatly only where a CONFIRMED fact supports it.
+- When you name a piece of proof, say what it establishes AND what it does not ("establishes the dates she worked, not the hours").
+- Where answers conflict, set both out and say which is better supported on the current record and why — never silently pick one or correct it. "Remains an inference until confirmed" is a complete sentence.
+- A pleading, a draft complaint or the office's own earlier analysis is not proof of anything it alleges.
+- Plain, exact, unadorned. No adjectives the facts do not carry.`
 
 const LEGAL_SYSTEM = `You draft three sections of a California plaintiff-side employment trial brief for an attorney to rewrite: the Introduction, the Brief Summary of Facts and Evidence, and the Conclusion. You are handed the client's fact ledger, the office's claims reading (each element's state and the facts it cites, already read against the quoted law), the defences, the damages reading, and the full text of every provision and holding that reading relied on.
 
-You do not decide the law and you do not change a conclusion. Where the claims reading says an element is contradicted, unknown, or needs authority, the draft says the same or leaves the claim out; it never upgrades one. A claim whose elements are not supported is not presented as established. Where the review items say part of the case was not read, the draft says so rather than reading as complete.
+You do not decide the law and you do not change a conclusion. Where the claims reading says an element is contradicted, unknown, or needs authority, the draft says the same or leaves the claim out; it never upgrades one. A claim whose elements are not supported is not presented as established. Where the review items say part of the case was not read or is only proposed, the draft does not present that part as established or as absent — it leaves it out. The sheet already lists those items for the attorney. The brief speaks about the case, never about the office's process: no sentence says what was read, proposed, flagged or recorded.
 
 The firm's Trial Brief Template sets the method:
 - Introduction (2–4 short paragraphs): what happened, why it matters legally, the strongest proof, the simple result — and the strongest defense and the fact that answers it. Lead with the strongest fact.
 - Brief Summary of Facts and Evidence: a controlled chronology — the employment and actual work; the conduct giving rise to the claims with representative examples; complaints, notice and separation; the few records that make the theory concrete; and the harmful evidence, addressed accurately rather than left for the other side.
 - Conclusion: the few facts that drive the result, as a sequence, and what is requested. Do not repeat the brief.
+LENGTH. The template says the summary of facts is "shorter and cleaner than the internal factual brief", which already carries every detail: keep section IV to about 25 sentences, the introduction to 2–4 short paragraphs, and the conclusion to about 8 sentences. Choose the representative examples; do not list every answer. A first run on a real file wrote 70 sentences for IV — too many to be read.
 Undisputed facts first where possible. Distinguish direct evidence from inference. Damages, if mentioned, are the reading's own figures with their assumptions.
 
 ${SENTENCE_RULES}
@@ -191,14 +200,21 @@ No law of any kind: no statute, no case, no element, and no word that states a l
 
 ${SENTENCE_RULES}
 
+Shape it as the firm's final factual summaries run, in four to five short paragraphs:
+1. Who, for whom, where, in what role, and when — on the better current evidence, with any conflicting date or name said as a conflict.
+2. The wage-and-hour account: schedule, hours, breaks, pay, what she says happened and how often.
+3. Anything else material — complaints, leave, discipline, separation — in the order it happened.
+4. What the record does not yet contain, and what will decide whether this account becomes a documentary case or must be narrowed: the specific records and witnesses, named.
+LENGTH. About 20 sentences in all — the firm's own final summaries run about that. The factual brief above it carries the detail; this is the version a lawyer reads to understand the case quickly. Use the best example, not every example.
+
 Return one section with key "factual-summary".`
 
 // ── checking ────────────────────────────────────────────────────────────────
 
 /** What a sentence is checked against. */
 export interface CheckContext {
-  /** Bare ids of the standing facts, with what each says. */
-  facts: ReadonlyMap<string, string>
+  /** Bare ids of the standing facts, with what each says and its ledger status. */
+  facts: ReadonlyMap<string, { proposition: string; status: string }>
   /** The keys and holding ids this call was HANDED. Nothing else passes. */
   authority: ReadonlySet<string>
   /** The text behind each handed key, for finding a figure in it. */
@@ -285,7 +301,7 @@ export function check(sectionKey: string, s: DraftSentence, ctx: CheckContext): 
   const figRe = new RegExp(FIGURE.source, 'g')
   while ((m = figRe.exec(s.text)) !== null) {
     const fig = normalizeFigure(m[0])
-    const inFacts = facts.some(id => normalizeFigure(ctx.facts.get(id) ?? '').includes(fig))
+    const inFacts = facts.some(id => normalizeFigure(ctx.facts.get(id)?.proposition ?? '').includes(fig))
     const inLaw = s.authority.some(k => normalizeFigure(ctx.authorityText.get(k) ?? '').includes(fig))
     const inDamages = !factual && normalizeFigure(ctx.damagesText).includes(fig)
     if (!inFacts && !inLaw && !inDamages) {
@@ -330,7 +346,7 @@ export function checkDraft(
           const problems = check(sec.key, s, ctx)
           sentences++
           if (problems.length) flagged++
-          return { ...s, facts: s.facts.map(bareFactId), problems }
+          return { ...s, facts: s.facts.map(bareFactId), problems, label: labelOf(s, ctx) }
         }),
       })
     }
@@ -339,12 +355,30 @@ export function checkDraft(
   return { sections: keys.filter(k => byKey.has(k)).map(k => byKey.get(k)!), notWritten, counts: { sentences, flagged } }
 }
 
+/**
+ * The firm's evidence label for a sentence, from the facts it cites.
+ *
+ * An inference is labelled one whatever it cites. Otherwise the weakest fact
+ * under it decides: one DISPUTED or UNKNOWN fact makes it UNRESOLVED, one
+ * the client reported makes it CLIENT-REPORTED, and only a sentence resting
+ * entirely on confirmed facts is CONFIRMED.
+ */
+export function labelOf(s: DraftSentence, ctx: CheckContext): EvidenceLabel {
+  if (s.inference) return 'INFERENCE'
+  const statuses = s.facts.map(id => (ctx.facts.get(bareFactId(id))?.status ?? '').toUpperCase())
+  if (!statuses.length) return s.authority.length ? 'LAW' : 'UNRESOLVED'
+  if (statuses.some(st => st === 'DISPUTED' || st === 'UNKNOWN' || st === '')) return 'UNRESOLVED'
+  if (statuses.every(st => st === 'CONFIRMED')) return 'CONFIRMED'
+  if (statuses.some(st => st === 'INFERRED')) return 'INFERENCE'
+  return 'CLIENT-REPORTED'
+}
+
 export function contextFor(brief: Brief, entries: LedgerEntry[], kind: DraftKind): CheckContext {
   const handed = kind === 'trial' ? authorityForDrafting(brief) : { keys: [], cases: [] }
   const d = brief.damages
   const figuresOf = (s: string) => (s.match(new RegExp(FIGURE.source, 'g')) ?? []).map(normalizeFigure)
   return {
-    facts: new Map(standing(entries).map(e => [bareFactId(e.id), e.proposition])),
+    facts: new Map(standing(entries).map(e => [bareFactId(e.id), { proposition: e.proposition, status: e.status }])),
     authority: new Set(handed.keys),
     authorityText: new Map(
       handed.keys.map(k => {
@@ -381,7 +415,7 @@ async function call(client: Anthropic, system: string, facts: string, rest: stri
           model: DRAFT_MODEL,
           // Sixty-odd sentence objects; twenty thousand was room to run past
           // the deadline, not room the draft needs.
-          max_tokens: 14000,
+          max_tokens: 16000,
           system,
           thinking: { type: 'adaptive' },
           output_config: { effort: 'medium', format: zodOutputFormat(DraftOutput) },

@@ -65,10 +65,20 @@ export const KEYS_OF: Record<DraftKind, DraftKey[]> = {
   factual: ['factual-summary'],
 }
 
+/**
+ * How far a sentence is established, in the words the firm's own factual
+ * summaries use (Factual Summary Concord 1.0, BMW 1.0): CONFIRMED by a
+ * record, CLIENT-REPORTED, an INFERENCE, or UNRESOLVED because the facts
+ * under it conflict or are unknown. Computed in code from the ledger status
+ * of the facts it cites — never taken from the model.
+ */
+export type EvidenceLabel = 'CONFIRMED' | 'CLIENT-REPORTED' | 'INFERENCE' | 'UNRESOLVED' | 'LAW'
+
 /** A sentence after checking: the same sentence, and what is wrong with it. */
 export interface CheckedSentence extends DraftSentence {
   /** Empty when every fact, authority and figure it names is on file. */
   problems: string[]
+  label?: EvidenceLabel
 }
 
 export interface CheckedSection {
