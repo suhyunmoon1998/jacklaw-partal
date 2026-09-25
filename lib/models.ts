@@ -62,6 +62,14 @@
  *   baseline had 12 rows to Opus's 25. Haiku 4.5 wrote a basis outside the
  *   four allowed and the reading stopped at the second stage.
  *
+ *   SPINE — back on Opus 5. Read again on Opus 5.5, every one of the four
+ *   files came back thin in the way Sonnet did: anomalies 13 -> 4 (AARON OH),
+ *   10 -> 2 (DAYEON KIM), 7 -> 4, 5 -> 2; date conflicts and events down by
+ *   about half. What AARON OH lost was the unpaid minutes either side of the
+ *   shift, the ban on early clock-ins, meal counts that do not reconcile and
+ *   a schedule that does not add up — the follow-up engine asks from these.
+ *   Three calls a file; Opus 5 costs about $0.20 more a reading.
+ *
  *   DRAFTS — Opus 5.5. Sonnet 5 wrote every section at half the price, with
  *   one flagged sentence and a factual summary a quarter over length; usable,
  *   not better. Haiku 4.5 left daily overtime — a claim the reading supports
@@ -70,6 +78,8 @@
 
 /** The models this codebase knows about. */
 export const OPUS = 'claude-opus-5-5'
+/** Kept for the spine, which Opus 5.5 reads thin. See above. */
+export const OPUS_5 = 'claude-opus-5'
 export const SONNET = 'claude-sonnet-5'
 export const HAIKU = 'claude-haiku-4-5-20251001'
 
@@ -85,7 +95,7 @@ export const EXTRACTION_MODEL = pick('MODEL_EXTRACTION', OPUS)
 export const MATRIX_MODEL = pick('MODEL_MATRIX', OPUS)
 
 /** The chronology, the anomalies and the evidence spine. */
-export const SPINE_MODEL = pick('MODEL_SPINE', OPUS)
+export const SPINE_MODEL = pick('MODEL_SPINE', OPUS_5)
 
 /** Which IWC Wage Order covers the employer. Cross-checked in code. */
 export const CHOICE_MODEL = pick('MODEL_WAGE_ORDER', SONNET)
