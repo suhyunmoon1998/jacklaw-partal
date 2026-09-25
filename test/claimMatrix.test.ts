@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { ClaimFinding, factSheet, ranked, unresolved } from '@/lib/claimMatrix'
+import { ClaimFinding, ELEMENT_STATES, STANDINGS, factSheet, ranked, settle, unresolved } from '@/lib/claimMatrix'
 import { LedgerEntry } from '@/lib/factLedger'
 
 const fact = (over: Partial<LedgerEntry> = {}): LedgerEntry => ({
@@ -78,5 +78,57 @@ describe('reading the matrix back', () => {
     expect(out).toHaveLength(2)
     expect(out.map(o => o.state).sort()).toEqual(['needs authority', 'unknown'])
     expect(out.find(o => o.element === 'duty-owed')!.need).toBe('Wage Order 5')
+  })
+})
+
+describe('the closed sets, checked after the call rather than in its schema', () => {
+  // In the output schema one mislabelled value cost the whole claim; the
+  // follow-up rounds lost twenty questions to one rung label that way.
+  const raw = (over: Record<string, unknown> = {}) => ({
+    claimId: 'minimum-wage',
+    standing: 'gaps to close',
+    elements: [
+      { key: 'paid-less', state: 'supported', facts: ['f001'], reasoning: 'Paid nothing for the tip work.', wouldSettleIt: '' },
+    ],
+    defense: '',
+    adverse: [],
+    damagesInputs: [],
+    damagesMissing: [],
+    ...over,
+  })
+
+  it('passes a well-formed finding through unchanged', () => {
+    expect(settle(raw())).toEqual(raw())
+  })
+
+  it('reads a label written with different case, hyphens or spacing as the label', () => {
+    const f = settle(raw({
+      standing: ' Gaps-to-Close ',
+      elements: [{ key: 'k', state: 'Partially_Supported', facts: [], reasoning: 'r', wouldSettleIt: '' }],
+    }))
+    expect(f.standing).toBe('gaps to close')
+    expect(f.elements[0].state).toBe('partially supported')
+  })
+
+  it('keeps an element with a state outside the five, shown as unknown and saying what it was given', () => {
+    const f = settle(raw({
+      elements: [
+        { key: 'a', state: 'likely supported', facts: ['f002'], reasoning: 'She says so.', wouldSettleIt: 'Pay stubs' },
+        { key: 'b', state: 'contradicted', facts: ['f003'], reasoning: 'Stub shows pay.', wouldSettleIt: '' },
+      ],
+    }))
+    expect(f.elements.map(e => e.state)).toEqual(['unknown', 'contradicted'])
+    expect(f.elements[0].reasoning).toContain('"likely supported"')
+    expect(f.elements[0].reasoning).toContain('She says so.')
+    expect(f.elements[0].facts).toEqual(['f002'])
+  })
+
+  it('refuses a standing outside the four, so the claim is read again rather than shown wrong', () => {
+    expect(() => settle(raw({ standing: 'probably met' }))).toThrow(/probably met/)
+  })
+
+  it('ranks by the same four the check allows', () => {
+    expect(STANDINGS).toHaveLength(4)
+    expect(ELEMENT_STATES).toContain('needs authority')
   })
 })

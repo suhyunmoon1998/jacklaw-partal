@@ -45,18 +45,28 @@ export { MATRIX_MODEL }
  * may be perfectly clear. It is unresolved for a different reason, and the fix
  * is different too.
  */
-const ElementState = z.enum([
+export const ELEMENT_STATES = [
   'supported',
   'partially supported',
   'contradicted',
   'unknown',
   'needs authority',
-])
-export type ElementState = z.infer<typeof ElementState>
+] as const
+export type ElementState = (typeof ELEMENT_STATES)[number]
 
-const ElementFinding = z.object({
+/** Whether the office can presently make out the claim. */
+export const STANDINGS = ['elements met', 'gaps to close', 'blocked', 'not raised by these facts'] as const
+export type Standing = (typeof STANDINGS)[number]
+
+/*
+ * What the model writes. The two closed sets above are plain strings in it and
+ * are checked by settle() afterwards: a provider enforces a schema
+ * all-or-nothing, so in the schema one mislabelled element cost the whole
+ * claim. Same rule, and same reason, as vet() in followUpShape.ts.
+ */
+const ElementOutput = z.object({
   key: z.string(),
-  state: ElementState,
+  state: z.string(),
   /**
    * Fact ids from the ledger, and nothing else.
    *
@@ -70,16 +80,16 @@ const ElementFinding = z.object({
   wouldSettleIt: z.string(),
 })
 
-const ClaimFinding = z.object({
+const ClaimOutput = z.object({
   claimId: z.string(),
   /**
-   * Whether the office can presently make out the claim.
+   * One of STANDINGS.
    *
    * Not a prediction and not a recommendation — a reading of the elements as
    * they currently stand.
    */
-  standing: z.enum(['elements met', 'gaps to close', 'blocked', 'not raised by these facts']),
-  elements: z.array(ElementFinding),
+  standing: z.string(),
+  elements: z.array(ElementOutput),
   /** The defence these particular facts invite, and what in the record answers it. */
   defense: z.string(),
   /** Facts that cut against the claim. Stated here, not buried. */
@@ -89,7 +99,43 @@ const ClaimFinding = z.object({
   /** Damages inputs it needs and the ledger does not have. */
   damagesMissing: z.array(z.string()),
 })
-export type ClaimFinding = z.infer<typeof ClaimFinding>
+type ClaimOutput = z.infer<typeof ClaimOutput>
+
+export type ElementFinding = Omit<z.infer<typeof ElementOutput>, 'state'> & { state: ElementState }
+export type ClaimFinding = Omit<ClaimOutput, 'standing' | 'elements'> & {
+  standing: Standing
+  elements: ElementFinding[]
+}
+
+const closed = (s: string) => s.trim().toLowerCase().replace(/[-_]+/g, ' ').replace(/\s+/g, ' ')
+
+/**
+ * The closed sets, checked.
+ *
+ * An element whose state is not one of the five is kept, shown as unknown, and
+ * says what it was given: one element, not the claim. The standing is the one
+ * thing a claim cannot be shown without, so a standing outside the four
+ * throws, and the claim gets its second attempt.
+ */
+export function settle(raw: ClaimOutput): ClaimFinding {
+  const standing = closed(raw.standing)
+  if (!(STANDINGS as readonly string[]).includes(standing)) {
+    throw new Error(`The claim came back as "${raw.standing}", which is not one of the four standings.`)
+  }
+  return {
+    ...raw,
+    standing: standing as Standing,
+    elements: raw.elements.map(e => {
+      const state = closed(e.state)
+      if ((ELEMENT_STATES as readonly string[]).includes(state)) return { ...e, state: state as ElementState }
+      return {
+        ...e,
+        state: 'unknown' as const,
+        reasoning: `[Given as "${e.state}", which is not one of the five states; shown as unknown.] ${e.reasoning}`,
+      }
+    }),
+  }
+}
 
 const SYSTEM = `You map established facts onto the elements of a claim for a California employment
 law office. You are not deciding what the law is — the elements are given to you, and the text
@@ -137,6 +183,10 @@ RULES
 8. NEVER SUPPLY A FIGURE. Rates, caps, penalty amounts and minimum wages are read off the
    statute or they are not stated. If the section in front of you gives a figure, you may use
    it. If it does not, say the figure has to be read off the provision.
+
+9. WRITE THE LABELS EXACTLY. Each element's state is one of the five in rule 3, spelled as
+   shown there. The claim's standing is one of exactly these four, spelled as shown:
+   elements met | gaps to close | blocked | not raised by these facts
 
 You are producing internal work product for a lawyer. Be direct and specific. No hedging
 language, no reassurance, and nothing that reads as advice to a client.`
@@ -321,7 +371,7 @@ export async function buildMatrix(
           max_tokens: 24000,
           system: SYSTEM,
           thinking: { type: 'adaptive' },
-          output_config: { effort: 'medium', format: zodOutputFormat(ClaimFinding) },
+          output_config: { effort: 'medium', format: zodOutputFormat(ClaimOutput) },
           messages: [
             {
               role: 'user',
@@ -355,7 +405,7 @@ export async function buildMatrix(
     if (!parsed) throw new Error(`The ${claim.name} matrix came back unreadable.`)
     // The model is told to use the claim's own id; make certain of it, because
     // everything downstream joins on it.
-    return { ...parsed, claimId: claim.id }
+    return settle({ ...parsed, claimId: claim.id })
   }
 
   const failed: Matrix['failed'] = []
@@ -380,13 +430,7 @@ export async function buildMatrix(
 
 /** Claims worth a lawyer's attention first. */
 export function ranked(findings: ClaimFinding[]): ClaimFinding[] {
-  const order: ClaimFinding['standing'][] = [
-    'elements met',
-    'gaps to close',
-    'blocked',
-    'not raised by these facts',
-  ]
-  return [...findings].sort((a, b) => order.indexOf(a.standing) - order.indexOf(b.standing))
+  return [...findings].sort((a, b) => STANDINGS.indexOf(a.standing) - STANDINGS.indexOf(b.standing))
 }
 
 /** Every element the office cannot answer, and why — the development plan. */
