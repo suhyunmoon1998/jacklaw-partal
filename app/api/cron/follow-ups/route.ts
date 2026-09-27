@@ -138,23 +138,20 @@ async function readFacts(next: Waiting): Promise<Outcome> {
   // 300-second ceiling cannot take the extraction down with it.
   const { extractFacts } = await import('@/lib/factExtraction')
   const { addFacts, saveContradictions } = await import('@/lib/factStore')
-  const { data: state } = await getSupabase()
-    .from('questionnaire_states')
-    .select('answers')
-    .eq('client_id', next.clientId)
-    .maybeSingle()
+  const { gatherExtractionInput } = await import('@/lib/factInput')
+  const { keepSearch } = await import('@/lib/sourceSearchStore')
+  // The same input the admin panel reads: the questionnaire and every answered
+  // question set. This read the questionnaire alone, and the sets were lost.
+  const input = await gatherExtractionInput(next.clientId)
+  if (!input) return { ran: false, client: next.name, reason: 'No such client.' }
 
-  const read = await extractFacts({
-    clientId: next.clientId,
-    clientName: next.name,
-    answers: (state?.answers ?? {}) as Record<string, never>,
-    meter,
-  })
+  const read = await extractFacts({ ...input, meter })
   if (!read.entries.length) {
     return { ran: false, client: next.name, reason: 'The reading produced no facts.' }
   }
   await addFacts(next.clientId, read.entries)
   await saveContradictions(next.clientId, read.contradictions)
+  await keepSearch(next.clientId, input.searched)
   return {
     ran: true,
     client: next.name,

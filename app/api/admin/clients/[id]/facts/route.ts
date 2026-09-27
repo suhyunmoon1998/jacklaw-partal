@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabase } from '@/lib/supabase'
 import { isAdmin } from '@/lib/adminAuth'
 import { toEnglishCached } from '@/lib/translationCache'
-import { ExtractionInput, extractAdditions, extractFacts } from '@/lib/factExtraction'
+import { extractAdditions, extractFacts } from '@/lib/factExtraction'
+import { gatherExtractionInput as gather } from '@/lib/factInput'
 import { unreadRows } from '@/lib/factAdditions'
-import { loadAssignedSets } from '@/lib/assignedSets'
 import {
   addFacts,
   clearContradictions,
@@ -16,9 +15,7 @@ import {
 } from '@/lib/factStore'
 import { standing, unsettled } from '@/lib/factLedger'
 import { clearReading } from '@/lib/caseReadingStore'
-import { AnswerValue } from '@/types'
 import { Meter, describeSpend } from '@/lib/spend'
-import { recordSearch } from '@/lib/sourceSearch'
 import { keepSearch, lastSearch } from '@/lib/sourceSearchStore'
 import { snapshotNow } from '@/lib/briefVersions'
 
@@ -36,37 +33,6 @@ import { snapshotNow } from '@/lib/briefVersions'
  */
 export const maxDuration = 300
 
-async function gather(clientId: string) {
-  const db = getSupabase()
-  const [{ data: client }, { data: state }, assigned, docs] = await Promise.all([
-    db.from('clients').select('id, name').eq('id', clientId).maybeSingle(),
-    db.from('questionnaire_states').select('answers').eq('client_id', clientId).maybeSingle(),
-    // Everything else the office has asked this client and had answered. These
-    // live in their own table, outside the questionnaire's structure, so
-    // nothing reading `answers` alone would ever see them.
-    loadAssignedSets(clientId),
-    db.from('documents').select('name, category').eq('client_id', clientId),
-  ])
-  if (!client) return null
-  // The raw record. extractFacts runs it through answersForReading itself, so
-  // that a question the client retracted is read as retracted here too rather
-  // than twice or not at all.
-  const answers = (state?.answers ?? {}) as Record<string, AnswerValue>
-  return {
-    clientId,
-    clientName: client.name ?? '',
-    answers,
-    extra: assigned.sets as NonNullable<ExtractionInput['extra']>,
-    searched: recordSearch({
-      ranAt: new Date().toISOString(),
-      answers: state ? answers : null,
-      assignments: assigned.error ? { error: assigned.error } : assigned.found,
-      documents: docs.error
-        ? { error: docs.error.message }
-        : (docs.data ?? []).map(d => ({ name: String(d.name ?? ''), category: String(d.category ?? '') })),
-    }),
-  }
-}
 
 /**
  * Each fact's verbatim in English, or '' where it already is.
