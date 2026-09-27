@@ -23,6 +23,8 @@ import Anthropic from '@anthropic-ai/sdk'
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod'
 import { z } from 'zod'
 import { answersForReading } from '@/lib/modules'
+import { isVisible } from '@/lib/questionLogic'
+import { QUESTIONNAIRE_V1_SECTIONS } from '@/lib/questionnaireV1'
 import { FactNugget, LedgerEntry, standing } from '@/lib/factLedger'
 import { SetRows, Supersession, afterAdditions, checkSupersessions, nextFactNumber } from '@/lib/factAdditions'
 import { plainly } from '@/lib/modelErrors'
@@ -151,15 +153,22 @@ const shown = (v: AnswerValue | undefined): string =>
 export function sections(input: ExtractionInput): { title: string; text: string; answered: number }[] {
   const reading = answersForReading(input.answers)
   const out: { title: string; text: string; answered: number }[] = []
+  const read = new Set<string>()
   for (const section of reading.sections) {
     const rows: string[] = []
     for (const q of section.questions) {
       const value = shown(reading.filed[q.id])
       if (!value) continue
       rows.push(`[${q.id}] ${q.label}\n  ANSWER: ${value}`)
+      read.add(q.id)
     }
     if (rows.length) out.push({ title: section.title, text: rows.join('\n'), answered: rows.length })
   }
+  // Retracted answers are known to the current questionnaire and deliberately
+  // left out; they must not come back in through the earlier version below.
+  for (const id of Object.keys(reading.retracted)) read.add(id)
+
+  out.push(...earlierVersion(input.answers, read))
 
   // Assigned question sets, as their own sections. Same shape, so a fact from
   // one carries the same provenance as a fact from the questionnaire.
@@ -168,6 +177,43 @@ export function sections(input: ExtractionInput): { title: string; text: string;
       .filter(r => r.answer.trim())
       .map(r => `[${r.id}] ${r.label}\n  ANSWER: ${r.answer}`)
     if (rows.length) out.push({ title: set.title, text: rows.join('\n'), answered: rows.length })
+  }
+  return out
+}
+
+/**
+ * Answers given to the questionnaire as it was before 2026-09-03, under ids the
+ * current one no longer has.
+ *
+ * Read with the wording the client was actually shown, and titled as the
+ * earlier version so a fact from July is not taken for one from September:
+ * where a client answered both, the two can disagree, and the contradiction
+ * pass should see which is which rather than one quietly replacing the other.
+ * A question the earlier version itself would have hidden — its gate answered
+ * the other way — is left out, as a retracted answer is today.
+ */
+function earlierVersion(
+  answers: Record<string, AnswerValue>,
+  read: Set<string>
+): { title: string; text: string; answered: number }[] {
+  const out: { title: string; text: string; answered: number }[] = []
+  const placed = new Set(read)
+  for (const section of QUESTIONNAIRE_V1_SECTIONS) {
+    const rows: string[] = []
+    for (const q of section.questions) {
+      if (placed.has(q.id)) continue
+      placed.add(q.id)
+      const value = shown(answers[q.id])
+      if (!value || !isVisible(q, answers)) continue
+      rows.push(`[${q.id}] ${q.label}\n  ANSWER: ${value}`)
+    }
+    if (rows.length) {
+      out.push({
+        title: `${section.title} (earlier version of the questionnaire, before September 3, 2026)`,
+        text: rows.join('\n'),
+        answered: rows.length,
+      })
+    }
   }
   return out
 }

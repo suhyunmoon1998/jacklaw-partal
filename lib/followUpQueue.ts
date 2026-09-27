@@ -9,6 +9,7 @@
  */
 
 import { Lang } from '@/lib/langs'
+import { QUESTIONNAIRE_V1_SECTIONS } from '@/lib/questionnaireV1'
 
 /** In the order the work has to happen. Also the order of precedence below. */
 export const STEPS = ['facts', 'reading', 'questions'] as const
@@ -22,9 +23,32 @@ export interface Waiting {
   needs: Step
 }
 
+/**
+ * Whether a client has told the office everything the questionnaire asks.
+ *
+ * Module 2 submitted — or, for the clients who answered before Module 2
+ * existed, the earlier twenty-section version answered through. That version
+ * asked the meal, rest, overtime and retaliation questions Module 2 asks now,
+ * so waiting for a Module 2 from them would wait on questions they have
+ * already answered; four clients sat unread for two months on exactly that.
+ *
+ * Nineteen of the twenty sections counts: the twentieth was "Additional
+ * Information" (prior complaints, prior attorneys, notes), and the office
+ * counted Ester, who stopped there, as finished (2026-09-27). The current
+ * Module 1 has ten sections, so nineteen completed can only be the earlier
+ * version.
+ */
+export function finishedQuestionnaire(state: {
+  m2_submitted?: boolean | null
+  completed_sections?: number[] | null
+}): boolean {
+  if (state.m2_submitted) return true
+  return (state.completed_sections?.length ?? 0) >= QUESTIONNAIRE_V1_SECTIONS.length - 1
+}
+
 export function whoIsWaiting(input: {
   clients: { id: string; name: string; lang: Lang }[]
-  /** Clients whose Module 2 is submitted. */
+  /** Clients who have answered everything: see finishedQuestionnaire. */
   finishedModule2: string[]
   haveFacts: string[]
   /** Clients whose reading is on file with every stage run. */

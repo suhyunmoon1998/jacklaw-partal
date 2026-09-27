@@ -15,7 +15,7 @@ import { readReading, saveStage } from '@/lib/caseReadingStore'
 import { ClaimFinding } from '@/lib/claimMatrix'
 import { SpineReading } from '@/lib/evidenceSpine'
 import { Meter, describeSpend, totalSpend } from '@/lib/spend'
-import { Outcome, Waiting, drain, whoIsWaiting } from '@/lib/followUpQueue'
+import { Outcome, Waiting, drain, finishedQuestionnaire, whoIsWaiting } from '@/lib/followUpQueue'
 
 /**
  * Reading a client's answers and writing their next questions, unprompted.
@@ -84,12 +84,12 @@ async function waitingFor(): Promise<Waiting[]> {
   const db = getSupabase()
   const [{ data: states }, { data: clients }, { data: plans }, { data: readings }] =
     await Promise.all([
-      db.from('questionnaire_states').select('client_id, m2_submitted'),
+      db.from('questionnaire_states').select('client_id, m2_submitted, completed_sections'),
       db.from('clients').select('id, name, portal_lang'),
       db.from('follow_up_plans').select('client_id'),
       db.from('case_readings').select('client_id, result'),
     ])
-  const finishedModule2 = (states ?? []).filter(s => s.m2_submitted).map(s => s.client_id as string)
+  const finishedModule2 = (states ?? []).filter(s => finishedQuestionnaire(s)).map(s => s.client_id as string)
 
   // Counted per client, not read off the whole table. This was one select of
   // every fact's client_id, and a select stops at 1000 rows: the table held
