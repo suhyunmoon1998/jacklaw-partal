@@ -98,6 +98,12 @@ Before real client use, the following MUST be implemented:
 - Add audit logging for all admin actions (who viewed what, when)
 - Host admin panel on a separate subdomain with IP allowlisting if possible
 
+### Sends from Eleanor
+- Eleanor (the office's assistant) can send a module or the next reminder text **only after Jack approves the exact message** in Eleanor's Approvals.
+- She calls `/api/eleanor/sends` server to server with `ELEANOR_PORTAL_SERVICE_SECRET` (32+ characters, set in both Vercel projects). Without it the route refuses everything.
+- The preview she shows is sealed. If the address, number, language, link or words change before the send, nothing is sent.
+- Sends go through the same code as the admin panel's Send button (`lib/moduleSend.ts`) and the daily reminder chase (`lib/reminderSend.ts`). The route never returns a full phone number or email address.
+
 ### Legal / Compliance
 - All data is subject to California attorney-client privilege
 - Comply with the California State Bar's rules on client data and technology

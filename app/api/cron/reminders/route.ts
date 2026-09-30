@@ -4,8 +4,6 @@ import { getSupabase } from '@/lib/supabase'
 import { ModuleId } from '@/lib/modules'
 import {
   Chasing,
-  assignmentOf,
-  DueReminder,
   LADDER,
   ReminderKind,
   ReminderTarget,
@@ -14,8 +12,8 @@ import {
   planReminders,
   resolveLang,
 } from '@/lib/reminderSchedule'
-import { CALL_VOICE, IMAGE_FOR, reminderBody } from '@/lib/reminderMessages'
-import { isConfigured, placeCall, sendSms, xmlEscape } from '@/lib/twilio'
+import { isConfigured } from '@/lib/twilio'
+import { deliverReminder, publicOrigin, reminderPreview, reminderRef } from '@/lib/reminderSend'
 
 /**
  * The daily chase.
@@ -187,17 +185,8 @@ export async function GET(req: NextRequest) {
   }
 
   const { due, skipped } = planReminders({ steps, targets, alreadySent, now })
-  /**
-   * The public address of the portal, fixed — not whatever host this request
-   * happened to arrive on.
-   *
-   * Two things ride on it: the link a client taps, and the URL the carrier
-   * fetches the picture from. A scheduled run that landed on a deployment URL
-   * rather than the custom domain would put a link behind Vercel's deployment
-   * protection into a client's text, and hand the carrier a picture it cannot
-   * fetch — and neither failure is visible from here.
-   */
-  const origin = (process.env.PUBLIC_ORIGIN ?? 'https://jacklaw-portal.vercel.app').replace(/\/$/, '')
+  // The public address, never this request's host (see publicOrigin).
+  const origin = publicOrigin()
 
   /**
    * With no provider there is nothing to send, and running anyway would be
@@ -212,7 +201,7 @@ export async function GET(req: NextRequest) {
       reason:
         'Twilio is not configured (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM_NUMBER). ' +
         'Nothing was sent and nothing was recorded, so no reminder has been used up.',
-      wouldSend: due.map(d => preview(d, origin)),
+      wouldSend: due.map(d => reminderPreview(d, origin)),
       skipped,
     })
   }
@@ -222,47 +211,21 @@ export async function GET(req: NextRequest) {
       ran: false,
       dryRun: true,
       configured: isConfigured(),
-      wouldSend: due.map(d => preview(d, origin)),
+      wouldSend: due.map(d => reminderPreview(d, origin)),
       skipped,
     })
   }
 
   const results: Record<string, unknown>[] = []
   for (const item of due) {
-  const { body, link, mediaUrl } = preview(item, origin)
-
-    // Claim the rung first. If two runs overlap, the second insert violates the
-    // unique index and this client is skipped rather than texted twice.
-    const round = assignmentOf(item.chasing)
-    const { error: claimError } = await db.from('client_reminders').insert({
-      client_id: item.clientId,
-      module_id: round ? null : item.chasing,
-      assignment_id: round,
-      kind: item.kind,
-      channel: item.channel,
-      to_number: item.phone,
-      lang: item.lang,
-      body,
-      status: 'sent',
+    // Claimed before it is sent, so overlapping runs cannot text anyone twice.
+    const delivered = await deliverReminder(db, item, origin)
+    results.push({
+      ...reminderRef(item),
+      ...(delivered.status === 'skipped' ? {} : { link: delivered.link }),
+      status: delivered.status,
+      error: delivered.error,
     })
-    if (claimError) {
-      results.push({ ...ref(item), status: 'skipped', error: 'already claimed' })
-      continue
-    }
-
-    const sent =
-      item.channel === 'sms'
-        ? await sendSms(item.phone, body, mediaUrl)
-        : await placeCall(item.phone, twimlFor(item, body))
-
-    // The rung just claimed, addressed by whichever column identifies it.
-    const patch = sent.ok ? { provider_id: sent.id } : { status: 'failed', error: sent.error }
-    const rung = db.from('client_reminders').update(patch).eq('kind', item.kind)
-    await (round
-      ? rung.eq('assignment_id', round)
-      : rung.eq('client_id', item.clientId).eq('module_id', item.chasing))
-
-    results.push({ ...ref(item), link, status: sent.ok ? 'sent' : 'failed', error: sent.ok ? undefined : sent.error })
   }
 
   return NextResponse.json({ ran: true, configured: isConfigured(), sent: results, skipped })
@@ -333,42 +296,4 @@ export async function POST(req: NextRequest) {
     marked: rows.length,
     note: 'Existing unsubmitted steps will not be chased. Anything sent from now on will be.',
   })
-}
-
-const ref = (d: DueReminder) => ({
-  clientId: d.clientId,
-  name: d.name,
-  chasing: d.chasing,
-  kind: d.kind,
-  channel: d.channel,
-  // So the dry run answers "and what language will they get this in?"
-  lang: d.lang,
-  daysWaiting: d.daysWaiting,
-})
-
-function preview(d: DueReminder, origin: string) {
-  // Sign-in is by phone, so the link is the front door rather than a per-client
-  // URL — nothing in a text should be a key to somebody's case file.
-  const link = `${origin}/client`
-  // A round of extra questions is not "your questionnaire is still waiting" —
-  // that person finished it. The copy says what is actually being asked.
-  const subject = assignmentOf(d.chasing) ? ('follow-up' as const) : ('questionnaire' as const)
-  const image = subject === 'questionnaire' ? IMAGE_FOR[d.kind] : undefined
-  return {
-    ...ref(d),
-    link,
-    body: reminderBody(d.kind, d.lang, { name: d.name, link, subject }),
-    // Twilio fetches this itself, so it has to be the public origin.
-    mediaUrl: d.channel === 'sms' && image ? `${origin}${image}` : undefined,
-  }
-}
-
-/** One spoken message, then hang up. */
-function twimlFor(d: DueReminder, body: string): string {
-  const v = CALL_VOICE[d.lang] ?? CALL_VOICE.en
-  return (
-    `<Response><Pause length="1"/>` +
-    `<Say voice="${v.voice}" language="${v.language}">${xmlEscape(body)}</Say>` +
-    `</Response>`
-  )
 }
