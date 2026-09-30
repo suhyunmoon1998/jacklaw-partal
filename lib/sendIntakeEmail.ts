@@ -34,7 +34,9 @@ export async function sendIntakeNotificationEmails(
   clientName: string,
   caseType: string,
   answers: Record<string, AnswerValue>,
-  moduleId: 'module1' | 'module2' = 'module1'
+  moduleId: 'module1' | 'module2' = 'module1',
+  /** The language the client reads the portal in; decides what is translated. */
+  clientLanguage?: string | null
 ): Promise<void> {
   const apiKey = process.env.RESEND_API_KEY
   const firmEmail = process.env.FIRM_EMAIL
@@ -75,7 +77,7 @@ export async function sendIntakeNotificationEmails(
     }
     return id
   }
-  const { english, incomplete } = await toEnglishForOffice(filed, labelFor)
+  const { english, incomplete } = await toEnglishForOffice(filed, labelFor, clientLanguage)
   const forOffice: Record<string, AnswerValue> = { ...filed }
   for (const [id, text] of Object.entries(english)) {
     forOffice[id] = `${text}\n\n— as written: ${String(filed[id])}`

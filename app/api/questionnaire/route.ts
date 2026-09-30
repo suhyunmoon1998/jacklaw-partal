@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
 import { sendIntakeNotificationEmails } from '@/lib/sendIntakeEmail'
+import { submissionLanguage } from '@/lib/machineTranslate'
 import { denyClient } from '@/lib/clientAuth'
 
 /**
@@ -115,12 +116,17 @@ export async function POST(req: NextRequest) {
   if (submitted && !wasSubmitted) {
     const { data: client } = await supabase
       .from('clients')
-      .select('name, case_type')
+      .select('name, case_type, portal_lang')
       .eq('id', clientId)
       .maybeSingle()
 
     if (client) {
-      await sendIntakeNotificationEmails(client.name, client.case_type, answers, moduleId)
+      // Whichever says the client wrote in something other than English: the
+      // portal language, or the answers themselves. Gustavo Arce Cordero reads
+      // the portal in English and answered in Spanish, so neither alone is
+      // enough.
+      const lang = [client.portal_lang, submissionLanguage(answers)].find(l => l && l !== 'en') ?? 'en'
+      await sendIntakeNotificationEmails(client.name, client.case_type, answers, moduleId, lang)
     }
   }
 

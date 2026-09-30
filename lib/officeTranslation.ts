@@ -47,6 +47,36 @@ export function needsEnglish(answers: Record<string, AnswerValue>): string[] {
     .map(([id]) => id)
 }
 
+/** Yes/no answers are stored as these literals, never as the client's words. */
+const STORED_LITERALS = new Set(['yes', 'no', 'not_sure'])
+
+/**
+ * What to put into English for the office: anything not in Latin script, and —
+ * for a client who reads the portal in another language — everything they
+ * typed.
+ *
+ * Latin script alone was the test, because this began as the fix for a PDF
+ * that could not draw Chinese. But the office cannot read Spanish either, and
+ * Spanish is Latin script: a parking attendant's account of his job, and the
+ * dates he gave as "Septiembre 2024" and "Agosto 4 2026", reached the firm's
+ * inbox untranslated. Guessing Spanish from the words misses most of it — only
+ * accented text gives itself away — so the client's own language decides.
+ */
+export function answersToTranslate(
+  answers: Record<string, AnswerValue>,
+  clientLanguage?: string | null
+): string[] {
+  const unreadable = needsEnglish(answers)
+  if (!clientLanguage || clientLanguage === 'en') return unreadable
+  const typed = Object.entries(answers)
+    .filter(
+      ([, value]) =>
+        typeof value === 'string' && /\p{L}/u.test(value) && !STORED_LITERALS.has(value.trim())
+    )
+    .map(([id]) => id)
+  return Array.from(new Set([...unreadable, ...typed]))
+}
+
 /**
  * Translates what a reader of English could not read, and nothing else.
  *
@@ -56,9 +86,11 @@ export function needsEnglish(answers: Record<string, AnswerValue>): string[] {
  */
 export async function toEnglishForOffice(
   answers: Record<string, AnswerValue>,
-  labelFor: (id: string) => string
+  labelFor: (id: string) => string,
+  /** The language the client reads the portal in, when the caller knows it. */
+  clientLanguage?: string | null
 ): Promise<EnglishRendering> {
-  const ids = needsEnglish(answers)
+  const ids = answersToTranslate(answers, clientLanguage)
   if (ids.length === 0) return { english: {}, incomplete: false }
 
   if (!process.env.ANTHROPIC_API_KEY) {
@@ -82,6 +114,9 @@ export async function toEnglishForOffice(
     'written. Where the client is vague, stay vague: "about 20 minutes" must not',
     'become "20 minutes". Where they quote someone, keep it a quotation.',
     '',
+    'Some answers may already be in English, or be a choice the client picked from',
+    'an English list; return those exactly as given.',
+    '',
     'Return one entry per answer you were given, with the same id.',
   ].join('\n')
 
@@ -100,12 +135,17 @@ export async function toEnglishForOffice(
     if (!parsed) return { english: {}, incomplete: true }
 
     const english: Record<string, string> = {}
+    const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase()
+    let answered = 0
     for (const item of parsed.answers) {
-      if (ids.includes(item.id) && item.english.trim() !== '') {
-        english[item.id] = item.english.trim()
-      }
+      if (!ids.includes(item.id) || item.english.trim() === '') continue
+      answered++
+      // An answer that was English already comes back unchanged, and printing
+      // it twice — once as the translation, once "as written" — is noise.
+      if (same(item.english, String(answers[item.id]))) continue
+      english[item.id] = item.english.trim()
     }
-    return { english, incomplete: Object.keys(english).length < ids.length }
+    return { english, incomplete: answered < ids.length }
   } catch (err) {
     console.error('could not put answers into English for the office:', err)
     return { english: {}, incomplete: true }
