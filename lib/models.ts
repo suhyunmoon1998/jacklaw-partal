@@ -70,7 +70,9 @@
  *   a schedule that does not add up — the follow-up engine asks from these.
  *   Three calls a file; Opus 5 costs about $0.20 more a reading.
  *
- *   DRAFTS — Opus 5.5. Sonnet 5 wrote every section at half the price, with
+ *   DRAFTS — Sonnet 5, the office's choice on 2026-09-30 for the saving (about
+ *   $0.50 a client), with what follows in front of it. Sonnet 5 wrote every
+ *   section at half the price, with
  *   one flagged sentence and a factual summary a quarter over length; usable,
  *   not better. Haiku 4.5 left daily overtime — a claim the reading supports
  *   — out of the trial draft, and ran the factual summary half again over.
@@ -170,11 +172,11 @@ export const QUESTION_MODEL = pick('MODEL_QUESTIONS', HAIKU)
 
 /**
  * Drafting the four template sections that are prose rather than assembly.
- * Opus, untested against another model: a draft is persuasive writing about a
- * real client, every sentence of it is checked in code after, and an attorney
- * rewrites it before anything leaves the office.
+ * Sonnet, by the office's decision — see DRAFTS above. Every sentence is still
+ * checked in code after, and an attorney rewrites the draft before anything
+ * leaves the office; MODEL_DRAFT=claude-opus-5-5 puts it back.
  */
-export const DRAFT_MODEL = pick('MODEL_DRAFT', OPUS)
+export const DRAFT_MODEL = pick('MODEL_DRAFT', SONNET)
 
 /**
  * How hard a call thinks, in the form its model takes.
