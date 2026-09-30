@@ -1,38 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
 import { isAdmin } from '@/lib/adminAuth'
-import { Lang, isLang } from '@/lib/langs'
-import { ModuleId, moduleById, moduleQuestionCount, stepName } from '@/lib/modules'
-import { lookupClientEmail, lookupClientLanguage, sendAssignmentEmail } from '@/lib/sendAssignmentEmail'
-import { readSteps } from '@/lib/clientSteps'
-import { isConfigured, sendSms } from '@/lib/twilio'
-import { chooseSmsTarget, lookupClientSms, origin, stepInviteSms } from '@/lib/assignmentInvite'
-
-const asModule = (value: unknown): ModuleId | null =>
-  value === 'module1' || value === 'module2' || value === 'module3' ? value : null
-
-/**
- * Where to send the client.
- *
- * Normally the questionnaire itself. But the office can hand out Step 2 while
- * Step 1 is unfinished, and then the module's own address is a locked door: the
- * client taps a link from their attorney, logs in, and is refused. So a module
- * that will land locked links to the dashboard instead, where the step they can
- * actually do is the live card and the new one is visibly waiting behind it.
- */
-const moduleLink = (origin: string, moduleId: ModuleId, blocked: boolean) =>
-  blocked ? `${origin}/dashboard` : `${origin}${moduleById(moduleId)?.href ?? '/dashboard'}`
-
-/** The step this module would sit behind for this client, if any. */
-async function blockedByStep(clientId: string, moduleId: ModuleId): Promise<number | null> {
-  const views = await readSteps(clientId)
-  const mine = views.find(v => v.id === moduleId)
-  if (!mine) return null
-  // Computed as though it were already sent, because the office is asking what
-  // will happen when they press Send.
-  const earlier = views.find(v => v.step < mine.step && v.sentAt !== null && v.state !== 'done')
-  return earlier?.step ?? null
-}
+import { lookupClientEmail, lookupClientLanguage } from '@/lib/sendAssignmentEmail'
+import { isConfigured } from '@/lib/twilio'
+import { lookupClientSms, origin } from '@/lib/assignmentInvite'
+import { asModule, blockedByStep, moduleLink, performModuleSend, planModuleSend } from '@/lib/moduleSend'
 
 /**
  * GET /api/admin/modules/send?clientId=…&moduleId=…
@@ -76,6 +48,7 @@ export async function GET(req: NextRequest) {
  * The record is what the client's own portal reads to decide whether to offer
  * the module at all, so it is written even when the email fails — the office can
  * copy the link and send it themselves, and the client can still get in.
+ * The send itself lives in lib/moduleSend.ts, shared with Eleanor's approved sends.
  */
 export async function POST(req: NextRequest) {
   if (!isAdmin(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -87,151 +60,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Missing clientId or moduleId' }, { status: 400 })
   }
 
-  const definition = moduleById(moduleId)
-  if (!definition?.built) {
-    return NextResponse.json(
-      { error: `${definition?.name ?? 'That module'} has not been built yet, so it cannot be sent.` },
-      { status: 400 }
-    )
-  }
-
-  const supabase = getSupabase()
-  const { data: client } = await supabase
-    .from('clients')
-    .select('name')
-    .eq('id', clientId)
-    .maybeSingle()
-  if (!client) return NextResponse.json({ error: 'Client not found.' }, { status: 404 })
-
-  // Present-but-empty means the office cleared the box on purpose; absent means
-  // they were never shown one and the file should answer.
-  const to =
-    typeof body?.email === 'string' ? body.email.trim() : await lookupClientEmail(clientId)
-  const lang: Lang = isLang(body?.lang) ? body.lang : await lookupClientLanguage(clientId)
-
-  const typedPhone = typeof body?.phone === 'string' ? body.phone : undefined
-  const target =
-    body?.sms === false
-      ? { phone: '', reason: 'off' as const }
-      : chooseSmsTarget(typedPhone, await lookupClientSms(clientId))
-
-  // Said before anything is recorded, because both of these are the office
-  // mistyping or forgetting — not a state the client should be put into.
-  if (target.reason === 'unusable') {
-    return NextResponse.json(
-      { error: `That does not look like a phone number: ${String(typedPhone).trim()}` },
-      { status: 400 }
-    )
-  }
-  if (target.reason === 'opted-out' && typedPhone) {
-    return NextResponse.json(
-      {
-        error:
-          `${client.name ?? 'This client'} replied STOP to our texts, so this office cannot text them. ` +
-          'Send it by email, or open it to them and pass the link on yourself.',
-      },
-      { status: 400 }
-    )
-  }
-  const blockedBy = await blockedByStep(clientId, moduleId)
-  const link = moduleLink(req.nextUrl.origin, moduleId, blockedBy !== null)
-
-  // Recorded first. A module the client cannot open is worse than one they were
-  // told about twice, and the office may well be sending the link by hand.
-  const { error: writeError } = await supabase
-    .from('client_module_sends')
-    .upsert(
-      {
-        client_id: clientId,
-        module_id: moduleId,
-        sent_at: new Date().toISOString(),
-        sent_to: to || null,
-        sent_lang: lang,
-        created_by: 'admin',
-      },
-      { onConflict: 'client_id,module_id' }
-    )
-
-  if (writeError) {
-    console.error('module send write failed:', writeError)
-    return NextResponse.json({ error: 'Could not record the send.', link }, { status: 500 })
-  }
-
-  // Text first, email second. This office's reminder ladder is two texts and a
-  // telephone call because that is how its clients are actually reached, and
-  // the send that starts the ladder was reaching them by email alone — so a
-  // client with no email address got a module they were never told about.
-  const phone = target.phone
-  const texted = !phone
-    ? null
-    : isConfigured()
-      ? await sendSms(
-          phone,
-          stepInviteSms(lang, client.name ?? '', { name: stepName(definition, lang), minutes: definition.minutes }, origin(req))
-        )
-      : { ok: false as const, error: 'Texting is not switched on for this portal yet.' }
-
-  if (!to.includes('@')) {
-    return NextResponse.json({
-      sent: Boolean(texted?.ok),
-      sms: texted?.ok ? phone : null,
-      smsError: texted && !texted.ok ? texted.error : undefined,
-      recorded: true,
-      link,
-      lang,
-      blockedBy,
-      // The second half of this sentence has to change when the step lands
-      // locked, or the office is told to hand over a link that will refuse the
-      // client — and told it by the same screen that just warned them.
-      error:
-        texted?.ok
-          ? undefined
-          : blockedBy === null
-            ? 'No email address and no text could be sent. The step is open to them — copy the link and send it yourself.'
-            : `No email address and no text could be sent. The step is recorded, but stays locked until Step ${blockedBy} is submitted; the link goes to their step list.`,
-    })
-  }
-
-  try {
-    await sendAssignmentEmail({
-      to,
-      clientName: client.name || 'there',
-      // "Step 2 · Questions about your pay and breaks", in their language —
-      // not the office's internal row name.
-      setName: stepName(definition, lang),
-      questionCount: moduleQuestionCount(moduleId),
-      link,
-      lang,
-    })
-  } catch (err) {
-    console.error('module send email failed:', err)
-    // The text may still have arrived, and if it did the client has the link.
-    return NextResponse.json({
-      sent: Boolean(texted?.ok),
-      sms: texted?.ok ? phone : null,
-      recorded: true,
-      link,
-      lang,
-      blockedBy,
-      error: texted?.ok
-        ? undefined
-        : err instanceof Error
-          ? err.message
-          : 'Could not send the email.',
-      emailError: err instanceof Error ? err.message : 'Could not send the email.',
-    })
-  }
-
-  return NextResponse.json({
-    sent: true,
-    recorded: true,
-    email: to,
-    sms: texted?.ok ? phone : null,
-    smsError: texted && !texted.ok ? texted.error : undefined,
-    link,
-    lang,
-    blockedBy,
+  const planned = await planModuleSend({
+    clientId,
+    moduleId,
+    // Present-but-empty means the office cleared the box on purpose; absent means
+    // they were never shown one and the file should answer.
+    email: typeof body?.email === 'string' ? body.email : undefined,
+    phone: typeof body?.phone === 'string' ? body.phone : undefined,
+    sms: body?.sms === false ? false : undefined,
+    lang: body?.lang,
+    linkOrigin: req.nextUrl.origin,
+    textOrigin: origin(req),
   })
+  const outcome = planned.ok ? await performModuleSend(planned.plan, 'admin') : planned.outcome
+  return NextResponse.json(outcome.body, { status: outcome.status })
 }
 
 /**
