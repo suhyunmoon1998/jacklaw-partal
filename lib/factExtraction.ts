@@ -31,7 +31,7 @@ import { plainly } from '@/lib/modelErrors'
 import { Meter } from '@/lib/spend'
 import { AnswerValue } from '@/types'
 
-import { EXTRACTION_MODEL } from '@/lib/models'
+import { EXTRACTION_EFFORT, EXTRACTION_MODEL, thinkingFor } from '@/lib/models'
 
 export { EXTRACTION_MODEL }
 
@@ -276,10 +276,10 @@ async function ask<T>(
         model: EXTRACTION_MODEL,
         max_tokens: 24000,
         system,
-        thinking: { type: 'adaptive' },
+        thinking: thinkingFor(EXTRACTION_MODEL, EXTRACTION_EFFORT, 24000).thinking,
         // Extraction against strict rules rather than open reasoning, and every
         // answer has to be covered — the budget goes on finishing.
-        output_config: { effort: 'medium', format: zodOutputFormat(schema) },
+        output_config: { ...thinkingFor(EXTRACTION_MODEL, EXTRACTION_EFFORT, 24000).effort, format: zodOutputFormat(schema) },
         messages: [{ role: 'user', content: user }],
       })
       .finalMessage()

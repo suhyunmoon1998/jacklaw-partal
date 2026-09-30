@@ -97,6 +97,24 @@
  *   reading only the English would never see. Sonnet asked the DOT
  *   item as a checklist with "None" and "Not sure". Half the price, a few
  *   cents a paste.
+ *
+ *   EXTRACTION — Opus 5.5 at medium, measured 2026-09-30 on Maiya
+ *   Soukpaseuth's 157 answers, three ways, nothing saved:
+ *     Opus 5.5 medium  $1.80  108s  229 facts  5 contradictions
+ *     Opus 5.5 low     $1.25   67s  206 facts  7 contradictions
+ *     Sonnet 5 medium  $0.62   70s  200 facts  2 contradictions
+ *   Low read every answer and cited each by its exact id, branch included,
+ *   where medium cited a repeating branch's answers without saying which
+ *   branch. But low folds what medium keeps apart: one fact for the whole
+ *   week's schedule where medium has one per day, and it drops medium's notes
+ *   that a time had no AM or PM and that some days were left blank — the
+ *   granularity the damages reading counts from. Sonnet lost a branch's
+ *   detail and three of five contradictions. EXTRACTION_EFFORT is the dial;
+ *   left at medium until the office decides the $0.55 is worth it.
+ *
+ *   TRANSLATION — thinking costs nothing here: Sonnet wrote 808 tokens at
+ *   medium and 794 at low for Xilong Wang's 23 answers, about a cent either
+ *   way, with the same English. Not a place to save.
  */
 
 /** The models this codebase knows about. */
@@ -111,8 +129,20 @@ function pick(envVar: string, fallback: string): string {
   return said || fallback
 }
 
+function pickEffort(envVar: string, fallback: 'low' | 'medium' | 'high'): 'low' | 'medium' | 'high' {
+  const said = process.env[envVar]?.trim()
+  return said === 'low' || said === 'medium' || said === 'high' ? said : fallback
+}
+
 /** Turning a client's answers into atomic facts. Everything rests on it. */
 export const EXTRACTION_MODEL = pick('MODEL_EXTRACTION', OPUS)
+
+/**
+ * How hard extraction thinks. Its own dial because extraction is the largest
+ * single cost of a client — about $1.56 of Jingwen Du's, $1.34 of it output —
+ * and most of that output is thinking.
+ */
+export const EXTRACTION_EFFORT = pickEffort('EFFORT_EXTRACTION', 'medium')
 
 /** Mapping facts onto claim elements against quoted authority. */
 export const MATRIX_MODEL = pick('MODEL_MATRIX', OPUS)
