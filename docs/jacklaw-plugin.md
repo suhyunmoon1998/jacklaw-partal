@@ -23,7 +23,8 @@ known); original answer text is preserved and is not a translated statement.
 
 ## Configuration
 
-1. Apply `supabase/migrations/0023_mcp_authorization_codes.sql` in the project's
+1. Apply `supabase/migrations/0023_mcp_authorization_codes.sql` and
+   `supabase/migrations/20261001061904_mcp_refresh_sessions.sql` in the project's
    Supabase SQL editor. It adds only the OAuth code table, with RLS and explicit
    `service_role` grants; browser roles have no access.
 2. Set these **server-only** Vercel environment variables for the deployment:
@@ -44,7 +45,7 @@ known); original answer text is preserved and is not a translated statement.
 4. In ChatGPT's custom MCP connection setup, use the deployed `/api/mcp` URL,
    OAuth, a predefined client ID matching `MCP_CLIENT_ID`, and public-client
    token authentication (`none`, PKCE S256). There is no client secret, dynamic
-   registration, CIMD, or refresh grant in v0.1. If the host setup cannot choose
+   registration or CIMD. Refresh-token rotation is supported. If the host setup cannot choose
    a predefined public client, stop and adapt registration; do not disable auth.
 5. Set `MCP_REDIRECT_URIS` to the exact redirect displayed there and redeploy if
    needed. Metadata advertises issuer identification and every authorization
@@ -55,8 +56,17 @@ known); original answer text is preserved and is not a translated statement.
    reviewing the scope. Never put the staff password into ChatGPT.
 
 The signing secret and admin password jointly derive the token key. Changing
-either revokes issued access tokens immediately. Tokens expire after one hour;
-the user reconnects afterward. Authorization codes expire after five minutes,
+either revokes issued access tokens immediately. Access tokens expire after one hour and renew with rotating refresh tokens.
+Connections have a 90-day absolute lifetime and a 30-day renewal inactivity limit.
+Existing connections must reconnect once to receive a refresh token. Used-token
+replay revokes the entire connection, including its session-bound access tokens.
+A concurrent refresh or lost refresh response can require reconnection; clients
+must serialize refresh requests. The RFC 7009 endpoint `/oauth/revoke` accepts
+a refresh token (including a used token) and revokes the connection immediately.
+ChatGPT disconnect stops client use; server revocation on disconnect depends on
+whether the host calls this endpoint. Staff can revoke a specific session using
+`update public.mcp_sessions set revoked_at = now() where id = <session uuid>`
+in the SQL editor. Rotating either server secret revokes every connection. Authorization codes expire after five minutes,
 are stored hashed, and are consumed atomically with the matching PKCE challenge,
 client, redirect and resource. Expired unused hashes can periodically be removed
 using the housekeeping SQL in the migration. The public client ID is not a secret

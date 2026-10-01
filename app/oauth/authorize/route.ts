@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
     .map(([name, value]) => `<input type="hidden" name="${escape(name)}" value="${escape(value)}">`).join('')
   const content = isAdmin(req)
     ? `<p>This connection lets ChatGPT read all clients' names, intake answers, document metadata, fact records and stored case analyses available to the office administrator.</p>
-       <p>It cannot send messages, change records, download document contents, or start paid analyses. Access lasts one hour; reconnect after it expires.</p>
+       <p>It cannot send messages, change records, download document contents, or start paid analyses. Access tokens last one hour and renew automatically. Reconnect after 30 days without renewal or after 90 days total. Disconnect in ChatGPT to stop using this connection. The office can revoke all connections by rotating its admin password or MCP signing secret.</p>
        <p>OAuth client: <strong>${escape(grant.client_id)}</strong></p><p>Return address: ${escape(grant.redirect_uri)}</p>
        <form method="post" action="/oauth/authorize">${hidden}<button name="decision" value="allow">Allow read access</button> <button name="decision" value="deny">Cancel</button></form>`
     : '<p>Sign in to the staff portal in another tab, then reload this page to review the connection.</p><p><a href="/admin" target="_blank" rel="noopener noreferrer">Open staff sign-in</a></p>'

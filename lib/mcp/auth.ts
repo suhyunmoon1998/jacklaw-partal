@@ -86,9 +86,9 @@ export function authorizationEpoch() {
   return createHash('sha256').update(signingKey()).digest('hex')
 }
 
-export async function issueToken() {
+export async function issueToken(sessionId?: string) {
   const c = mcpConfig()!
-  return new SignJWT({ scope: READ_SCOPE, client_id: c.clientId })
+  return new SignJWT({ scope: READ_SCOPE, client_id: c.clientId, ...(sessionId ? { sid: sessionId } : {}) })
     .setProtectedHeader({ alg: 'HS256', typ: 'at+jwt' })
     .setSubject('portal-admin').setIssuer(c.origin).setAudience(c.resource)
     .setIssuedAt().setExpirationTime(`${TOKEN_SECONDS}s`).setJti(randomCode()).sign(signingKey())
@@ -103,7 +103,12 @@ export async function authorized(req: NextRequest) {
       issuer: c.origin, audience: c.resource, algorithms: ['HS256'], typ: 'at+jwt',
       requiredClaims: ['exp', 'iat', 'sub', 'jti'], maxTokenAge: TOKEN_SECONDS,
     })
-    return payload.sub === 'portal-admin' && payload.scope === READ_SCOPE && payload.client_id === c.clientId
+    if (payload.sub !== 'portal-admin' || payload.scope !== READ_SCOPE || payload.client_id !== c.clientId) return false
+    // Legacy one-hour tokens remain valid until expiry. New connections are revocable immediately.
+    if (payload.sid === undefined) return true
+    if (typeof payload.sid !== 'string' || !/^[0-9a-f-]{36}$/.test(payload.sid)) return false
+    const { activeSession } = await import('./refresh')
+    return await activeSession(payload.sid)
   } catch { return false }
 }
 
@@ -112,7 +117,8 @@ export function authorizationMetadata() {
   return {
     issuer: c.origin, authorization_endpoint: `${c.origin}/oauth/authorize`,
     token_endpoint: `${c.origin}/oauth/token`, response_types_supported: ['code'],
-    grant_types_supported: ['authorization_code'], token_endpoint_auth_methods_supported: ['none'],
+    grant_types_supported: ['authorization_code', 'refresh_token'], token_endpoint_auth_methods_supported: ['none'],
+    revocation_endpoint: `${c.origin}/oauth/revoke`, revocation_endpoint_auth_methods_supported: ['none'],
     code_challenge_methods_supported: ['S256'], scopes_supported: [READ_SCOPE],
     authorization_response_iss_parameter_supported: true,
   }
