@@ -1,0 +1,19 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "jacklaw-portal",
+  "version": "0.1.0",
+  "description": "Staff-only access to JackLaw client intake answers, fact records, saved case analyses, assignments and document metadata.",
+  "author": { "name": "JackLaw" },
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "JackLaw Portal",
+        "shortDescription": "Staff access to client records",
+        "longDescription": "Search clients and read intake answers, supplemental answers, stored facts, saved analysis sections and document metadata. Requires a staff-authorized OAuth connection. Does not send messages, modify records, read document file contents or start paid analyses.",
+        "developerName": "Law Offices of Jack D. Josephson, APC",
+        "category": "Productivity",
+        "defaultPrompt": "Find a client's case, review their answers, and identify missing facts with source references."
+      }
+    }
+  }
+}
