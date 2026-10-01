@@ -5,14 +5,15 @@ import { authorizationEpoch, authorized, challenge, consentSeal, issueToken, mcp
 import { POST, GET } from '@/app/api/mcp/route'
 import { GET as consentPage, POST as consentPost } from '@/app/oauth/authorize/route'
 import { POST as exchange } from '@/app/oauth/token/route'
+import { POST as revoke } from '@/app/oauth/revoke/route'
 import { GET as metadata } from '@/app/.well-known/oauth-authorization-server/route'
 
 const db = vi.hoisted(() => ({ results: [] as { data: unknown; error: unknown }[], calls: [] as unknown[][] }))
-vi.mock('@/lib/supabase', () => ({ getSupabase: () => ({ from: (table: string) => {
+vi.mock('@/lib/supabase', () => ({ getSupabase: () => ({ rpc: (name: string, args: unknown) => { db.calls.push(['rpc', name, args]); return Promise.resolve(db.results.shift() ?? { data: null, error: null }) }, from: (table: string) => {
   const response = db.results.shift() ?? { data: null, error: null }
   db.calls.push(['from', table])
   const chain: Record<string, unknown> = {}
-  for (const method of ['select', 'eq', 'gt', 'order', 'range', 'ilike', 'insert', 'delete', 'maybeSingle']) {
+  for (const method of ['select', 'eq', 'is', 'gt', 'order', 'range', 'ilike', 'insert', 'delete', 'maybeSingle']) {
     chain[method] = (...args: unknown[]) => { db.calls.push([method, ...args]); return chain }
   }
   chain.then = (resolve: (value: unknown) => void) => Promise.resolve(response).then(resolve)
@@ -125,9 +126,11 @@ describe('staff OAuth boundary', () => {
     const p = new URLSearchParams({ grant_type: 'authorization_code', client_id: 'jacklaw-test',
       code: 'c'.repeat(43), code_verifier: verifier, redirect_uri: callback, resource: `${origin}/api/mcp` })
     const request = () => new NextRequest(`${origin}/oauth/token`, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: p.toString() })
-    db.results.push({ data: { code_hash: 'hash' }, error: null })
+    db.results.push({ data: { code_hash: 'hash' }, error: null }, { data: null, error: null })
     const r = await exchange(request()); expect(r.status).toBe(200)
     const body = await r.json(); expect(body.scope).toBe(READ_SCOPE)
+    expect(body.refresh_token).toMatch(/^[A-Za-z0-9_-]{43}$/)
+    db.results.push({ data: { id: 'active' }, error: null })
     expect(await authorized(new NextRequest(`${origin}/api/mcp`, { headers: { authorization: `Bearer ${body.access_token}` } }))).toBe(true)
     expect(db.calls).toContainEqual(['delete'])
     expect(db.calls).toContainEqual(['eq', 'code_challenge', challenge(verifier)])
@@ -143,7 +146,7 @@ describe('staff OAuth boundary', () => {
   it('advertises only implemented OAuth features', async () => {
     const meta = await metadata().json()
     expect(meta.code_challenge_methods_supported).toEqual(['S256'])
-    expect(meta.grant_types_supported).toEqual(['authorization_code'])
+    expect(meta.grant_types_supported).toEqual(['authorization_code', 'refresh_token'])
     expect(meta.registration_endpoint).toBeUndefined()
   })
 })
@@ -197,5 +200,57 @@ describe('MCP protocol and client data', () => {
     expect((await call('delete_client', { clientId: 'client-a' })).isError).toBe(true)
     expect((await call('get_client_intake', { clientId: '' })).isError).toBe(true)
     expect(db.calls).toEqual([])
+  })
+})
+
+
+describe('rotating refresh tokens', () => {
+  const sid = '11111111-1111-4111-8111-111111111111'
+  function request(params: Record<string, string>, path = 'token') {
+    return new NextRequest(`${origin}/oauth/${path}`, { method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ client_id: 'jacklaw-test', ...params }).toString() })
+  }
+  const params = { grant_type: 'refresh_token', refresh_token: 'r'.repeat(43) }
+  it('rotates refresh tokens and binds access to an active server-side session', async () => {
+    db.results.push({ data: sid, error: null })
+    const r = await exchange(request(params)), body = await r.json()
+    expect(r.status).toBe(200)
+    expect(body.refresh_token).not.toBe(params.refresh_token)
+    expect(body.expires_in).toBe(3600)
+    expect(JSON.stringify(db.calls)).not.toContain(params.refresh_token)
+    const req = new NextRequest(`${origin}/api/mcp`, { headers: { authorization: `Bearer ${body.access_token}` } })
+    db.results.push({ data: { id: sid }, error: null })
+    expect(await authorized(req)).toBe(true)
+    expect(await authorized(req)).toBe(false)
+    expect(db.calls).toContainEqual(['is', 'revoked_at', null])
+  })
+  it('rejects replay/expired refresh tokens and storage failures', async () => {
+    expect((await exchange(request(params))).status).toBe(400)
+    db.results.push({ data: null, error: { message: 'private error' } })
+    const r = await exchange(request(params))
+    expect(r.status).toBe(503)
+    expect(await r.text()).not.toContain('private error')
+  })
+  it('rejects wrong clients, expanded scopes and resources without consuming tokens', async () => {
+    for (const extra of [{ client_id: 'other' }, { scope: 'jacklaw:write' }, { resource: 'https://other.example' }]) {
+      expect((await exchange(request({ ...params, ...extra }))).status).toBe(400)
+    }
+    expect(db.calls).toEqual([])
+  })
+  it('fails closed on session-check errors and secret rotation', async () => {
+    const token = await issueToken(sid)
+    const req = new NextRequest(`${origin}/api/mcp`, { headers: { authorization: `Bearer ${token}` } })
+    db.results.push({ data: null, error: { message: 'offline' } })
+    expect(await authorized(req)).toBe(false)
+    vi.stubEnv('ADMIN_PASSWORD', 'rotated')
+    expect(await authorized(req)).toBe(false)
+  })
+  it('revokes without exposing whether a refresh token exists', async () => {
+    const r = await revoke(request({ token: 'r'.repeat(43) }, 'revoke'))
+    expect(r.status).toBe(200)
+    expect(r.headers.get('cache-control')).toBe('no-store')
+    expect(db.calls[0][1]).toBe('mcp_revoke_refresh')
+    expect(JSON.stringify(db.calls)).not.toContain('r'.repeat(43))
   })
 })
