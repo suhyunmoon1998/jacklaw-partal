@@ -99,6 +99,10 @@ describe('staff OAuth boundary', () => {
     const grant = parseGrant(grantParams())!, expires = String(Date.now() + 60_000)
     const seal = consentSeal(req, grant, expires)
     expect(validConsent(req, grant, expires, seal)).toBe(true)
+    for (const badOrigin of ['null', 'https://evil.example', '']) {
+      const bad = new NextRequest(req.url, { headers: { cookie: req.headers.get('cookie')!, origin: badOrigin } })
+      expect(validConsent(bad, grant, expires, seal)).toBe(false)
+    }
     expect(validConsent(req, { ...grant, state: 'changed' }, expires, seal)).toBe(false)
     expect(validConsent(req, grant, '0', seal)).toBe(false)
     expect(validConsent(new NextRequest(`${origin}/oauth/authorize`), grant, expires, seal)).toBe(false)
@@ -108,6 +112,7 @@ describe('staff OAuth boundary', () => {
     expect(await guest.text()).toContain('Open staff sign-in')
     const staff = await consentPage(new NextRequest(`${origin}/oauth/authorize?${grantParams()}`, { headers: { cookie: adminCookie() } }))
     expect(await staff.text()).toContain('Allow read access')
+    expect(staff.headers.get('referrer-policy')).toBe('same-origin')
     expect(staff.headers.get('content-security-policy')).toContain("frame-ancestors 'none'")
     expect(db.calls).toEqual([])
   })
@@ -118,6 +123,7 @@ describe('staff OAuth boundary', () => {
     p.set('expires', expires); p.set('seal', consentSeal(req, parseGrant(grantParams())!, expires)); p.set('decision', 'deny')
     const r = await consentPost(new NextRequest(req.url, { method: 'POST', headers: { cookie, origin, 'content-type': 'application/x-www-form-urlencoded' }, body: p.toString() }))
     const redirect = new URL(r.headers.get('location')!)
+    expect(r.headers.get('referrer-policy')).toBe('no-referrer')
     expect(r.status).toBe(303); expect(redirect.searchParams.get('iss')).toBe(origin)
     expect(redirect.searchParams.get('state')).toBe('opaque-state')
     expect(redirect.searchParams.get('error')).toBe('access_denied'); expect(db.calls).toEqual([])
