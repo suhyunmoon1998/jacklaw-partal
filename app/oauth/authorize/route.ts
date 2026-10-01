@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
     : '<p>Sign in to the staff portal in another tab, then reload this page to review the connection.</p><p><a href="/admin" target="_blank" rel="noopener noreferrer">Open staff sign-in</a></p>'
   return new NextResponse(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Connect JackLaw Portal</title><body><main><h1>Connect JackLaw Portal</h1>${content}</main></body></html>`, {
     headers: { ...noStore, 'Content-Type': 'text/html; charset=utf-8', 'X-Frame-Options': 'DENY',
-      'Referrer-Policy': 'no-referrer', 'Content-Security-Policy': "default-src 'none'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'" },
+      'Referrer-Policy': 'same-origin', 'Content-Security-Policy': "default-src 'none'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'" },
   })
 }
 
