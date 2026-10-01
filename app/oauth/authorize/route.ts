@@ -12,6 +12,9 @@ export async function GET(req: NextRequest) {
   if (!mcpConfig()) return fail('MCP is not configured', 503)
   const grant = parseGrant(req.nextUrl.searchParams)
   if (!grant) return fail('Invalid authorization request')
+  // Chrome applies form-action to redirects after the same-origin POST too.
+  const callback = new URL(grant.redirect_uri)
+  const callbackSource = callback.origin + callback.pathname
   const expires = String(Date.now() + 600_000)
   const hidden = [...req.nextUrl.searchParams, ['expires', expires], ['seal', consentSeal(req, grant, expires)]]
     .map(([name, value]) => `<input type="hidden" name="${escape(name)}" value="${escape(value)}">`).join('')
@@ -23,7 +26,7 @@ export async function GET(req: NextRequest) {
     : '<p>Sign in to the staff portal in another tab, then reload this page to review the connection.</p><p><a href="/admin" target="_blank" rel="noopener noreferrer">Open staff sign-in</a></p>'
   return new NextResponse(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Connect JackLaw Portal</title><body><main><h1>Connect JackLaw Portal</h1>${content}</main></body></html>`, {
     headers: { ...noStore, 'Content-Type': 'text/html; charset=utf-8', 'X-Frame-Options': 'DENY',
-      'Referrer-Policy': 'same-origin', 'Content-Security-Policy': "default-src 'none'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'" },
+      'Referrer-Policy': 'same-origin', 'Content-Security-Policy': `default-src 'none'; form-action 'self' ${callbackSource}; frame-ancestors 'none'; base-uri 'none'` },
   })
 }
 

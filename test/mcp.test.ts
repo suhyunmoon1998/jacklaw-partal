@@ -113,6 +113,8 @@ describe('staff OAuth boundary', () => {
     const staff = await consentPage(new NextRequest(`${origin}/oauth/authorize?${grantParams()}`, { headers: { cookie: adminCookie() } }))
     expect(await staff.text()).toContain('Allow read access')
     expect(staff.headers.get('referrer-policy')).toBe('same-origin')
+    expect(staff.headers.get('content-security-policy')).toContain(`form-action 'self' ${callback};`)
+    expect(staff.headers.get('content-security-policy')).not.toContain('*')
     expect(staff.headers.get('content-security-policy')).toContain("frame-ancestors 'none'")
     expect(db.calls).toEqual([])
   })
