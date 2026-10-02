@@ -15,9 +15,16 @@ import { createHmac, timingSafeEqual } from 'crypto'
  * before it was set. It is compared in constant time and never accepted from
  * a cookie or a query string, so a link cannot carry it.
  *
- * It opens exactly one route, /api/eleanor/sends, which can do what the admin
- * panel's Send button does for a module, and send the next reminder text now.
- * It cannot read answers, change a file, or reach anything else.
+ * It opens exactly two routes:
+ *
+ *   /api/eleanor/sends     what the admin panel's Send button does for a module,
+ *                          and the next reminder text, now.
+ *   /api/eleanor/analysis  one stage of the client's damages reading — the admin
+ *                          panel's Run, the same code — which Eleanor reads back
+ *                          from the shared database for its FACTS / DAMAGES screen.
+ *
+ * It cannot change a file, send anything the admin panel would not, or reach
+ * anything else.
  */
 
 export function eleanorServiceSecret(): string | null {

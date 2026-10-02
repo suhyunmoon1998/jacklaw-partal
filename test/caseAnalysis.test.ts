@@ -217,7 +217,10 @@ describe('a reading that runs in stages', () => {
   it('walks the stages in the order they depend on each other', () => {
     expect(nextStage({ overview })).toBe('findings')
     expect(nextStage({ overview, findings })).toBe('assembly')
-    expect(nextStage({ overview, findings, assembly })).toBeNull()
+    // The damages inputs come last; a reading without them is still whole
+    // (completed() below) and only the inputs are outstanding.
+    expect(nextStage({ overview, findings, assembly })).toBe('inputs')
+    expect(nextStage({ overview, findings, assembly, inputs: { period: { start: '', end: '', how: '' }, inputs: [], applicability: [], attorneyValuation: [] } })).toBeNull()
   })
 
   it('shows nothing until every stage is in', () => {
