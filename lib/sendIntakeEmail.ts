@@ -18,12 +18,12 @@ const MODULE_EMAIL: Record<
   { subject: (name: string, caseType: string) => string; heading: string }
 > = {
   module1: {
-    subject: (name, caseType) => `New Client Intake: ${name} — ${caseType}`,
-    heading: 'Client Intake',
+    subject: (name, caseType) => `Initial Questions: ${name} — ${caseType}`,
+    heading: 'Initial Questions',
   },
   module2: {
-    subject: (name, caseType) => `Wage & Hour Answers: ${name} — ${caseType}`,
-    heading: 'Wage & Hour',
+    subject: (name, caseType) => `Wage and Hour Questions: ${name} — ${caseType}`,
+    heading: 'Wage and Hour Questions',
   },
 }
 

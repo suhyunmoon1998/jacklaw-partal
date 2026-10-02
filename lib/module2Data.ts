@@ -423,7 +423,7 @@ export const MODULE_2_SECTIONS: QuestionnaireSection[] = [
         label: 'On a normal workday, how many paid 10-minute rest breaks did you get?',
         type: 'select',
         options: ['0', '1', '2', '3 or more', 'It changed', 'Not sure'],
-        helpText: 'Module 1 has your usual hours per day — answer for a day of that length.',
+        helpText: 'Your Initial questions have your usual hours per day — answer for a day of that length.',
         // Not asked of someone who has just said they got none. The five
         // questions below hang off this one, so they close with it.
         showIf: REST_HAPPENED,

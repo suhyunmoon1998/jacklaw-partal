@@ -246,8 +246,8 @@ describe('rest breaks', () => {
     expect(shown({ m2_rest_given: 'Yes' }).sees('m2_rest_why_not')).toBe(false)
   })
 
-  it('offers the usual day from Module 1 as the frame for the question', () => {
-    expect(find(MODULE_2_SECTIONS, 'm2_rest_count')?.helpText).toContain('Module 1')
+  it('offers the usual day from the Initial questions as the frame for the question', () => {
+    expect(find(MODULE_2_SECTIONS, 'm2_rest_count')?.helpText).toContain('Initial questions')
   })
 })
 

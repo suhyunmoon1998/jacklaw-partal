@@ -174,7 +174,7 @@ describe('a step that just arrived', () => {
 
     await waitFor(() => expect(screen.getByText('Our office sent you a new step.')).toBeTruthy())
     expect(screen.getByText('New')).toBeTruthy()
-    expect(screen.getByText('Step 1 · Your information')).toBeTruthy()
+    expect(screen.getByText('Step 1 · Initial questions')).toBeTruthy()
   })
 })
 
