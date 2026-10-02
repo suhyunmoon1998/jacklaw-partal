@@ -579,5 +579,10 @@ export async function runStage(
   }
 
   if (!stored.findings) throw new Error('The categories have not been read yet. Start again.')
+  if (stage === 'inputs') {
+    // Imported here, not at the top: damagesInputs.ts imports this module.
+    const { runDamagesInputs } = await import('@/lib/damagesInputs')
+    return { ...stored, inputs: await runDamagesInputs(input, stored) }
+  }
   return { ...stored, assembly: await runAssembly(input, stored.overview, stored.findings) }
 }

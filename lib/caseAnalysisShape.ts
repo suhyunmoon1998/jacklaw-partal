@@ -171,13 +171,14 @@ export type Analysis = z.infer<typeof Overview> &
  * by the baseline, and the overlap check can only be run on findings that
  * already exist.
  */
-export const STAGES = ['baseline', 'findings', 'assembly'] as const
+export const STAGES = ['baseline', 'findings', 'assembly', 'inputs'] as const
 export type Stage = (typeof STAGES)[number]
 
 export const STAGE_LABEL: Record<Stage, string> = {
   baseline: 'Establishing the employment baseline',
   findings: 'Reading the damages categories',
   assembly: 'Totalling and checking for overlap',
+  inputs: 'Setting out the damages inputs',
 }
 
 /**
@@ -194,6 +195,13 @@ export interface StoredAnalysis {
   overview?: z.infer<typeof Overview>
   findings?: z.infer<typeof Findings>
   assembly?: z.infer<typeof Assembly>
+  /**
+   * The damages inputs (damagesInputsShape.ts): the numbers Eleanor's FACTS /
+   * DAMAGES screen multiplies out, each quoted. Optional and after the rest, so
+   * a reading stored before this stage existed is still whole and still shows;
+   * only the inputs are outstanding.
+   */
+  inputs?: import('./damagesInputsShape').DamagesInputs
 }
 
 /** The whole reading, or null while a stage is still outstanding. */
@@ -207,6 +215,7 @@ export function nextStage(stored: StoredAnalysis | null | undefined): Stage | nu
   if (!stored?.overview) return 'baseline'
   if (!stored.findings) return 'findings'
   if (!stored.assembly) return 'assembly'
+  if (!stored.inputs) return 'inputs'
   return null
 }
 
