@@ -25,6 +25,10 @@ import { createHmac, timingSafeEqual } from 'crypto'
  *
  * It cannot change a file, send anything the admin panel would not, or reach
  * anything else.
+ *
+ * Separately, a key DERIVED from the same secret signs Eleanor's 60-second
+ * admin sign-in tickets (lib/eleanorSso.ts). The secret itself still never
+ * leaves the two servers.
  */
 
 export function eleanorServiceSecret(): string | null {
