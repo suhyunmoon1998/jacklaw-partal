@@ -11,8 +11,17 @@
 import { Lang } from '@/lib/langs'
 import { QUESTIONNAIRE_V1_SECTIONS } from '@/lib/questionnaireV1'
 
-/** In the order the work has to happen. Also the order of precedence below. */
-export const STEPS = ['facts', 'reading', 'questions'] as const
+/**
+ * In the order the work has to happen. Also the order of precedence below.
+ *
+ * 'additions' reads answers that arrived after the facts — a follow-up round's,
+ * usually — into the ledger; the reading then no longer matches the facts and
+ * is read again (owner's decision, 2026-10-03). 'damages' is the damages
+ * reading begun when Module 2 was submitted and not finished in that request
+ * (lib/damagesAuto.ts). Neither writes a new round: a re-read client already
+ * has one, and writing the next is not automated.
+ */
+export const STEPS = ['facts', 'additions', 'reading', 'questions', 'damages'] as const
 export type Step = (typeof STEPS)[number]
 
 export interface Waiting {
@@ -54,19 +63,30 @@ export function whoIsWaiting(input: {
   /** Clients whose reading is on file with every stage run. */
   haveReading: string[]
   haveRound: string[]
+  /** Clients who finished a question set after their facts were last read or searched. */
+  answeredSinceFacts?: string[]
+  /** Clients whose facts are newer than their reading, so the reading no longer describes them. */
+  readingBehindFacts?: string[]
+  /** Clients owed the damages reading: see owedDamages in lib/damagesAuto.ts. */
+  owedDamages?: string[]
 }): Waiting[] {
   const done = new Set(input.finishedModule2)
   const withFacts = new Set(input.haveFacts)
   const withReading = new Set(input.haveReading)
   const withRound = new Set(input.haveRound)
+  const answered = new Set(input.answeredSinceFacts ?? [])
+  const behind = new Set(input.readingBehindFacts ?? [])
+  const damages = new Set(input.owedDamages ?? [])
 
   // What is still owed, earliest step first. A client is in the queue while
-  // any of the three is missing — including someone who already has a round
-  // but no reading, who would otherwise never be read at all.
+  // any of them is missing — including someone who already has a round but no
+  // reading, who would otherwise never be read at all.
   const owes = (id: string): Step | null => {
     if (!withFacts.has(id)) return 'facts'
-    if (!withReading.has(id)) return 'reading'
+    if (answered.has(id)) return 'additions'
+    if (!withReading.has(id) || behind.has(id)) return 'reading'
     if (!withRound.has(id)) return 'questions'
+    if (damages.has(id)) return 'damages'
     return null
   }
 
@@ -119,7 +139,7 @@ export async function drain(opts: {
   /** Seconds since the run began. */
   elapsed: () => number
   /** The latest second at which a step of each kind may still be begun. */
-  startBy: Record<Step, number>
+  startBy: Partial<Record<Step, number>>
 }): Promise<{ done: Outcome[]; left: Waiting[] }> {
   const done: Outcome[] = []
   const passedOver = new Set<string>()
@@ -128,7 +148,9 @@ export async function drain(opts: {
   for (;;) {
     const next = queue.find(w => !passedOver.has(w.clientId))
     if (!next) break
-    if (done.length && opts.elapsed() > opts.startBy[next.needs]) break
+    // A step with no limit given is begun only as the first of a run.
+    const startBy = opts.startBy[next.needs]
+    if (done.length && (startBy === undefined || opts.elapsed() > startBy)) break
 
     let outcome: Outcome
     try {

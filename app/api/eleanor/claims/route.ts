@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { isEleanorService } from '@/lib/eleanorService'
-import { CLAIMS } from '@/lib/authority/claims'
+import { CLAIMS, FEHA_CLAIMS } from '@/lib/authority/claims'
 
 export const dynamic = 'force-dynamic'
 
@@ -17,7 +17,9 @@ export async function GET(req: NextRequest) {
   if (!isEleanorService(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: { 'Cache-Control': 'no-store' } })
   return NextResponse.json(
     {
-      claims: CLAIMS.map(claim => ({
+      // The FEHA claims too: a reading's third stage names them, and without
+      // them here Eleanor showed their ids where their names belong.
+      claims: [...CLAIMS, ...FEHA_CLAIMS].map(claim => ({
         id: claim.id,
         name: claim.name,
         sections: claim.sections,

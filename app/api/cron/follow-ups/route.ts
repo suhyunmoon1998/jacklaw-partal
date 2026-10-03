@@ -17,6 +17,10 @@ import { SpineReading } from '@/lib/evidenceSpine'
 import { Meter, describeSpend, totalSpend } from '@/lib/spend'
 import { Outcome, Waiting, drain, finishedQuestionnaire, whoIsWaiting } from '@/lib/followUpQueue'
 import { clearSkip, readSkips, recordSkip, withoutSkipped } from '@/lib/nightlySkips'
+import { StoredAnalysis } from '@/lib/caseAnalysisShape'
+import { owedDamages, readDamagesWhileTimeAllows } from '@/lib/damagesAuto'
+import { addArrivedAnswers } from '@/lib/factAdditionsRun'
+import { keepSearch } from '@/lib/sourceSearchStore'
 
 /**
  * Reading a client's answers and writing their next questions, unprompted.
@@ -64,6 +68,15 @@ const START_FACTS_BY = 120
 /** No round is begun after this. Rounds have taken 83 to 102 seconds. */
 const START_ROUND_BY = 170
 
+/**
+ * No reading of newly arrived answers is begun after this. It reads only the
+ * new rows, so it is shorter than a whole extraction, which is begun by 120.
+ */
+const START_ADDITIONS_BY = 120
+
+/** No damages stage is begun after this; see START_NO_DAMAGES_STAGE_AFTER. */
+const START_DAMAGES_BY = 150
+
 function authorised(req: NextRequest): boolean {
   // Vercel's scheduler sends the secret as a bearer token. An admin can also
   // run it by hand from the panel, which is how a backlog gets cleared without
@@ -88,39 +101,94 @@ async function waitingFor(): Promise<Waiting[]> {
     { data: clients, error: clientsErr },
     { data: plans, error: plansErr },
     { data: readings, error: readingsErr },
+    { data: answeredSets, error: answeredErr },
+    { data: searches, error: searchesErr },
+    { data: analyses, error: analysesErr },
   ] =
     await Promise.all([
-      db.from('questionnaire_states').select('client_id, m2_submitted, completed_sections'),
+      db.from('questionnaire_states').select('client_id, m2_submitted, m2_last_saved, completed_sections'),
       db.from('clients').select('id, name, portal_lang'),
       db.from('follow_up_plans').select('client_id'),
-      db.from('case_readings').select('client_id, result'),
+      db.from('case_readings').select('client_id, result, updated_at'),
+      // Question sets the client finished: their answers are owed to the facts.
+      db.from('client_question_set_assignments').select('client_id, completed_at').not('completed_at', 'is', null),
+      // When each client's answers were last searched by an extraction.
+      db.from('source_searches').select('client_id, created_at').order('created_at', { ascending: false }).limit(1000),
+      // Which damages stages are on file — a few small fields, not the reading.
+      db
+        .from('case_analyses')
+        .select('client_id, created_at, o:result->overview->>summary, f:result->findings->>notRaised, a:result->assembly->>doubleCounting, i:result->inputs->period->>start'),
     ])
   // A list that failed to load is not an empty list. Without plans every read
   // client looks owed a round (paid again); without readings every finished
   // client looks unread; without states or clients the night says "Nobody is
   // waiting". Stop the run instead, as the count below already does.
-  const listError = statesErr ?? clientsErr ?? plansErr ?? readingsErr
+  const listError = statesErr ?? clientsErr ?? plansErr ?? readingsErr ?? answeredErr ?? searchesErr ?? analysesErr
   if (listError) throw new Error(`Could not read who is waiting: ${listError.message}`)
   const finishedModule2 = (states ?? []).filter(s => finishedQuestionnaire(s)).map(s => s.client_id as string)
 
-  // Counted per client, not read off the whole table. This was one select of
-  // every fact's client_id, and a select stops at 1000 rows: the table held
-  // 758 with five clients read, so the sixth or seventh would have pushed
-  // someone's facts past the cut. That client would then look unread, and the
-  // night would extract them a second time into the same ledger. A count that
-  // fails stops the run rather than being taken for none.
-  const haveFacts = (
-    await Promise.all(
-      finishedModule2.map(async id => {
-        const { count, error } = await db
-          .from('case_facts')
-          .select('client_id', { count: 'exact', head: true })
-          .eq('client_id', id)
-        if (error) throw new Error(`Could not count facts for ${id}: ${error.message}`)
-        return count ? id : null
-      })
-    )
-  ).filter((id): id is string => id !== null)
+  // Per client, not read off the whole table. This was one select of every
+  // fact's client_id, and a select stops at 1000 rows: the table held 758 with
+  // five clients read, so the sixth or seventh would have pushed someone's
+  // facts past the cut. That client would then look unread, and the night
+  // would extract them a second time into the same ledger. A read that fails
+  // stops the run rather than being taken for none. The newest fact's time
+  // comes with it, for the two questions below.
+  const lastFactAt = new Map<string, string>()
+  await Promise.all(
+    finishedModule2.map(async id => {
+      const { data, error } = await db
+        .from('case_facts')
+        .select('created_at')
+        .eq('client_id', id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+      if (error) throw new Error(`Could not read the facts for ${id}: ${error.message}`)
+      if (data?.length) lastFactAt.set(id, String(data[0].created_at))
+    })
+  )
+  const haveFacts = [...lastFactAt.keys()]
+  const time = (iso: unknown) => Date.parse(String(iso ?? ''))
+
+  // B (owner's decision, 2026-10-03): a question set finished after the facts
+  // were read — and after the last search of the answers, which is also kept
+  // when the new answers produced no facts — is owed to the ledger.
+  const lastSearchAt = new Map<string, number>()
+  for (const s of searches ?? []) {
+    const id = String(s.client_id)
+    if (!lastSearchAt.has(id)) lastSearchAt.set(id, time(s.created_at))
+  }
+  const lastFinishedAt = new Map<string, number>()
+  for (const a of answeredSets ?? []) {
+    const id = String(a.client_id)
+    lastFinishedAt.set(id, Math.max(lastFinishedAt.get(id) ?? 0, time(a.completed_at)))
+  }
+  const answeredSinceFacts = haveFacts.filter(id => {
+    const finished = lastFinishedAt.get(id)
+    if (!finished) return false
+    return finished > time(lastFactAt.get(id)) && finished > (lastSearchAt.get(id) ?? 0)
+  })
+
+  // A reading older than the newest fact was read from a ledger that has since
+  // grown, so it is read again. A stage that is stale for any other reason —
+  // its model or authority moved — is still re-read only when somebody asks.
+  const readingAt = new Map((readings ?? []).map(r => [String(r.client_id), time(r.updated_at)]))
+  const readingBehindFacts = haveFacts.filter(id => readingAt.has(id) && time(lastFactAt.get(id)) > (readingAt.get(id) ?? 0))
+
+  const owed = owedDamages({
+    finishedModule2,
+    submittedModule2At: Object.fromEntries((states ?? []).filter(s => s.m2_submitted).map(s => [String(s.client_id), s.m2_last_saved as string | null])),
+    analyses: (analyses ?? []).map(a => {
+      const row = a as unknown as Record<string, unknown>
+      const on = (key: string) => (row[key] === null || row[key] === undefined ? undefined : {})
+      return {
+        clientId: String(row.client_id),
+        // Written by each stage, so it says when the reading on file was last advanced.
+        writtenAt: row.created_at as string | null,
+        result: { overview: on('o'), findings: on('f'), assembly: on('a'), inputs: on('i') } as unknown as StoredAnalysis,
+      }
+    }),
+  })
 
   // Complete means every stage is on the row. Whether those stages are still
   // true of the facts is a question only the ledger can answer, so it is asked
@@ -140,6 +208,9 @@ async function waitingFor(): Promise<Waiting[]> {
     haveFacts,
     haveReading: finishedReading,
     haveRound: (plans ?? []).map(p => p.client_id as string),
+    answeredSinceFacts,
+    readingBehindFacts,
+    owedDamages: owed,
   })
 }
 
@@ -176,6 +247,45 @@ async function readFacts(next: Waiting): Promise<Outcome> {
     facts: read.entries.length,
     contradictions: read.contradictions.length,
     spent: describeSpend(meter.spent),
+  }
+}
+
+/**
+ * Read the answers that arrived after the facts into them (B). The reading is
+ * then older than the newest fact, and the queue reads it again next.
+ */
+async function readAdditions(next: Waiting): Promise<Outcome> {
+  const meter = new Meter()
+  const result = await addArrivedAnswers(next.clientId, meter)
+  if (!result.ok) {
+    // Looked at and nothing to add, or read and nothing came of it: the
+    // search is kept, so this question set is not read — and paid for —
+    // again every night. The panel still counts the answers no fact came
+    // from, so the office can see them.
+    if ((result.nothingNew || result.noFacts) && result.searched) {
+      await keepSearch(next.clientId, result.searched)
+    }
+    return { ran: false, client: next.name, reason: result.error, spent: describeSpend(meter.spent) }
+  }
+  return {
+    ran: true,
+    client: next.name,
+    did: 'read the newly answered questions into the facts',
+    added: result.added,
+    superseded: result.superseded.length,
+    spent: describeSpend(meter.spent),
+  }
+}
+
+/** Finish a damages reading begun when Module 2 was submitted (lib/damagesAuto.ts). */
+async function readDamages(next: Waiting, began: number): Promise<Outcome> {
+  const run = await readDamagesWhileTimeAllows(next.clientId, began)
+  if (!run.ran) return { ran: false, client: next.name, reason: run.reason ?? 'The damages reading did not advance.' }
+  return {
+    ran: true,
+    client: next.name,
+    did: `read ${run.stages.length} damages stage(s): ${run.stages.join(', ')}`,
+    stagesLeft: run.next ? `${run.next} next — ${run.reason ?? ''}` : 'the damages reading is complete',
   }
 }
 
@@ -343,9 +453,13 @@ export async function GET(req: NextRequest) {
         const outcome =
           next.needs === 'facts'
             ? await readFacts(next)
-            : next.needs === 'reading'
-              ? await readCase(next, began)
-              : await writeRound(next)
+            : next.needs === 'additions'
+              ? await readAdditions(next)
+              : next.needs === 'reading'
+                ? await readCase(next, began)
+                : next.needs === 'damages'
+                  ? await readDamages(next, began)
+                  : await writeRound(next)
         console.log(`cron follow-ups: ${next.name} — ${outcome.did ?? outcome.reason ?? ''}`)
         if (outcome.ran) await clearSkip(next.clientId, next.needs)
         else await recordSkip(next.clientId, next.needs, String(outcome.reason ?? 'did not advance'))
@@ -357,7 +471,13 @@ export async function GET(req: NextRequest) {
       }
     },
     elapsed,
-    startBy: { facts: START_FACTS_BY, reading: START_NO_STAGE_AFTER, questions: START_ROUND_BY },
+    startBy: {
+      facts: START_FACTS_BY,
+      additions: START_ADDITIONS_BY,
+      reading: START_NO_STAGE_AFTER,
+      questions: START_ROUND_BY,
+      damages: START_DAMAGES_BY,
+    },
   })
 
   const ran = done.some(d => d.ran)
