@@ -80,17 +80,25 @@ async function prepare(request: Request, secret: string): Promise<Preview> {
       return { ok: false, status: planned.outcome.status === 404 ? 404 : 409, body: { ok: false, reason: 'Refused', explanation: String(planned.outcome.body.error ?? 'It cannot be sent.') } }
     }
     const plan = planned.plan
-    const { data: earlier } = await getSupabase()
+    const { data: earlier, error: earlierErr } = await getSupabase()
       .from('client_module_sends')
       .select('sent_at')
       .eq('client_id', plan.clientId)
       .eq('module_id', plan.moduleId)
       .maybeSingle()
+    // Whether it was already sent is what Jack is shown ("Send" or "Send
+    // again"), so it is part of what he approves. Unread, it could not be.
+    if (earlierErr) {
+      return { ok: false, status: 503, body: { ok: false, reason: 'Unavailable', explanation: 'Whether this module was already sent could not be checked, so nothing was prepared.' } }
+    }
     const textReady = isConfigured()
     const textWhy = plan.target.phone ? (textReady ? null : 'texting-off') : plan.target.reason ?? 'none'
     const facts = {
       kind: 'module', clientId: plan.clientId, moduleId: plan.moduleId, to: plan.to, phone: plan.target.phone,
       textReady, lang: plan.lang, link: plan.link, blockedBy: plan.blockedBy, step: stepName(plan.definition, plan.lang),
+      // Sealed: if the office sends it from the panel after Jack approved a
+      // first send, the seal no longer matches and the client is not sent it twice.
+      alreadySentAt: earlier?.sent_at ?? null,
     }
     return {
       ok: true,

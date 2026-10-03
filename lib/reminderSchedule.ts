@@ -140,12 +140,29 @@ export function resolveLang(picked: unknown): Lang {
   return isLang(picked) ? picked : 'en'
 }
 
-/** Whole days between two instants, counted on the calendar. */
+/** The firm's calendar day for an instant, as Date.UTC of that day. */
+function firmDay(d: Date): number {
+  const [y, m, day] = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Los_Angeles',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  })
+    .format(d)
+    .split('-')
+    .map(Number)
+  return Date.UTC(y, m - 1, day)
+}
+
+/**
+ * Whole days between two instants, counted on the firm's calendar (Los
+ * Angeles). Counted on the UTC calendar, anything sent after 5 pm PDT carried
+ * the next day's date, so every reminder for an evening send went a day late.
+ */
 export function daysBetween(from: string | Date, to: Date): number {
   const a = new Date(from)
   if (Number.isNaN(a.getTime())) return -1
-  const startOfDay = (d: Date) => Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())
-  return Math.floor((startOfDay(to) - startOfDay(a)) / 86_400_000)
+  return Math.round((firmDay(to) - firmDay(a)) / 86_400_000)
 }
 
 /**

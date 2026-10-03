@@ -160,7 +160,10 @@ export async function runAnalysisStage(clientId: string, stage: Stage): Promise<
       // them: carrying on would send the office to a stage that cannot find its
       // input and fails with "the baseline has not been read yet", which says
       // nothing about what actually went wrong. Stop here and say so.
-      if (stage !== 'assembly') {
+      // The last stage returns the whole reading; any earlier one is read back
+      // by the stage after it. This compared against 'assembly', which stopped
+      // being last when 'inputs' was added after it.
+      if (stage !== STAGES[STAGES.length - 1]) {
         return NextResponse.json(
           {
             error:
