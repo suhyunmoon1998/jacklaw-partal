@@ -101,30 +101,33 @@ async function waitingFor(): Promise<Waiting[]> {
     { data: clients, error: clientsErr },
     { data: plans, error: plansErr },
     { data: readings, error: readingsErr },
-    { data: answeredSets, error: answeredErr },
-    { data: searches, error: searchesErr },
     { data: analyses, error: analysesErr },
+    { data: submissions, error: submissionsErr },
   ] =
     await Promise.all([
-      db.from('questionnaire_states').select('client_id, m2_submitted, m2_last_saved, completed_sections'),
+      db.from('questionnaire_states').select('client_id, m2_submitted, completed_sections'),
       db.from('clients').select('id, name, portal_lang'),
       db.from('follow_up_plans').select('client_id'),
       db.from('case_readings').select('client_id, result, updated_at'),
-      // Question sets the client finished: their answers are owed to the facts.
-      db.from('client_question_set_assignments').select('client_id, completed_at').not('completed_at', 'is', null),
-      // When each client's answers were last searched by an extraction.
-      db.from('source_searches').select('client_id, created_at').order('created_at', { ascending: false }).limit(1000),
       // Which damages stages are on file — a few small fields, not the reading.
       db
         .from('case_analyses')
         .select('client_id, created_at, o:result->overview->>summary, f:result->findings->>notRaised, a:result->assembly->>doubleCounting, i:result->inputs->period->>start'),
+      // When each client first submitted Module 2 (migration 0025). Not
+      // m2_last_saved: every autosave writes that, a visit to a long-finished
+      // Module 2 included, and it made an old submission look new.
+      db.from('questionnaire_states').select('client_id, m2_submitted_at').not('m2_submitted_at', 'is', null),
     ])
   // A list that failed to load is not an empty list. Without plans every read
   // client looks owed a round (paid again); without readings every finished
   // client looks unread; without states or clients the night says "Nobody is
   // waiting". Stop the run instead, as the count below already does.
-  const listError = statesErr ?? clientsErr ?? plansErr ?? readingsErr ?? answeredErr ?? searchesErr ?? analysesErr
+  const listError = statesErr ?? clientsErr ?? plansErr ?? readingsErr ?? analysesErr
   if (listError) throw new Error(`Could not read who is waiting: ${listError.message}`)
+  // The one read allowed to fail: before migration 0025 the column is not
+  // there. Then the night starts no damages reading of its own and only
+  // finishes the ones begun at submission — it never guesses a submission.
+  if (submissionsErr) console.warn(`cron follow-ups: Module 2 submission times not read (${submissionsErr.message}); no damages reading is started tonight, only finished`)
   const finishedModule2 = (states ?? []).filter(s => finishedQuestionnaire(s)).map(s => s.client_id as string)
 
   // Per client, not read off the whole table. This was one select of every
@@ -133,36 +136,40 @@ async function waitingFor(): Promise<Waiting[]> {
   // facts past the cut. That client would then look unread, and the night
   // would extract them a second time into the same ledger. A read that fails
   // stops the run rather than being taken for none. The newest fact's time
-  // comes with it, for the two questions below.
+  // comes with it, for the two questions below — and, the same way and for the
+  // same reason, the newest search of the client's answers and the newest
+  // question set they finished: read off whole tables, a select's 1000-row cut
+  // would drop a client's newest search, and the night would read their
+  // answers again, and pay again, every night.
   const lastFactAt = new Map<string, string>()
+  const lastSearchAt = new Map<string, number>()
+  const lastFinishedAt = new Map<string, number>()
+  const time = (iso: unknown) => Date.parse(String(iso ?? ''))
   await Promise.all(
     finishedModule2.map(async id => {
-      const { data, error } = await db
-        .from('case_facts')
-        .select('created_at')
-        .eq('client_id', id)
-        .order('created_at', { ascending: false })
-        .limit(1)
+      const [facts, searched, finished] = await Promise.all([
+        db.from('case_facts').select('created_at').eq('client_id', id).order('created_at', { ascending: false }).limit(1),
+        db.from('source_searches').select('created_at').eq('client_id', id).order('created_at', { ascending: false }).limit(1),
+        db
+          .from('client_question_set_assignments')
+          .select('completed_at')
+          .eq('client_id', id)
+          .not('completed_at', 'is', null)
+          .order('completed_at', { ascending: false })
+          .limit(1),
+      ])
+      const error = facts.error ?? searched.error ?? finished.error
       if (error) throw new Error(`Could not read the facts for ${id}: ${error.message}`)
-      if (data?.length) lastFactAt.set(id, String(data[0].created_at))
+      if (facts.data?.length) lastFactAt.set(id, String(facts.data[0].created_at))
+      if (searched.data?.length) lastSearchAt.set(id, time(searched.data[0].created_at))
+      if (finished.data?.length) lastFinishedAt.set(id, time(finished.data[0].completed_at))
     })
   )
   const haveFacts = [...lastFactAt.keys()]
-  const time = (iso: unknown) => Date.parse(String(iso ?? ''))
 
   // B (owner's decision, 2026-10-03): a question set finished after the facts
   // were read — and after the last search of the answers, which is also kept
   // when the new answers produced no facts — is owed to the ledger.
-  const lastSearchAt = new Map<string, number>()
-  for (const s of searches ?? []) {
-    const id = String(s.client_id)
-    if (!lastSearchAt.has(id)) lastSearchAt.set(id, time(s.created_at))
-  }
-  const lastFinishedAt = new Map<string, number>()
-  for (const a of answeredSets ?? []) {
-    const id = String(a.client_id)
-    lastFinishedAt.set(id, Math.max(lastFinishedAt.get(id) ?? 0, time(a.completed_at)))
-  }
   const answeredSinceFacts = haveFacts.filter(id => {
     const finished = lastFinishedAt.get(id)
     if (!finished) return false
@@ -177,7 +184,7 @@ async function waitingFor(): Promise<Waiting[]> {
 
   const owed = owedDamages({
     finishedModule2,
-    submittedModule2At: Object.fromEntries((states ?? []).filter(s => s.m2_submitted).map(s => [String(s.client_id), s.m2_last_saved as string | null])),
+    submittedModule2At: Object.fromEntries((submissions ?? []).map(s => [String(s.client_id), s.m2_submitted_at as string | null])),
     analyses: (analyses ?? []).map(a => {
       const row = a as unknown as Record<string, unknown>
       const on = (key: string) => (row[key] === null || row[key] === undefined ? undefined : {})

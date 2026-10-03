@@ -1,3 +1,4 @@
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { Stage, StoredAnalysis, nextStage } from '@/lib/caseAnalysisShape'
 import { analysisFingerprint } from '@/lib/caseAnalysis'
 import { gather, load, runAnalysisCore } from '@/lib/analysisRun'
@@ -24,11 +25,49 @@ import { gather, load, runAnalysisCore } from '@/lib/analysisRun'
 /**
  * Clients who submitted Module 2 before this are not read unprompted.
  *
- * Read off `m2_last_saved`, which the submission writes. Twelve clients had a
- * claims reading and no damages reading the day this shipped; reading them all
- * would have cost $12–24 nobody had decided to spend.
+ * Read off `m2_submitted_at` (migration 0025), which only the submission
+ * writes. It was read off `m2_last_saved`, which every autosave writes — the
+ * one a visit to a long-finished Module 2 makes, too — so such a visit made an
+ * old submission look new and the night started a reading nobody decided on.
+ * Twelve clients had a claims reading and no damages reading the day this
+ * shipped; reading them all would have cost $12–24 nobody had decided to spend.
  */
 export const DAMAGES_ON_MODULE2_SINCE = '2026-10-03T00:00:00Z'
+
+/**
+ * Records the first submission of Module 2, and says whether this request is
+ * the one that made it.
+ *
+ * 'first': this request wrote the time, so it begins the damages reading.
+ * 'again': the time was already written — a second submit racing the first,
+ * or a second tab still holding the unsubmitted form — so the reading already
+ * begun is not begun twice and paid for twice.
+ * 'unknown': the time could not be written (migration 0025 not applied yet, or
+ * the write failed); the caller falls back to the submitted-flag transition it
+ * already checked, as before the column existed.
+ */
+export async function claimModule2Submission(
+  db: Pick<SupabaseClient, 'from'>,
+  clientId: string,
+  now = new Date()
+): Promise<'first' | 'again' | 'unknown'> {
+  try {
+    const { data, error } = await db
+      .from('questionnaire_states')
+      .update({ m2_submitted_at: now.toISOString() })
+      .eq('client_id', clientId)
+      .is('m2_submitted_at', null)
+      .select('client_id')
+    if (error) {
+      console.warn(`Module 2 submission time not recorded for ${clientId} (${error.message})`)
+      return 'unknown'
+    }
+    return (data ?? []).length > 0 ? 'first' : 'again'
+  } catch (err) {
+    console.warn(`Module 2 submission time not recorded for ${clientId}`, err)
+    return 'unknown'
+  }
+}
 
 /**
  * Seconds into a request after which no NEW damages stage is begun.

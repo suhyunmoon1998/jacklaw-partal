@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
 
 /*
  * The damages reading begun when a client submits Module 2 (owner's decision,
@@ -24,7 +26,7 @@ vi.mock('@/lib/analysisRun', () => ({
   }),
 }))
 
-import { DAMAGES_ON_MODULE2_SINCE, owedDamages, readDamagesWhileTimeAllows, startingStage } from '@/lib/damagesAuto'
+import { DAMAGES_ON_MODULE2_SINCE, claimModule2Submission, owedDamages, readDamagesWhileTimeAllows, startingStage } from '@/lib/damagesAuto'
 
 beforeEach(() => {
   ran.length = 0
@@ -106,5 +108,80 @@ describe('who the night owes a damages reading', () => {
     const complete = { overview: {}, findings: {}, assembly: {}, inputs: {} }
     expect(owedDamages({ finishedModule2: ['a'], submittedModule2At: { a: after }, analyses: [{ clientId: 'a', result: complete, writtenAt: after }] })).toEqual([])
     expect(owedDamages({ finishedModule2: [], submittedModule2At: { a: after }, analyses: [] })).toEqual([])
+  })
+})
+
+/*
+ * The submission time is written once, by the submission (migration 0025).
+ * m2_last_saved was read in its place, and every autosave writes it — the one
+ * a visit to a long-finished Module 2 makes, too — so an old submission looked
+ * new and the night could start a reading nobody had decided on.
+ */
+describe('the moment Module 2 was submitted', () => {
+  // A stand-in for the query the claim makes: update … where m2_submitted_at is null, returning what changed.
+  const fakeDb = (answer: { data?: unknown[] | null; error?: { message: string } | null; throws?: boolean }) => {
+    const calls: Array<[string, ...unknown[]]> = []
+    const chain = {
+      update: (values: unknown) => (calls.push(['update', values]), chain),
+      eq: (column: string, value: unknown) => (calls.push(['eq', column, value]), chain),
+      is: (column: string, value: unknown) => (calls.push(['is', column, value]), chain),
+      select: async (columns: string) => {
+        calls.push(['select', columns])
+        if (answer.throws) throw new Error('network')
+        return { data: answer.data ?? null, error: answer.error ?? null }
+      },
+    }
+    return { db: { from: (table: string) => (calls.push(['from', table]), chain) } as never, calls }
+  }
+  const now = new Date('2026-10-04T05:00:00Z')
+
+  it('is written only while it is empty, and the request that writes it is the first', async () => {
+    const { db, calls } = fakeDb({ data: [{ client_id: 'c1' }] })
+    expect(await claimModule2Submission(db, 'c1', now)).toBe('first')
+    expect(calls).toEqual([
+      ['from', 'questionnaire_states'],
+      ['update', { m2_submitted_at: '2026-10-04T05:00:00.000Z' }],
+      ['eq', 'client_id', 'c1'],
+      ['is', 'm2_submitted_at', null],
+      ['select', 'client_id'],
+    ])
+  })
+
+  it('says "again" when it was already written: a second submit or a stale tab begins nothing', async () => {
+    expect(await claimModule2Submission(fakeDb({ data: [] }).db, 'c1', now)).toBe('again')
+  })
+
+  it('says "unknown" when it cannot be written, so the submission falls back to the flag it already checked', async () => {
+    expect(await claimModule2Submission(fakeDb({ error: { message: 'column "m2_submitted_at" does not exist' } }).db, 'c1', now)).toBe('unknown')
+    expect(await claimModule2Submission(fakeDb({ throws: true }).db, 'c1', now)).toBe('unknown')
+  })
+
+  const read = (file: string) => readFileSync(path.join(process.cwd(), file), 'utf8')
+
+  it('is what the night reads, never the last save, and a failed read starts nothing', () => {
+    const cron = read('app/api/cron/follow-ups/route.ts')
+    expect(cron).toMatch(/select\('client_id, m2_submitted_at'\)\.not\('m2_submitted_at', 'is', null\)/)
+    expect(cron).toMatch(/submittedModule2At: Object\.fromEntries\(\(submissions \?\? \[\]\)/)
+    expect(cron).not.toMatch(/s\.m2_last_saved/)
+    // Missing column: warned, not thrown, and not counted among the lists that stop the run.
+    expect(cron).toMatch(/if \(submissionsErr\) console\.warn/)
+    expect(cron).not.toMatch(/listError = [^\n]*submissionsErr/)
+  })
+
+  it('is written by the submission, which begins the reading unless the time was already there', () => {
+    const route = read('app/api/questionnaire/route.ts')
+    expect(route).toMatch(/const claim = moduleId === 'module2' \? await claimModule2Submission\(supabase, clientId\) : 'again'/)
+    expect(route).toMatch(/if \(moduleId === 'module2' && claim !== 'again'\) \{/)
+    // The reading's clock is the request's: maxDuration counts the emails sent before it.
+    expect(route.indexOf('const began = Date.now()')).toBeLessThan(route.indexOf('await req.json()'))
+    const migration = read('supabase/migrations/0025_module2_submitted_at.sql')
+    expect(migration).toMatch(/alter table public\.questionnaire_states\s+add column if not exists m2_submitted_at timestamptz;/)
+  })
+
+  it('reads each client\'s newest search and finished set on their own, not off a cut whole table', () => {
+    const cron = read('app/api/cron/follow-ups/route.ts')
+    expect(cron).toMatch(/from\('source_searches'\)\.select\('created_at'\)\.eq\('client_id', id\)\.order\('created_at', \{ ascending: false \}\)\.limit\(1\)/)
+    expect(cron).not.toMatch(/from\('source_searches'\)\.select\('client_id, created_at'\)/)
+    expect(cron).toMatch(/from\('client_question_set_assignments'\)\s*\.select\('completed_at'\)\s*\.eq\('client_id', id\)/)
   })
 })
