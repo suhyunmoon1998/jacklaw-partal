@@ -3,7 +3,7 @@ import { getSupabase } from '@/lib/supabase'
 import { sendIntakeNotificationEmails } from '@/lib/sendIntakeEmail'
 import { submissionLanguage } from '@/lib/machineTranslate'
 import { denyClient } from '@/lib/clientAuth'
-import { readDamagesWhileTimeAllows } from '@/lib/damagesAuto'
+import { claimModule2Submission, readDamagesWhileTimeAllows } from '@/lib/damagesAuto'
 
 /**
  * Long enough for the damages reading begun after a Module 2 submission
@@ -73,6 +73,9 @@ export async function GET(req: NextRequest) {
 
 // POST /api/questionnaire  { clientId, answers, completedSections, submitted }
 export async function POST(req: NextRequest) {
+  // The damages reading's clock (below) runs from here: maxDuration counts the
+  // whole request, the emails sent before it included.
+  const began = Date.now()
   const { clientId, answers, completedSections, submitted, module } = await req.json()
   if (!clientId) return NextResponse.json({ error: 'Missing clientId' }, { status: 400 })
 
@@ -141,8 +144,12 @@ export async function POST(req: NextRequest) {
     // false-to-true transition as the notice above (owner's decision,
     // 2026-10-03). After the client has their answer; whatever this request's
     // clock does not cover, the nightly run finishes (lib/damagesAuto.ts).
-    if (moduleId === 'module2') {
-      const began = Date.now()
+    //
+    // The submission time is written once (migration 0025) and is what the
+    // night reads; a request that finds it already written is a second submit
+    // or a stale second tab, and does not begin the reading a second time.
+    const claim = moduleId === 'module2' ? await claimModule2Submission(supabase, clientId) : 'again'
+    if (moduleId === 'module2' && claim !== 'again') {
       try {
         after(async () => {
           try {
