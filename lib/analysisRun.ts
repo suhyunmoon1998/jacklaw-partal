@@ -90,23 +90,36 @@ export function present(
   }
 }
 
+/** One stage's result: the HTTP status and body both callers answer with, and what is now on file. */
+export interface AnalysisStageResult {
+  status: number
+  body: Record<string, unknown>
+  /** What is stored after the stage. Absent unless the stage ran. */
+  stored?: StoredAnalysis
+}
+
 /**
  * Run one stage and keep what it produced.
  *
  * 'baseline' starts a fresh reading and discards whatever was on file, so a
  * re-run cannot end up with this week's findings sitting on last week's
  * baseline. The later stages build on what is stored.
+ *
+ * Returns a plain result rather than a response, because a third caller has
+ * no request to answer: the reading started when a client submits Module 2,
+ * and the night that finishes it (lib/damagesAuto.ts). All three go through
+ * this one body, so none can store or refuse differently.
  */
-export async function runAnalysisStage(clientId: string, stage: Stage): Promise<NextResponse> {
+export async function runAnalysisCore(clientId: string, stage: Stage): Promise<AnalysisStageResult> {
   const input = await gather(clientId)
-  if (!input) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  if (!input) return { status: 404, body: { error: 'Not found' } }
   // A reading taken without the follow-up answers would be stored as current
   // and read as whole. Refuse rather than pay for that.
   if (input.setsError) {
-    return NextResponse.json(
-      { error: `The client's question sets could not be read (${input.setsError}), so nothing was run.` },
-      { status: 502 }
-    )
+    return {
+      status: 502,
+      body: { error: `The client's question sets could not be read (${input.setsError}), so nothing was run.` },
+    }
   }
 
   const row = await load(clientId)
@@ -117,13 +130,13 @@ export async function runAnalysisStage(clientId: string, stage: Stage): Promise<
   // moved between requests. Carrying on would staple new findings to a baseline
   // drawn from different facts, so the reading restarts instead.
   if (stage !== 'baseline' && row && row.fingerprint !== fingerprint) {
-    return NextResponse.json(
-      {
+    return {
+      status: 409,
+      body: {
         error: 'The answers changed while this was being read. Start the reading again.',
         restart: true,
       },
-      { status: 409 }
-    )
+    }
   }
 
   // 'baseline' discards the damages reading on file. The brief built on it is
@@ -164,33 +177,43 @@ export async function runAnalysisStage(clientId: string, stage: Stage): Promise<
       // by the stage after it. This compared against 'assembly', which stopped
       // being last when 'inputs' was added after it.
       if (stage !== STAGES[STAGES.length - 1]) {
-        return NextResponse.json(
-          {
+        return {
+          status: 500,
+          body: {
             error:
               'The reading ran but could not be saved, so the next stage has nothing to build on. ' +
               'This is a database problem, not a problem with the answers.',
           },
-          { status: 500 }
-        )
+        }
       }
     }
 
-    return NextResponse.json({
-      ...present(
-        { fingerprint, law_version: LAW_VERSION, model: ANALYSIS_MODEL, duration_ms: durationMs, created_at: new Date().toISOString() },
-        stored,
-        fingerprint
-      ),
-      stored: !error,
-    })
+    return {
+      status: 200,
+      body: {
+        ...present(
+          { fingerprint, law_version: LAW_VERSION, model: ANALYSIS_MODEL, duration_ms: durationMs, created_at: new Date().toISOString() },
+          stored,
+          fingerprint
+        ),
+        stored: !error,
+      },
+      stored,
+    }
   } catch (err) {
     if (err instanceof NotEnoughAnswers) {
-      return NextResponse.json({ error: err.message, notEnough: true }, { status: 422 })
+      return { status: 422, body: { error: err.message, notEnough: true } }
     }
     console.error(`case analysis (${stage}) failed:`, err)
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'The reading could not be run.' },
-      { status: 502 }
-    )
+    return {
+      status: 502,
+      body: { error: err instanceof Error ? err.message : 'The reading could not be run.' },
+    }
   }
+}
+
+/** The same stage, answered as a response, for the admin panel and Eleanor. */
+export async function runAnalysisStage(clientId: string, stage: Stage): Promise<NextResponse> {
+  const result = await runAnalysisCore(clientId, stage)
+  return NextResponse.json(result.body, { status: result.status })
 }

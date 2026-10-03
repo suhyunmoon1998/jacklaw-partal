@@ -78,6 +78,45 @@ describe('choosing who the nightly run reads next', () => {
     expect(out[0].lang).toBe('ko')
   })
 
+  it('reads newly answered questions into the facts before anything else is owed', () => {
+    // B (2026-10-03): a question set finished after the facts were read is read
+    // into the ledger first; the reading is then behind the facts.
+    const out = whoIsWaiting({
+      clients: [who('a')],
+      finishedModule2: ['a'],
+      haveFacts: ['a'],
+      haveReading: ['a'],
+      haveRound: ['a'],
+      answeredSinceFacts: ['a'],
+    })
+    expect(out.map(w => w.needs)).toEqual(['additions'])
+  })
+
+  it('reads the case again once the facts have grown past the reading, and writes no new round', () => {
+    const out = whoIsWaiting({
+      clients: [who('a')],
+      finishedModule2: ['a'],
+      haveFacts: ['a'],
+      haveReading: ['a'],
+      haveRound: ['a'],
+      readingBehindFacts: ['a'],
+    })
+    expect(out.map(w => w.needs)).toEqual(['reading'])
+    // Read again and with a round on file, nothing more is owed: writing the
+    // next round is not automated (the owner did not approve it).
+    expect(
+      whoIsWaiting({ clients: [who('a')], finishedModule2: ['a'], haveFacts: ['a'], haveReading: ['a'], haveRound: ['a'] })
+    ).toEqual([])
+  })
+
+  it('finishes a damages reading only after the facts, the reading and the round', () => {
+    const base = { clients: [who('a')], finishedModule2: ['a'], owedDamages: ['a'] }
+    expect(whoIsWaiting({ ...base, haveFacts: [], haveReading: [], haveRound: [] })[0].needs).toBe('facts')
+    expect(whoIsWaiting({ ...base, haveFacts: ['a'], haveReading: ['a'], haveRound: ['a'] })[0].needs).toBe('damages')
+    // Damages are owed only to someone who finished Module 2.
+    expect(whoIsWaiting({ ...base, finishedModule2: [], haveFacts: ['a'], haveReading: ['a'], haveRound: ['a'] })).toEqual([])
+  })
+
   it('is empty when nobody is owed anything', () => {
     expect(ask({ clients: [who('a')] })).toEqual([])
     expect(ask({ finishedModule2: ['ghost'] })).toEqual([])

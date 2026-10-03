@@ -1,8 +1,15 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
 import { sendIntakeNotificationEmails } from '@/lib/sendIntakeEmail'
 import { submissionLanguage } from '@/lib/machineTranslate'
 import { denyClient } from '@/lib/clientAuth'
+import { readDamagesWhileTimeAllows } from '@/lib/damagesAuto'
+
+/**
+ * Long enough for the damages reading begun after a Module 2 submission
+ * (below). The client's request is answered first; only that work runs on.
+ */
+export const maxDuration = 300
 
 /**
  * Both modules write here.
@@ -127,6 +134,31 @@ export async function POST(req: NextRequest) {
       // enough.
       const lang = [client.portal_lang, submissionLanguage(answers)].find(l => l && l !== 'en') ?? 'en'
       await sendIntakeNotificationEmails(client.name, client.case_type, answers, moduleId, lang)
+    }
+
+    // Module 2 is where the pay, the hours and the breaks are answered, so the
+    // damages reading starts the moment it is submitted — once, on the same
+    // false-to-true transition as the notice above (owner's decision,
+    // 2026-10-03). After the client has their answer; whatever this request's
+    // clock does not cover, the nightly run finishes (lib/damagesAuto.ts).
+    if (moduleId === 'module2') {
+      const began = Date.now()
+      try {
+        after(async () => {
+          try {
+            const run = await readDamagesWhileTimeAllows(clientId, began)
+            console.log(
+              `damages on Module 2 for ${clientId}: ${run.ran ? `read ${run.stages.join(', ')}` : 'did not run'}` +
+                `${run.next ? `; ${run.next} next` : ''}${run.reason ? ` (${run.reason})` : ''}`
+            )
+          } catch (err) {
+            console.error(`damages on Module 2 for ${clientId} failed; the night will try:`, err)
+          }
+        })
+      } catch (err) {
+        // Outside a request (a test, a script) there is nothing to run after.
+        console.warn('damages on Module 2 not scheduled:', err)
+      }
     }
   }
 
