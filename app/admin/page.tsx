@@ -1,5 +1,6 @@
 'use client'
 
+import { safeAdminReturn } from '@/lib/adminReturn'
 import { useEffect, useState, useCallback } from 'react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
@@ -1217,6 +1218,9 @@ export default function AdminPage() {
       const res = await fetch('/api/admin/login', { cache: 'no-store' }).catch(() => null)
       const ok = Boolean(res?.ok && (await res.json().catch(() => ({}))).authenticated)
       if (!live) return
+      // Already signed in and sent here with a page to return to: go there.
+      const next = ok ? safeAdminReturn(new URLSearchParams(window.location.search).get('next')) : null
+      if (next) { window.location.assign(next); return }
       if (!ok) clearAdminSession()
       setAuthenticated(ok)
       if (ok) {
@@ -1493,7 +1497,12 @@ export default function AdminPage() {
     return (
       <AdminLogin
         notice={sessionEnded ? 'You were signed out after 8 hours. Sign in again to see current answers.' : undefined}
-        onLogin={() => { setSessionEnded(false); setAuthenticated(true); fetchClients() }}
+        onLogin={() => {
+          // Sent here from a case reading or factual brief? Go back to it (lib/adminReturn.ts).
+          const next = safeAdminReturn(new URLSearchParams(window.location.search).get('next'))
+          if (next) { window.location.assign(next); return }
+          setSessionEnded(false); setAuthenticated(true); fetchClients()
+        }}
       />
     )
 
