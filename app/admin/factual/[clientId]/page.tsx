@@ -9,6 +9,7 @@
  * client actually said wants this one and nothing else on it.
  */
 
+import { adminSignInHref } from '@/lib/adminReturn'
 import { useCallback, useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { LedgerFact, buildFactualBrief } from '@/lib/factualBrief'
@@ -133,7 +134,11 @@ export default function FactualSheetPage() {
     return (
       <main className="min-h-screen bg-gray-100 flex items-center justify-center p-8">
         <p className="text-sm text-gray-500">
-          Sign in to the admin panel first, then open this page again.
+          This page needs the admin panel sign-in.{' '}
+          <a className="underline text-gray-800" href={adminSignInHref(`/admin/factual/${clientId}`)}>
+            Sign in
+          </a>{' '}
+          and you will come straight back here.
         </p>
       </main>
     )

@@ -17,6 +17,7 @@
  * browser's own Save as PDF prints exactly what the office read.
  */
 
+import { adminSignInHref } from '@/lib/adminReturn'
 import { useCallback, useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { StoredReading, allClaims, fehaNotRead } from '@/lib/caseReadingShape'
@@ -226,7 +227,11 @@ export default function ReadingSheetPage() {
     return (
       <main className="min-h-screen bg-gray-100 flex items-center justify-center p-8">
         <p className="text-sm text-gray-500">
-          Sign in to the admin panel first, then open this page again.
+          This page needs the admin panel sign-in.{' '}
+          <a className="underline text-gray-800" href={adminSignInHref(`/admin/reading/${clientId}`)}>
+            Sign in
+          </a>{' '}
+          and you will come straight back here.
         </p>
       </main>
     )
