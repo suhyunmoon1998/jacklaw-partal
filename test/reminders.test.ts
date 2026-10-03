@@ -203,9 +203,17 @@ describe('who gets chased', () => {
     expect(due[0]).toMatchObject({ clientId: 'b', kind: 'day2' })
   })
 
-  it('counts the days from the send, on the calendar', () => {
-    expect(daysBetween('2026-09-09T23:00:00Z', AT('2026-09-11T01:00:00Z'))).toBe(2)
-    expect(daysBetween('2026-09-09T00:00:00Z', AT('2026-09-09T23:59:00Z'))).toBe(0)
+  it("counts the days from the send, on the firm's calendar (Los Angeles)", () => {
+    // Wed 9/9 4pm PDT -> Thu 9/10 6pm PDT: one day, though the UTC dates are two apart.
+    expect(daysBetween('2026-09-09T23:00:00Z', AT('2026-09-11T01:00:00Z'))).toBe(1)
+    // Tue 9/8 5pm PDT -> Wed 9/9 4:59pm PDT: the next day in Los Angeles.
+    expect(daysBetween('2026-09-09T00:00:00Z', AT('2026-09-09T23:59:00Z'))).toBe(1)
+    // Same Los Angeles day, morning to evening.
+    expect(daysBetween('2026-09-09T16:00:00Z', AT('2026-09-10T03:00:00Z'))).toBe(0)
+    // A Monday 6:30pm PDT send is two days old on Wednesday morning, so day 2 goes out Wednesday.
+    expect(daysBetween('2026-09-15T01:30:00Z', AT('2026-09-16T17:30:00Z'))).toBe(2)
+    // Across the November clock change.
+    expect(daysBetween('2026-10-31T20:00:00Z', AT('2026-11-02T18:00:00Z'))).toBe(2)
   })
 })
 

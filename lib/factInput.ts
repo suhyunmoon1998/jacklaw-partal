@@ -16,7 +16,7 @@ import { AnswerValue } from '@/types'
  */
 export async function gatherExtractionInput(clientId: string) {
   const db = getSupabase()
-  const [{ data: client }, { data: state }, assigned, docs] = await Promise.all([
+  const [{ data: client, error: clientErr }, { data: state, error: stateErr }, assigned, docs] = await Promise.all([
     db.from('clients').select('id, name').eq('id', clientId).maybeSingle(),
     db.from('questionnaire_states').select('answers').eq('client_id', clientId).maybeSingle(),
     // Everything else the office has asked this client and had answered. These
@@ -25,6 +25,11 @@ export async function gatherExtractionInput(clientId: string) {
     loadAssignedSets(clientId),
     db.from('documents').select('name, category').eq('client_id', clientId),
   ])
+  // A read that failed is not an empty answer sheet. Taken for one, a brief
+  // database error made the night pay to extract facts from half the file and
+  // then never come back to it, because the client now "has facts".
+  if (clientErr) throw new Error(`Could not read the client (${clientErr.message}).`)
+  if (stateErr) throw new Error(`Could not read the questionnaire (${stateErr.message}).`)
   if (!client) return null
   // The raw record. extractFacts runs it through answersForReading itself, so
   // that a question the client retracted is read as retracted here too rather
@@ -35,6 +40,8 @@ export async function gatherExtractionInput(clientId: string) {
     clientName: client.name ?? '',
     answers,
     extra: assigned.sets as NonNullable<ExtractionInput['extra']>,
+    /** Set when a question set could not be loaded: an extraction now would miss its answers. */
+    setsError: assigned.error ?? null,
     searched: recordSearch({
       ranAt: new Date().toISOString(),
       answers: state ? answers : null,

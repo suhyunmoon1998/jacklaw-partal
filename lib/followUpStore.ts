@@ -183,7 +183,13 @@ export async function savePlan(input: SavePlanInput): Promise<FollowUpPlan> {
     })
     .select('id, created_at')
     .single()
-  if (planErr || !plan) throw new Error(planErr?.message || 'Could not record why the questions were asked.')
+  if (planErr || !plan) {
+    // Without its plan row the review gate cannot recognise this draft as a
+    // generated round, and the night would write another one tomorrow. Take
+    // the assignment back out rather than leave it.
+    await supabase.from('client_question_set_assignments').delete().eq('id', assignment.id)
+    throw new Error(planErr?.message || 'Could not record why the questions were asked.')
+  }
 
   const rows = ordered.map((q, i) => ({
     plan_id: plan.id,
@@ -364,11 +370,14 @@ export async function reviewPlan(
  * it from the Question Sets tab without ever seeing the questions.
  */
 export async function unreviewedRound(assignmentId: string): Promise<{ planId: string } | null> {
-  const { data } = await getSupabase()
+  const { data, error } = await getSupabase()
     .from('follow_up_plans')
     .select('id, reviewed_at')
     .eq('assignment_id', assignmentId)
     .maybeSingle()
+  // The gate fails closed. A read error used to come back as "not a generated
+  // round", which let an unapproved, model-written round be sent or released.
+  if (error) throw new Error(`Could not check whether this round was approved (${error.message}). Nothing was sent.`)
   if (!data || data.reviewed_at) return null
   return { planId: data.id as string }
 }

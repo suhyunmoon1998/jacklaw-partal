@@ -16,6 +16,7 @@ import { ClaimFinding } from '@/lib/claimMatrix'
 import { SpineReading } from '@/lib/evidenceSpine'
 import { Meter, describeSpend, totalSpend } from '@/lib/spend'
 import { Outcome, Waiting, drain, finishedQuestionnaire, whoIsWaiting } from '@/lib/followUpQueue'
+import { clearSkip, readSkips, recordSkip, withoutSkipped } from '@/lib/nightlySkips'
 
 /**
  * Reading a client's answers and writing their next questions, unprompted.
@@ -82,13 +83,24 @@ function authorised(req: NextRequest): boolean {
 /** Who has finished Module 2 and is owed something. */
 async function waitingFor(): Promise<Waiting[]> {
   const db = getSupabase()
-  const [{ data: states }, { data: clients }, { data: plans }, { data: readings }] =
+  const [
+    { data: states, error: statesErr },
+    { data: clients, error: clientsErr },
+    { data: plans, error: plansErr },
+    { data: readings, error: readingsErr },
+  ] =
     await Promise.all([
       db.from('questionnaire_states').select('client_id, m2_submitted, completed_sections'),
       db.from('clients').select('id, name, portal_lang'),
       db.from('follow_up_plans').select('client_id'),
       db.from('case_readings').select('client_id, result'),
     ])
+  // A list that failed to load is not an empty list. Without plans every read
+  // client looks owed a round (paid again); without readings every finished
+  // client looks unread; without states or clients the night says "Nobody is
+  // waiting". Stop the run instead, as the count below already does.
+  const listError = statesErr ?? clientsErr ?? plansErr ?? readingsErr
+  if (listError) throw new Error(`Could not read who is waiting: ${listError.message}`)
   const finishedModule2 = (states ?? []).filter(s => finishedQuestionnaire(s)).map(s => s.client_id as string)
 
   // Counted per client, not read off the whole table. This was one select of
@@ -144,6 +156,11 @@ async function readFacts(next: Waiting): Promise<Outcome> {
   // question set. This read the questionnaire alone, and the sets were lost.
   const input = await gatherExtractionInput(next.clientId)
   if (!input) return { ran: false, client: next.name, reason: 'No such client.' }
+  // Facts extracted without a question set's answers are saved as complete and
+  // never read again. Wait for a night when every set loads.
+  if (input.setsError) {
+    return { ran: false, client: next.name, reason: `A question set could not be read (${input.setsError}), so nothing was extracted.` }
+  }
 
   const read = await extractFacts({ ...input, meter })
   if (!read.entries.length) {
@@ -242,8 +259,9 @@ async function readCase(next: Waiting, began: number): Promise<Outcome> {
     did: `read ${ran.length} of ${STAGES.length} stages: ${ran.join(', ')}`,
     stagesLeft: stage ? `${stage} next — ${stoppedFor}` : 'the reading is complete',
     // runStage meters itself and records it on the row, so the nightly
-    // meter never sees these tokens. Read them back off the stages run.
-    spent: describeSpend(totalSpend(stored.spent ?? {})),
+    // meter never sees these tokens. Read them back off the stages run —
+    // only those: the row also carries what earlier nights spent.
+    spent: describeSpend(totalSpend(Object.fromEntries(ran.map(stage => [stage, (stored.spent ?? {})[stage]])))),
   }
 }
 
@@ -299,7 +317,10 @@ export async function GET(req: NextRequest) {
   if (!authorised(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const dryRun = req.nextUrl.searchParams.get('dryRun') === '1'
-  const first = await waitingFor()
+  // A step that failed or produced nothing earlier tonight is not paid for
+  // again until tomorrow night (migration 0024). Without the table, no skips.
+  const skipped = await readSkips()
+  const first = withoutSkipped(await waitingFor(), skipped)
   if (dryRun || !first.length) {
     return NextResponse.json({ ran: false, waiting: first, reason: first.length ? 'dry run' : 'Nobody is waiting.' })
   }
@@ -315,7 +336,7 @@ export async function GET(req: NextRequest) {
         served = true
         return first
       }
-      return waitingFor()
+      return withoutSkipped(await waitingFor(), skipped)
     },
     step: async next => {
       try {
@@ -326,9 +347,12 @@ export async function GET(req: NextRequest) {
               ? await readCase(next, began)
               : await writeRound(next)
         console.log(`cron follow-ups: ${next.name} — ${outcome.did ?? outcome.reason ?? ''}`)
+        if (outcome.ran) await clearSkip(next.clientId, next.needs)
+        else await recordSkip(next.clientId, next.needs, String(outcome.reason ?? 'did not advance'))
         return outcome
       } catch (err) {
         console.error(`cron follow-ups: ${next.name}:`, err)
+        await recordSkip(next.clientId, next.needs, err instanceof Error ? err.message : 'failed')
         throw err
       }
     },
