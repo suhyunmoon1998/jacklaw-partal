@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { ADMIN_COOKIE, correctAdminPassword, isAdmin, mintAdminSession } from '@/lib/adminAuth'
-import { clientIp, mayTry, recordAttempt } from '@/lib/loginThrottle'
 
 /**
  * The one place the admin password is checked.
@@ -8,6 +7,14 @@ import { clientIp, mayTry, recordAttempt } from '@/lib/loginThrottle'
  * It arrives here and goes no further: what the browser keeps afterwards is a
  * signed, HttpOnly cookie that proves somebody knew the password once, and
  * cannot be read back out by script to be sent anywhere else.
+ *
+ * NO ATTEMPT LIMIT, by the owner's decision (2026-10-03): the office must be
+ * able to sign in at any time, and a limit that counts every connection could
+ * shut them out along with a guesser. The throttle this route had never ran in
+ * production (its table, migration 0022, was never applied) and only logged a
+ * warning on every sign-in; it is removed rather than left half there. The
+ * password is therefore the whole lock: keep it long. Eleanor's one-click
+ * sign-in (app/api/admin/eleanor-sso) does not use the password at all.
  */
 
 /** GET — is this browser still signed in? The panel asks before drawing. */
@@ -28,26 +35,7 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  // Checked before the password is, so a shut door says nothing about whether
-  // the guess would have been right.
-  const ip = clientIp(req)
-  const verdict = await mayTry(ip)
-  if (!verdict.allowed) {
-    const when = `Try again in ${verdict.retryInMinutes} minute${verdict.retryInMinutes === 1 ? '' : 's'}.`
-    return NextResponse.json(
-      {
-        error:
-          verdict.by === 'connection'
-            ? `Too many wrong passwords from this connection. ${when}`
-            : `Sign-in is paused after too many wrong passwords. ${when}`,
-      },
-      { status: 429, headers: { 'Retry-After': String(verdict.retryInMinutes * 60) } }
-    )
-  }
-
-  const right = correctAdminPassword(password)
-  await recordAttempt(ip, right)
-  if (!right) {
+  if (!correctAdminPassword(password)) {
     return NextResponse.json({ error: 'Incorrect password.' }, { status: 401 })
   }
 
