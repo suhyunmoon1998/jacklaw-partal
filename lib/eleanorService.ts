@@ -18,7 +18,8 @@ import { createHmac, timingSafeEqual } from 'crypto'
  * It opens exactly two routes:
  *
  *   /api/eleanor/sends     what the admin panel's Send button does for a module,
- *                          and the next reminder text, now.
+ *                          the next reminder text, now, and an update text made
+ *                          only of the fixed sentences in lib/clientUpdates.ts.
  *   /api/eleanor/analysis  one stage of the client's damages reading — the admin
  *                          panel's Run, the same code — which Eleanor reads back
  *                          from the shared database for its FACTS / DAMAGES screen.
