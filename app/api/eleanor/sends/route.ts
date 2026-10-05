@@ -6,6 +6,7 @@ import { deliverReminder, planManualReminder, publicOrigin, reminderPreview } fr
 import { Chasing } from '@/lib/reminderSchedule'
 import { moduleById, stepName } from '@/lib/modules'
 import { isConfigured } from '@/lib/twilio'
+import { deliverClientUpdate, isUpdateSendingHour, planClientUpdate } from '@/lib/clientUpdateSend'
 
 export const dynamic = 'force-dynamic'
 
@@ -18,9 +19,11 @@ export const dynamic = 'force-dynamic'
  * out again and sends only if nothing changed, through the same code as the
  * admin panel's Send button and the daily reminder chase.
  *
- * Two sends, both ones the office already makes:
+ * Three sends:
  *   kind=module    the admin panel's "Send" for Module 1 or 2
  *   kind=reminder  the next reminder text for a step, now instead of on day 2 or 5
+ *   kind=update    an update on the client's case, made only of the fixed
+ *                  sentences in lib/clientUpdates.ts, in the client's language
  *
  * Only Eleanor's server holds the secret (lib/eleanorService.ts). The replies
  * never carry a full phone number or email address.
@@ -37,7 +40,10 @@ function chasingOf(value: unknown): Chasing | null {
   return null
 }
 
-type Request = { kind: 'module'; clientId: string; moduleId: 'module1' | 'module2' | 'module3' } | { kind: 'reminder'; clientId: string; chasing: Chasing }
+type Request =
+  | { kind: 'module'; clientId: string; moduleId: 'module1' | 'module2' | 'module3' }
+  | { kind: 'reminder'; clientId: string; chasing: Chasing }
+  | { kind: 'update'; clientId: string; sentences: string }
 
 function parse(input: Record<string, unknown>): Request | null {
   const clientId = clientIdOf(input.clientId)
@@ -49,6 +55,11 @@ function parse(input: Record<string, unknown>): Request | null {
   if (input.kind === 'reminder') {
     const chasing = chasingOf(input.chasing)
     return chasing ? { kind: 'reminder', clientId, chasing } : null
+  }
+  if (input.kind === 'update') {
+    // Read strictly by lib/clientUpdates.ts when the update is worked out.
+    const sentences = typeof input.sentences === 'string' ? input.sentences.trim() : ''
+    return sentences && sentences.length <= 400 ? { kind: 'update', clientId, sentences } : null
   }
   return null
 }
@@ -74,6 +85,7 @@ type Preview =
 
 async function prepare(request: Request, secret: string): Promise<Preview> {
   const origin = publicOrigin()
+  if (request.kind === 'update') return prepareUpdate(request, secret)
   if (request.kind === 'module') {
     const planned = await planModuleSend({ clientId: request.clientId, moduleId: request.moduleId, linkOrigin: origin, textOrigin: origin })
     if (!planned.ok) {
@@ -180,19 +192,76 @@ async function prepare(request: Request, secret: string): Promise<Preview> {
   }
 }
 
-/** GET /api/eleanor/sends?kind=module&clientId=…&moduleId=… | ?kind=reminder&clientId=…&chasing=… */
+/**
+ * An update text. What is sealed is everything that decides what the client
+ * receives — the number, the language, the name, the exact words — and the
+ * firm's day, so an approval does not carry over to another day and the same
+ * text reaches the same client at most once a day.
+ */
+async function prepareUpdate(request: Extract<Request, { kind: 'update' }>, secret: string): Promise<Preview> {
+  const planned = await planClientUpdate(request.clientId, request.sentences)
+  if (!planned.ok) {
+    const status = planned.reason === 'UnknownClient' ? 404 : planned.reason === 'Unreadable' ? 503 : planned.reason === 'InvalidSentences' ? 400 : 409
+    return { ok: false, status, body: { ok: false, reason: planned.reason, explanation: planned.explanation } }
+  }
+  if (!isConfigured()) {
+    return { ok: false, status: 409, body: { ok: false, reason: 'TextingOff', explanation: 'Texting is not switched on for this portal, so no update can be sent.' } }
+  }
+  const plan = planned.plan
+  const facts = { kind: 'update', clientId: plan.clientId, phone: plan.phone, lang: plan.lang, name: plan.name, body: plan.body, day: plan.day }
+  const fingerprint = sendFingerprint(secret, facts)
+  return {
+    ok: true,
+    fingerprint,
+    preview: {
+      kind: 'update',
+      clientId: plan.clientId,
+      clientName: plan.name,
+      lang: plan.lang,
+      text: maskPhone(plan.phone),
+      sentences: plan.sentences,
+      body: plan.body,
+      english: plan.english,
+      day: plan.day,
+    },
+    run: async () => {
+      if (!isUpdateSendingHour(new Date())) {
+        return {
+          status: 409,
+          body: { ok: false, reason: 'QuietHours', explanation: 'It is outside 8 am to 9 pm in Los Angeles, so the update was not sent. Ask for it again in the morning.' },
+        }
+      }
+      const delivered = await deliverClientUpdate(getSupabase(), plan, fingerprint)
+      if (delivered.status === 'sent') return { status: 200, body: { ok: true, recorded: true, textSent: true } }
+      if (delivered.status === 'failed') {
+        return { status: 502, body: { ok: false, reason: 'NotSent', recorded: true, explanation: `The text did not go out: ${delivered.error}. It can be approved again.` } }
+      }
+      return delivered.reason === 'AlreadySent'
+        ? { status: 409, body: { ok: false, reason: 'AlreadySent', recorded: true, explanation: 'This exact update already went to them today. Nothing was sent again.' } }
+        : { status: 503, body: { ok: false, reason: 'Unrecordable', explanation: 'The portal could not record the text, so it was not sent.' } }
+    },
+  }
+}
+
+/** GET /api/eleanor/sends?kind=module&clientId=…&moduleId=… | ?kind=reminder&clientId=…&chasing=… | ?kind=update&clientId=…&sentences=… */
 export async function GET(req: NextRequest) {
   const secret = eleanorServiceSecret()
   if (!secret || !isEleanorService(req)) return reply({ error: 'Unauthorized' }, 401)
   const params = req.nextUrl.searchParams
-  const request = parse({ kind: params.get('kind'), clientId: params.get('clientId'), moduleId: params.get('moduleId'), chasing: params.get('chasing') })
+  const request = parse({
+    kind: params.get('kind'),
+    clientId: params.get('clientId'),
+    moduleId: params.get('moduleId'),
+    chasing: params.get('chasing'),
+    sentences: params.get('sentences'),
+  })
   if (!request) return reply({ ok: false, reason: 'InvalidRequest' }, 400)
   const prepared = await prepare(request, secret)
   if (!prepared.ok) return reply(prepared.body, prepared.status)
   return reply({ ok: true, preview: prepared.preview, fingerprint: prepared.fingerprint })
 }
 
-/** POST /api/eleanor/sends { kind, clientId, moduleId | chasing, fingerprint } — sends only what was previewed. */
+/** POST /api/eleanor/sends { kind, clientId, moduleId | chasing | sentences, fingerprint } — sends only what was previewed. */
 export async function POST(req: NextRequest) {
   const secret = eleanorServiceSecret()
   if (!secret || !isEleanorService(req)) return reply({ error: 'Unauthorized' }, 401)
@@ -209,7 +278,7 @@ export async function POST(req: NextRequest) {
     return reply({
       ok: false,
       reason: 'PreviewChanged',
-      explanation: 'What would be sent changed after it was approved (the address, number, language, link or words). Nothing was sent.',
+      explanation: 'What would be sent changed after it was approved (the address, number, language, link, words or day). Nothing was sent.',
     }, 409)
   }
   const outcome = await prepared.run()
