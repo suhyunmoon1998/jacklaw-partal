@@ -13,6 +13,8 @@ import { planQuestions, readPlans, reviewPlan, savePlan } from '@/lib/followUpSt
 import { ClaimFinding } from '@/lib/claimMatrix'
 import { snapshotNow } from '@/lib/briefVersions'
 import { SpineReading } from '@/lib/evidenceSpine'
+import { toEnglishCached } from '@/lib/translationCache'
+import type { Question } from '@/types'
 
 /**
  * Writing the next round of questions for one client.
@@ -56,6 +58,32 @@ async function gather(clientId: string) {
   }
 }
 
+/**
+ * What a non-English client will actually read, put back into English.
+ *
+ * The model writes each question twice, in English and in the client's
+ * language, and the reviewer approves what they can read. Someone who does not
+ * read Korean was approving the English and sending the Korean unread. This is
+ * the Korean, translated back, beside the English — for the reviewer only;
+ * nothing machine-translated goes to a client. Kept per text, so a round is
+ * paid for once.
+ */
+async function backInEnglish(questions: Question[]): Promise<Record<string, { label: string; options: string[] }>> {
+  const theirs = questions.map(q => ({ id: q.id, t: q.ko ?? q.es ?? q.zh }))
+  const texts = theirs.flatMap(({ t }) => (t ? [t.label ?? '', ...(t.options ?? [])] : []))
+  if (!texts.length) return {}
+  const english = await toEnglishCached(texts)
+  const out: Record<string, { label: string; options: string[] }> = {}
+  let i = 0
+  for (const { id, t } of theirs) {
+    if (!t) continue
+    const label = english[i++] ?? ''
+    const options = (t.options ?? []).map(() => english[i++] ?? '')
+    if (label || options.some(Boolean)) out[id] = { label, options }
+  }
+  return out
+}
+
 export async function GET(req: NextRequest, props: { params: Promise<{ id: string }> }) {
   const params = await props.params
   if (!isAdmin(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -65,7 +93,8 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
     // somebody is about to approve, and approving a round means reading the
     // questions rather than a summary of why they were asked.
     const questions = plans[0] ? await planQuestions(plans[0].questionSetId) : []
-    return NextResponse.json({ plans, questions })
+    const backTranslations = plans[0] && !plans[0].reviewedAt ? await backInEnglish(questions) : {}
+    return NextResponse.json({ plans, questions, backTranslations })
   } catch (err) {
     return NextResponse.json({ error: (err as Error).message }, { status: 500 })
   }

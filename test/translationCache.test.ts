@@ -1,16 +1,19 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-// The endpoint and the table, both in memory: what is tested is when each is
-// asked, not what MyMemory says.
+// The translator and the table, both in memory: what is tested is when each is
+// asked, not what the translation says.
 const calls: string[] = []
 let table: Record<string, string> = {}
 let tableBroken = false
 
-vi.mock('@/lib/machineTranslate', async importOriginal => ({
-  ...(await importOriginal<typeof import('@/lib/machineTranslate')>()),
-  machineTranslate: vi.fn(async (text: string) => {
-    calls.push(text)
-    return text === '실패' ? '' : `EN(${text})`
+vi.mock('@/lib/staffTranslation', () => ({
+  textsToEnglish: vi.fn(async (items: { key: string; text: string }[]) => {
+    const out = new Map<string, string>()
+    for (const { key, text } of items) {
+      calls.push(text)
+      if (text !== '실패') out.set(key, `EN(${text})`)
+    }
+    return out
   }),
 }))
 
@@ -41,7 +44,7 @@ beforeEach(() => {
 })
 
 describe('translating once and keeping it', () => {
-  it('asks the endpoint only for text in another language, once per text', async () => {
+  it('asks the translator only for text in another language, once per text', async () => {
     const out = await toEnglishCached(['팁 정리', 'yes', 'Toyota', '', '팁 정리'])
     expect(out).toEqual(['EN(팁 정리)', '', '', '', 'EN(팁 정리)'])
     expect(calls).toEqual(['팁 정리'])
@@ -68,5 +71,19 @@ describe('translating once and keeping it', () => {
   it('gives the answers back whole, English where it was needed', async () => {
     const out = await translateAnswersCached({ q1: '동료', q2: 'yes', q3: ['Mine', 'Tesla'] })
     expect(out).toEqual({ q1: 'EN(동료)', q2: 'yes', q3: 'Mine, Tesla' })
+  })
+})
+
+describe('where a client’s words are sent', () => {
+  it('never to a free public translation endpoint', async () => {
+    const { readFileSync, readdirSync } = await import('fs')
+    const { join } = await import('path')
+    const sources = (dir: string): string[] =>
+      readdirSync(dir, { withFileTypes: true }).flatMap(d =>
+        d.isDirectory() ? sources(join(dir, d.name)) : /\.(ts|tsx)$/.test(d.name) ? [join(dir, d.name)] : []
+      )
+    for (const file of [...sources('lib'), ...sources('app'), ...sources('components')]) {
+      expect(readFileSync(file, 'utf8'), file).not.toMatch(/mymemory\.translated|translate\.googleapis/i)
+    }
   })
 })

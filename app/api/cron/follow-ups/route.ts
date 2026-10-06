@@ -358,7 +358,7 @@ async function readCase(next: Waiting, began: number): Promise<Outcome> {
     // Handed the reading even for the Wage Order, so the other stages'
     // stamps survive it — see the panel's route.
     const patch = await runStage(stage, entries, stored)
-    stored = await saveStage(next.clientId, fingerprint, { ...stored, ...patch })
+    stored = await saveStage(next.clientId, fingerprint, patch, stored)
     ran.push(stage)
     stage = nextStage(stored)
   }

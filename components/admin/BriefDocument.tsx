@@ -358,6 +358,11 @@ function Body({
                 <span className="font-sans text-[11px] font-bold uppercase tracking-wider text-gray-400">
                   {el.key} — {el.state}
                 </span>
+                {'restsOnProposedOrder' in el && el.restsOnProposedOrder ? (
+                  <p className="text-[12px] text-amber-800">
+                    Rests on the proposed Wage Order {String(el.restsOnProposedOrder)}, not confirmed by an attorney.
+                  </p>
+                ) : null}
                 <p className="text-[14px] leading-[1.7] text-gray-800">{el.reasoning}</p>
                 {el.wouldSettleIt && (
                   <p className="text-[13px] leading-[1.6] text-gray-500">

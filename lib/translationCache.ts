@@ -1,13 +1,13 @@
 /**
- * Machine translation, fetched once per text and kept.
+ * A client's writing in English for the office, translated once per text and
+ * kept.
  *
- * MyMemory's free allowance is per address and per day. The browser used to
- * call it for every non-English answer each time a client was opened, and the
- * facts API for every fact's verbatim on every load. One afternoon of work ran
- * the allowance out, and the office then read untranslated answers with
- * seventy-four refusals in the console. Here each text is looked up first and
- * sent only when nothing is on file, and a translation that came back is kept
- * (supabase/migrations/0021_translation_cache.sql).
+ * The admin panel used to translate every non-English answer each time a
+ * client was opened, and the facts API every fact's quotation on every load.
+ * Here each text is looked up first and sent only when nothing is on file, and
+ * a translation that came back is kept (supabase/migrations/0021_translation_cache.sql).
+ * The translating itself is lib/staffTranslation.ts — never a free public
+ * endpoint, and never shown to a client.
  *
  * Server-only. The browser asks /api/admin/translate, which calls this.
  *
@@ -18,7 +18,8 @@
 import { createHash } from 'node:crypto'
 import { getSupabase } from '@/lib/supabase'
 import { Lang } from '@/lib/langs'
-import { answerText, detectLanguage, machineTranslate, mapWithLimit } from '@/lib/machineTranslate'
+import { answerText, detectLanguage } from '@/lib/machineTranslate'
+import { textsToEnglish } from '@/lib/staffTranslation'
 import { AnswerValue } from '@/types'
 
 /** Yes/no answers are stored as these literals, never as the client's words. */
@@ -56,15 +57,15 @@ export async function toEnglishCached(texts: string[]): Promise<string[]> {
 
   const missing = keys.filter(k => !found.has(k))
   const fresh: { key: string; from_lang: string; to_lang: string; source: string; translated: string }[] = []
-  // A few at a time: the endpoint is free and throttles a burst. Only the
-  // first reading of a file pays this; after that every text is on file.
-  await mapWithLimit(missing, 8, async key => {
+  // Only the first reading of a file pays this; after that every text is on file.
+  const english = await textsToEnglish(missing.map(key => ({ key, ...wanted.get(key)! })))
+  for (const key of missing) {
+    const translated = english.get(key)
+    if (!translated) continue
     const { text, from } = wanted.get(key)!
-    const english = await machineTranslate(text, from, 'en').catch(() => '')
-    if (!english) return
-    found.set(key, english)
-    fresh.push({ key, from_lang: from, to_lang: 'en', source: text, translated: english })
-  })
+    found.set(key, translated)
+    fresh.push({ key, from_lang: from, to_lang: 'en', source: text, translated })
+  }
   if (fresh.length) {
     const { error } = await db.from('translation_cache').upsert(fresh, { onConflict: 'key' })
     if (error) console.error('could not keep translations:', error.message)
@@ -79,8 +80,7 @@ export async function toEnglishCached(texts: string[]): Promise<string[]> {
 
 /**
  * Every answer a client wrote in another language, in English for the office;
- * everything else as it stands. The cached form of machineTranslate's
- * translateAnswersToEnglish, with the same result shape.
+ * everything else as it stands.
  */
 export async function translateAnswersCached(
   answers: Record<string, AnswerValue>

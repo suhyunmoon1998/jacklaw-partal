@@ -1,85 +1,14 @@
 /**
- * Machine translation through MyMemory's free endpoint.
+ * Which language a client wrote in, and their answers as plain strings.
  *
- * Two callers, and both treat the result as a draft a person reads rather than
- * as finished text: the question-set editor fills empty translation fields for
- * staff to correct before a set goes out, and the admin panel renders a
- * client's non-English answers in English so the office can read a file without
- * waiting on a translator. Nothing machine-translated is ever shown to a client
- * unreviewed.
- *
- * Every failure returns '' rather than throwing. A translation that does not
- * arrive should leave the original on screen, never break the page.
+ * This file used to send answers to MyMemory's free, anonymous translation
+ * endpoint. That is gone: the office's English now comes from
+ * lib/staffTranslation.ts, through lib/translationCache.ts. What is left sends
+ * nothing anywhere, which is why the admin panel can import it in the browser.
  */
 
-import { Lang, TranslatedLang } from '@/lib/langs'
+import { TranslatedLang } from '@/lib/langs'
 import { AnswerValue } from '@/types'
-
-/** MyMemory's language codes, which do not always match our own. */
-const MYMEMORY_CODE: Record<Lang, string> = {
-  en: 'en',
-  es: 'es',
-  zh: 'zh-CN',
-  ko: 'ko',
-}
-
-/**
- * MyMemory rejects anonymous queries much over 500 bytes, and intake answers
- * routinely run longer than that — "describe your job duties" is a paragraph.
- * Long text is cut on sentence boundaries (including the CJK full stops), each
- * piece translated, and the pieces rejoined, so a long answer comes back whole
- * instead of truncated.
- */
-function sentenceChunks(text: string, limit = 400): string[] {
-  if (text.length <= limit) return [text]
-
-  const sentences = text.match(/[^.!?。！？\n]*[.!?。！？\n]+|[^.!?。！？\n]+/g) ?? [text]
-  const out: string[] = []
-  let current = ''
-
-  for (const sentence of sentences) {
-    // One sentence longer than the limit still has to be cut somewhere.
-    if (sentence.length > limit) {
-      if (current) { out.push(current); current = '' }
-      for (let i = 0; i < sentence.length; i += limit) out.push(sentence.slice(i, i + limit))
-      continue
-    }
-    if (current && (current + sentence).length > limit) {
-      out.push(current)
-      current = ''
-    }
-    current += sentence
-  }
-
-  if (current) out.push(current)
-  return out
-}
-
-export async function machineTranslate(text: string, from: Lang, to: Lang): Promise<string> {
-  const body = text.trim()
-  if (!body || from === to) return ''
-
-  const pieces: string[] = []
-  for (const piece of sentenceChunks(body)) {
-    try {
-      const res = await fetch(
-        'https://api.mymemory.translated.net/get' +
-          `?q=${encodeURIComponent(piece)}` +
-          `&langpair=${MYMEMORY_CODE[from]}|${MYMEMORY_CODE[to]}`
-      )
-      const data = await res.json()
-      const translated = String(data?.responseData?.translatedText ?? '')
-      // A refusal comes back as prose in the field where the translation should
-      // be; keeping the original piece is better than pasting the complaint in.
-      pieces.push(/MYMEMORY WARNING|QUERY LENGTH LIMIT/i.test(translated) ? piece : translated || piece)
-    } catch {
-      return ''
-    }
-  }
-
-  const joined = pieces.join('')
-  return joined === body ? '' : joined
-}
 
 /**
  * Which language a piece of a client's writing is in, or null for English.
@@ -139,9 +68,8 @@ export function submissionLanguage(
 /**
  * Runs `task` over every item, at most `limit` at a time.
  *
- * The endpoint is free and rate-limited, and one questionnaire can carry a
- * hundred answers. Firing them all at once is what gets a batch throttled and
- * comes back half translated.
+ * Kept for callers that fan work out over many answers without firing them
+ * all at once.
  */
 export async function mapWithLimit<T, R>(
   items: T[],
@@ -159,22 +87,4 @@ export async function mapWithLimit<T, R>(
     })
   )
   return out
-}
-
-/**
- * Every answer a client wrote in another language, rendered in English for the
- * office. Answers already in English — and the stored yes/no literals — are
- * passed through untouched.
- */
-export async function translateAnswersToEnglish(
-  answers: Record<string, AnswerValue>
-): Promise<Record<string, string>> {
-  const entries = Object.entries(answers)
-  const done = await mapWithLimit(entries, 4, async ([id, value]) => {
-    const text = answerText(value)
-    const from = STORED_LITERALS.has(text) ? null : detectLanguage(text)
-    if (!from) return [id, text] as const
-    return [id, (await machineTranslate(text, from, 'en')) || text] as const
-  })
-  return Object.fromEntries(done)
 }

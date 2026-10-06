@@ -3,6 +3,7 @@ import { getSupabase } from '@/lib/supabase'
 import { isLang } from '@/lib/langs'
 import { MODULES_GIVEN_ON_CREATE, moduleSectionCount } from '@/lib/modules'
 import { isAdmin } from '@/lib/adminAuth'
+import { eraseClientFiles, forgetClientTranslations, isClientId } from '@/lib/clientErasure'
 
 
 /**
@@ -274,7 +275,19 @@ export async function DELETE(req: NextRequest) {
   if (!isAdmin(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const id = req.nextUrl.searchParams.get('id')
-  if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
+  if (!id || !isClientId(id)) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
+
+  // Their files first: a row deleted with its files left behind leaves pay
+  // stubs and medical records in storage with nothing pointing at them. If the
+  // files cannot be removed, the client is not deleted, so it can be tried again.
+  try {
+    await eraseClientFiles(id)
+  } catch (err) {
+    console.error('client delete: files not removed —', err instanceof Error ? err.message : err)
+    return NextResponse.json({ error: "The client's files could not be removed, so nothing was deleted. Try again." }, { status: 500 })
+  }
+  // Read before the row goes, since the answers and quotations go with it.
+  await forgetClientTranslations(id).catch(err => console.error('client delete: translations not forgotten —', err))
 
   const { error } = await getSupabase().from('clients').delete().eq('id', id)
   if (error) return NextResponse.json({ error: 'Delete failed' }, { status: 500 })
