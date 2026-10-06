@@ -60,6 +60,13 @@ file with the Opus reading stored for comparison — matrix and spine on Sonnet
 were materially worse, the Wage Order was identical and faster. Move one the
 same way: run it against a client already read and diff the findings.
 
+Staff translation — a client's own words into English for the office — goes to
+Google Cloud Translation when `GOOGLE_TRANSLATE_API_KEY` is set (owner's
+choice, 2026-10-06: free within Google's monthly allowance; `lib/googleTranslate.ts`),
+and then to nothing else. Without the key it uses `TRANSLATION_MODEL`. Never a
+keyless public endpoint such as MyMemory: client text does not go where no
+terms cover it.
+
 ## Cost
 
 David has raised token spend twice. Say the expected scale — agents, rough
