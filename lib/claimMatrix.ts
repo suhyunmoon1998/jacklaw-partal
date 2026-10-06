@@ -101,7 +101,16 @@ const ClaimOutput = z.object({
 })
 type ClaimOutput = z.infer<typeof ClaimOutput>
 
-export type ElementFinding = Omit<z.infer<typeof ElementOutput>, 'state'> & { state: ElementState }
+export type ElementFinding = Omit<z.infer<typeof ElementOutput>, 'state'> & {
+  state: ElementState
+  /**
+   * The proposed Wage Order this element was read under, set in code — never
+   * by the model. Present on every element whose duty comes out of an Order:
+   * the finding is only as good as the proposal, which an attorney has not
+   * confirmed.
+   */
+  restsOnProposedOrder?: string
+}
 export type ClaimFinding = Omit<ClaimOutput, 'standing' | 'elements'> & {
   standing: Standing
   elements: ElementFinding[]
@@ -175,10 +184,12 @@ RULES
    quoted language, and where the passage does not reach the facts, say that instead of
    stretching it. The line marked WHAT IT DOES NOT DECIDE is binding on you.
 
-7. A WAGE ORDER YOU WERE GIVEN IS THE ONE THAT APPLIES. Where an Order's text is quoted to
-   you, the office has settled that it governs this employer and you read the duty out of it.
-   Where an element instead says the Order is not yet settled, that is the 'needs authority'
-   state — do not reason about which Order it would be.
+7. A WAGE ORDER YOU WERE GIVEN IS PROPOSED, NOT DECIDED. Where an Order's text is quoted to
+   you, it is the Order the office's reading PROPOSES for this employer; an attorney has not
+   confirmed it. Read the duty out of its text, and in the reasoning of every element that
+   rests on it, say that it rests on the proposed Order. Do not write that the Order applies,
+   governs or has been settled. Where an element instead says no Order has been proposed, that
+   is the 'needs authority' state — do not reason about which Order it would be.
 
 8. NEVER SUPPLY A FIGURE. Rates, caps, penalty amounts and minimum wages are read off the
    statute or they are not stated. If the section in front of you gives a figure, you may use
@@ -191,7 +202,7 @@ RULES
 You are producing internal work product for a lawyer. Be direct and specific. No hedging
 language, no reassurance, and nothing that reads as advice to a client.`
 
-/** Is this a Wage Order duty whose Order has not been settled for the case? */
+/** Is this a Wage Order duty for a case with no Order proposed? */
 function unsettled(ref: string, wageOrder?: string): boolean {
   return ref.includes('{order}') && !wageOrder
 }
@@ -240,7 +251,11 @@ function brief(claim: Claim, wageOrder?: string): string {
           : e.needsAuthority
       return (
         `- key: ${e.key}\n  must be true: ${e.says}\n  read from: ${
-          waiting ? 'an IWC Wage Order, not yet settled' : cite(ref.law, ref.num)
+          waiting
+            ? 'an IWC Wage Order, none proposed yet'
+            : e.from.includes('{order}')
+              ? `${cite(ref.law, ref.num)} (the Order PROPOSED for this employer; not confirmed by an attorney)`
+              : cite(ref.law, ref.num)
         }` +
         (cases.length ? `\n  decided by: ${cases.map(h => h.id).join(', ')}` : '') +
         (missing ? `\n  AUTHORITY NOT ON FILE: ${missing}` : '')
@@ -324,12 +339,14 @@ export interface MatrixOptions {
   meter?: Meter
 
   /**
-   * The Wage Order settled for this employer, as '5'.
+   * The Wage Order PROPOSED for this employer, as '5'.
    *
-   * Proposed by lib/wageOrderChoice.ts and confirmed by an attorney. Passing
-   * it resolves the Wage Order duties; leaving it out makes them report as
-   * needing authority, which is the honest state of a case whose industry
-   * nobody has classified yet.
+   * Proposed by lib/wageOrderChoice.ts; only an attorney confirms it, and
+   * nothing in the portal records that they have. Passing it lets the Wage
+   * Order duties be read — every element that rests on it is marked so
+   * (`restsOnProposedOrder`), and the model is told it is a proposal. Leaving
+   * it out makes them report as needing authority, which is the honest state
+   * of a case whose industry nobody has classified yet.
    */
   wageOrder?: string
 }
@@ -405,7 +422,13 @@ export async function buildMatrix(
     if (!parsed) throw new Error(`The ${claim.name} matrix came back unreadable.`)
     // The model is told to use the claim's own id; make certain of it, because
     // everything downstream joins on it.
-    return settle({ ...parsed, claimId: claim.id })
+    const settled = settle({ ...parsed, claimId: claim.id })
+    if (!opts.wageOrder) return settled
+    const fromOrder = new Set(claim.elements.filter(e => e.from.includes('{order}')).map(e => e.key))
+    return {
+      ...settled,
+      elements: settled.elements.map(e => (fromOrder.has(e.key) ? { ...e, restsOnProposedOrder: opts.wageOrder } : e)),
+    }
   }
 
   const failed: Matrix['failed'] = []

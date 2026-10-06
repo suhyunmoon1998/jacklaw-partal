@@ -299,6 +299,35 @@ export function vet(q: FollowUp): string[] {
   if (q.inTheirLanguage && !q.inTheirLanguage.label.trim()) {
     problems.push(`${q.id} has an empty translation, so the client would see nothing.`)
   }
+  problems.push(...vetTheirLanguage(q))
+  return problems
+}
+
+/**
+ * The checks the client's own language can carry.
+ *
+ * A client who reads Korean, Spanish or Chinese reads only that version, and
+ * every check above reads only the English. So what is checkable without
+ * reading the language is checked here too: one question, the same choices as
+ * the English, and a way to say "I don't know" in her own words. The rest is
+ * for the reviewer, who is shown the translation put back into English.
+ */
+export function vetTheirLanguage(q: FollowUp): string[] {
+  const t = q.inTheirLanguage
+  if (!t || !t.label.trim()) return []
+  const problems: string[] = []
+  const marks = (t.label.match(/[?？]/g) ?? []).length
+  if (marks > 1) problems.push(`${q.id} asks more than one thing in the client's language.`)
+  const choice = q.type === 'select' || q.type === 'multiselect'
+  if (choice && t.options.length !== q.options.length) {
+    problems.push(`${q.id} offers ${t.options.length} choices in the client's language and ${q.options.length} in English.`)
+  }
+  if (choice && !t.options.some(o => /not sure|don.t know|모르|잘 모르|no estoy segur|no s[eé]|不确定|不知道|不清楚/i.test(o))) {
+    problems.push(`${q.id} gives the client no way to say they do not know, in their own language.`)
+  }
+  if (q.helpText.trim() && !t.helpText.trim()) {
+    problems.push(`${q.id} has help text in English that the client would not see.`)
+  }
   return problems
 }
 

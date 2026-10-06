@@ -66,6 +66,16 @@ export function maskPhone(phone: string): string {
   return digits.length >= 4 ? `•••-•••-${digits.slice(-4)}` : ''
 }
 
+/**
+ * Provider error text, with anything that looks like a phone number masked.
+ * Twilio names the number in some refusals ("The 'To' number +1… is not a
+ * valid phone number"), and these words are kept and shown in Eleanor.
+ */
+export function scrubNumbers(text: string | undefined): string | undefined {
+  if (!text) return text
+  return text.replace(/\+?\d[\d\s().-]{6,}\d/g, match => maskPhone(match) || '[number]')
+}
+
 /** Enough to recognise the address, not enough to write to it. */
 export function maskEmail(email: string): string {
   const value = String(email ?? '').trim()

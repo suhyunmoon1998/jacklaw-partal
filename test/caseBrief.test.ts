@@ -8,7 +8,7 @@ import { BriefInput, buildBrief, readsAsStrong, readsAsWeak, reviewItems } from 
  * here", and "we never ran it" is a different thing entirely.
  */
 const base = (over: Partial<BriefInput> = {}): BriefInput => ({
-  clientName: 'Dayeon Kim',
+  clientName: 'Minji Park',
   caseType: 'Wage & Hour',
   analysis: null,
   findings: [],
@@ -107,7 +107,7 @@ describe('where the strength of a case is actually written', () => {
     const brief = buildBrief(
       base({
         findings: [
-          finding({ adverse: ['client-1789103134380:f069 — she got a meal break every day.'] }),
+          finding({ adverse: ['client-1700000000002:f069 — she got a meal break every day.'] }),
         ],
       })
     )

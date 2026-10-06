@@ -33,7 +33,7 @@ describe('the questionnaire', () => {
   it('counts a section as reviewed once anything in it is answered, as the extraction would', () => {
     const first = answersForReading({}).sections[0]
     const id = first.questions[0].id
-    const q = cat(recordSearch({ ...base, answers: { [id]: 'Dayeon Kim' } }), 'questionnaire')
+    const q = cat(recordSearch({ ...base, answers: { [id]: 'Minji Park' } }), 'questionnaire')
     expect(q.reviewed[0]).toMatchObject({ label: first.title, answered: 1 })
     expect(q.missing.some(m => m.startsWith(`${first.title}:`))).toBe(false)
   })

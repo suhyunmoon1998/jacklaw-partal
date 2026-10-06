@@ -50,7 +50,7 @@ export const maxDuration = 300
 /**
  * Seconds into the run after which no NEW stage of a reading is begun.
  *
- * The longest stage measured is now the spine at 149 seconds (Branden,
+ * The longest stage measured is now the spine at 149 seconds (one client,
  * 2026-09-25), with claims 1 at 131; begun by this mark, either finishes
  * inside the 300-second ceiling. It was 170 when the longest known was 116,
  * which a 149-second spine begun at 169 would have overrun. Past it, whatever
@@ -60,7 +60,7 @@ const START_NO_STAGE_AFTER = 145
 
 /**
  * No extraction is begun after this. Every section is read at once, so a
- * file takes as long as its slowest section — 112 seconds for Jingwen Du's
+ * file takes as long as its slowest section — 112 seconds for one client's
  * 180 facts; 90 for the longest single section measured before that.
  */
 const START_FACTS_BY = 120
@@ -79,9 +79,13 @@ const START_DAMAGES_BY = 150
 
 function authorised(req: NextRequest): boolean {
   // Vercel's scheduler sends the secret as a bearer token. An admin can also
-  // run it by hand from the panel, which is how a backlog gets cleared without
-  // waiting for midnight.
-  if (isAdmin(req)) return true
+  // run it by hand, by opening the address, which is how a backlog gets cleared
+  // without waiting for midnight — but only by opening it: the browser sends
+  // the admin cookie with a link followed from another site too, and a page
+  // anywhere could otherwise start a full paid run. Sec-Fetch-Site is "none"
+  // for an address typed or bookmarked and "same-origin" from the portal.
+  const site = req.headers.get('sec-fetch-site')
+  if (isAdmin(req) && (site === 'none' || site === 'same-origin')) return true
   const secret = process.env.CRON_SECRET
   if (!secret) return false
   const auth = req.headers.get('authorization')
@@ -358,7 +362,7 @@ async function readCase(next: Waiting, began: number): Promise<Outcome> {
     // Handed the reading even for the Wage Order, so the other stages'
     // stamps survive it — see the panel's route.
     const patch = await runStage(stage, entries, stored)
-    stored = await saveStage(next.clientId, fingerprint, { ...stored, ...patch })
+    stored = await saveStage(next.clientId, fingerprint, patch, stored)
     ran.push(stage)
     stage = nextStage(stored)
   }
@@ -467,12 +471,13 @@ export async function GET(req: NextRequest) {
                 : next.needs === 'damages'
                   ? await readDamages(next, began)
                   : await writeRound(next)
-        console.log(`cron follow-ups: ${next.name} — ${outcome.did ?? outcome.reason ?? ''}`)
+        // The id, not the name: these logs are kept by the host.
+        console.log(`cron follow-ups: ${next.clientId} — ${outcome.did ?? outcome.reason ?? ''}`)
         if (outcome.ran) await clearSkip(next.clientId, next.needs)
         else await recordSkip(next.clientId, next.needs, String(outcome.reason ?? 'did not advance'))
         return outcome
       } catch (err) {
-        console.error(`cron follow-ups: ${next.name}:`, err)
+        console.error(`cron follow-ups: ${next.clientId}:`, err instanceof Error ? err.message : err)
         await recordSkip(next.clientId, next.needs, err instanceof Error ? err.message : 'failed')
         throw err
       }

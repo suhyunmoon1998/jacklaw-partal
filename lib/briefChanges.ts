@@ -146,7 +146,7 @@ export function factChanges(before: FactSnapshot[], after: FactSnapshot[]): Fact
 /**
  * Every fact id a claim or a damages category rests on, compared bare.
  *
- * The ledger stores `client-1789103134380:f001`; an element's `facts` carries
+ * The ledger stores `client-1700000000002:f001`; an element's `facts` carries
  * the whole thing and the damages reading writes the bare id into its prose.
  * Both are reduced before anything is matched, because comparing the two forms
  * against each other finds nothing and quietly reports that nothing depends on

@@ -27,7 +27,7 @@
 import { getSupabase } from '@/lib/supabase'
 import { Lang } from '@/lib/langs'
 import { FollowUp, FollowUpSet, FOLLOWUP_MODEL, toQuestion, vetAll } from '@/lib/followUp'
-import { getQuestionSetDetail, replaceQuestions } from '@/lib/questionSets'
+import { GENERATED_SET_NOTE, getQuestionSetDetail, replaceQuestions } from '@/lib/questionSets'
 import { Question } from '@/types'
 
 /** What a stored round looks like to the office. */
@@ -142,7 +142,7 @@ export async function savePlan(input: SavePlanInput): Promise<FollowUpPlan> {
       name_ko: SET_NAME.ko,
       // The description is the admin's internal note and is never sent to a
       // client, so it can say what this actually is.
-      description: `Generated follow-up round, ${new Date().toISOString().slice(0, 10)}. Written against ${input.factCount} facts. Not reviewed.`,
+      description: `${GENERATED_SET_NOTE}, ${new Date().toISOString().slice(0, 10)}. Written against ${input.factCount} facts. Not reviewed.`,
       status: 'active',
       is_default: false,
     })

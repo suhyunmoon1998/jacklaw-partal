@@ -5,7 +5,7 @@
  *
  * What was here before was accurate and unreadable: eleven-pixel type, every
  * claim folded into an accordion, and each supporting fact printed as
- * "client-1789099693038:f068 — …" so that the identifier was longer than the
+ * "client-1700000000001:f068 — …" so that the identifier was longer than the
  * sentence it introduced. The office was being handed a reference table and
  * asked to read it like a memo.
  *
@@ -25,6 +25,8 @@ export type Element = {
   reasoning: string
   wouldSettleIt: string
   facts?: string[]
+  /** The proposed Wage Order this element was read under (lib/claimMatrix.ts). */
+  restsOnProposedOrder?: string
 }
 
 export type Finding = {
@@ -44,7 +46,7 @@ export type Choice = {
 }
 
 /**
- * "client-1789099693038:f068 — he did no work" → "f068 — he did no work".
+ * "client-1700000000001:f068 — he did no work" → "f068 — he did no work".
  *
  * The client id is on every one of them and identical on every one of them,
  * so it carries no information and costs a third of the line.
@@ -201,6 +203,11 @@ function Claim({ f }: { f: Finding }) {
             {elementWords(e.key)}
             <span className="font-normal text-gray-500">— {ELEMENT_WORD[e.state] ?? e.state}</span>
           </p>
+          {e.restsOnProposedOrder && (
+            <p className="mt-1 font-sans text-[11px] text-amber-800 bg-amber-50 inline-block px-1.5 py-0.5 rounded">
+              Rests on the proposed Wage Order {e.restsOnProposedOrder}, which an attorney has not confirmed.
+            </p>
+          )}
           <p className="mt-1.5 text-[15px] leading-[1.75] text-gray-800">{shortRef(e.reasoning)}</p>
           {e.wouldSettleIt && (
             <p className="mt-2 text-[14px] leading-[1.7] text-gray-600 border-l-2 border-gray-200 pl-4">

@@ -192,7 +192,7 @@ export function readsAsWeak(state: string): boolean {
   )
 }
 
-/** `client-1789103134380:f069` → `f069`. The prefix is on every one of them. */
+/** `client-1700000000002:f069` → `f069`. The prefix is on every one of them. */
 export function shortFact(s: string): string {
   return s.replace(/\bclient-\d+:/g, '')
 }

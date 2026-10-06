@@ -9,7 +9,7 @@ import { methodFor, missingInformation } from '@/lib/missingInformation'
  * missing, why it matters, who holds it and how to get it.
  */
 const brief = (over: Partial<Brief> = {}): Brief => ({
-  clientName: 'Dayeon Kim',
+  clientName: 'Minji Park',
   caseType: 'Wage & Hour',
   factCount: 204,
   readOn: null,

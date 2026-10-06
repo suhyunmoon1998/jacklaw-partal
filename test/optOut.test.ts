@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { readsAs } from '@/lib/optOut'
+import { readReply, readsAs } from '@/lib/optOut'
 
 /**
  * The opt-out flag this endpoint sets is the only thing standing between a
@@ -56,3 +56,35 @@ describe('reading what a client meant', () => {
     }
   })
 })
+
+describe('words inside other words, and talk about work', () => {
+  it('does not hear "end" in send, "pare" in prepare or "quit" in quite', () => {
+    // Each of these silently muted a client who never asked to be.
+    for (const s of ['Please send me the link', 'I can prepare the papers', 'I am quite busy today', 'the weekend shift']) {
+      expect(readsAs(s)).toBeNull()
+    }
+  })
+
+  it('never reads an opt-in out of a question that happens to say start or continue', () => {
+    // These cleared the opt-out of someone who had asked to be left alone.
+    for (const s of ['When does my trial start?', 'quiero continuar con el caso', 'Can we start the case?']) {
+      expect(readsAs(s)).toBeNull()
+    }
+  })
+
+  it('does not take a worker talking about their job for an opt-out, but hands it to a person', () => {
+    for (const s of ['I quit my job last week', 'they told me to stop working at 5', 'cancel my appointment please?']) {
+      expect(readReply(s)).toEqual({ meaning: null, maybeStop: true })
+    }
+    // "그만두다" is to quit a job; not about texts at all.
+    expect(readReply('회사를 그만뒀어요')).toEqual({ meaning: null, maybeStop: false })
+    expect(readReply('公司取消了我的班')).toEqual({ meaning: null, maybeStop: true })
+  })
+
+  it('still hears a short message that is a stop', () => {
+    for (const s of ['stop it', 'STOP NOW', 'Stop please!!', 'quit it', '그만해요', '请停止', 'STOP ALL']) {
+      expect(readsAs(s)).toBe('stop')
+    }
+  })
+})
+

@@ -16,6 +16,7 @@ vi.mock('@/lib/claimMatrix', async importOriginal => ({
 
 import { claimsFor, runStage, stampsNow } from '@/lib/caseReading'
 import { StoredReading, staleStages } from '@/lib/caseReadingShape'
+import { mergeReading } from '@/lib/caseReadingStore'
 import { LedgerEntry } from '@/lib/factLedger'
 
 const fact: LedgerEntry = {
@@ -28,7 +29,7 @@ const fact: LedgerEntry = {
 
 describe('reading the Wage Order again', () => {
   it('keeps every other stage current, with what it took and cost', async () => {
-    // On DAYEON KIM's file a re-read Order came back the same and the
+    // On one client's file a re-read Order came back the same and the
     // chronology — untouched, and current a minute before — showed as stale,
     // because the stage was handed {} and its patch carried no other stamp.
     const entries = [fact]
@@ -39,7 +40,7 @@ describe('reading the Wage Order again', () => {
     expect(staleStages(read, stampsNow(entries, read))).not.toContain('spine')
 
     const patch = await runStage('wage order', entries, read)
-    const merged = { ...read, ...patch }
+    const merged = mergeReading(read, patch)
 
     expect(staleStages(merged, stampsNow(entries, merged))).not.toContain('spine')
     expect(merged.took?.spine).toBe(116)
@@ -49,7 +50,7 @@ describe('reading the Wage Order again', () => {
 })
 
 describe('a claims stage that did not read every claim', () => {
-  // On DAYEON KIM's file the account ran out of credit mid-reading. All five
+  // On one client's file the account ran out of credit mid-reading. All five
   // claims of claims 2 failed, and the stage was stored as read, empty, and
   // stamped current — so the panel called it done and the night skipped it.
   const entries = [fact]
@@ -68,7 +69,7 @@ describe('a claims stage that did not read every claim', () => {
       failed: ids.slice(1).map(claimId => ({ claimId, why: outOfCredit })),
     }
     const patch = await runStage('claims 2', entries, before)
-    const merged = { ...before, ...patch }
+    const merged = mergeReading(before, patch)
     expect(merged.claims2).toHaveLength(1)
     expect(merged.failed).toHaveLength(ids.length - 1)
     expect(staleStages(merged, stampsNow(entries, merged))).toContain('claims 2')
@@ -80,8 +81,21 @@ describe('a claims stage that did not read every claim', () => {
       failed: [],
     }
     const earlier = { ...before, failed: [{ claimId: ids[0], why: outOfCredit }, { claimId: 'meal-periods', why: 'other stage' }] }
-    const merged = { ...earlier, ...(await runStage('claims 2', entries, earlier)) }
+    const merged = mergeReading(earlier, await runStage('claims 2', entries, earlier))
     expect(merged.failed).toEqual([{ claimId: 'meal-periods', why: 'other stage' }])
     expect(staleStages(merged, stampsNow(entries, merged))).not.toContain('claims 2')
+  })
+})
+
+describe('two stages stored at the same time', () => {
+  it('keeps the one stored meanwhile, rather than the copy the other began with', () => {
+    // The panel and the night can overlap. The stage that finishes second must
+    // not put back what the first one replaced.
+    const began: StoredReading = { spine: { events: ['old'] }, stamps: { spine: 'old' } }
+    const onFileNow: StoredReading = { spine: { events: ['new'] }, stamps: { spine: 'new' } }
+    const patch: StoredReading = { claims1: [], stamps: { 'claims 1': 'c1' } }
+    const merged = mergeReading(onFileNow, patch, began)
+    expect(merged.spine).toEqual({ events: ['new'] })
+    expect(merged.stamps).toEqual({ spine: 'new', 'claims 1': 'c1' })
   })
 })

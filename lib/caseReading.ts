@@ -89,13 +89,15 @@ export function stampFor(entries: LedgerEntry[], stage: Stage, stored: StoredRea
     h.update(MATRIX_MODEL)
     // FEHA duties are not read out of a Wage Order, so a different Order
     // leaves the FEHA claims exactly as they were read.
-    if (stage !== 'claims 3') h.update(settledOrder(stored) ?? 'no order settled')
+    if (stage !== 'claims 3') // The fallback's wording is part of every stamp: left as it was, so no reading
+    // goes stale (and is paid for again) because a word changed.
+    h.update(proposedOrder(stored) ?? 'no order settled')
     // What the claims were read against, not only who read them. A claim
     // re-pointed at a provision now on file, or a holding added to an
     // element, reads differently; before this the stamp could not tell, and
     // a reading taken without Augustus stayed "current" after Augustus was
     // put on file.
-    h.update(claimInputs(claimsFor(stage), stage === 'claims 3' ? undefined : settledOrder(stored)))
+    h.update(claimInputs(claimsFor(stage), stage === 'claims 3' ? undefined : proposedOrder(stored)))
   }
   return h.digest('hex').slice(0, 32)
 }
@@ -197,14 +199,18 @@ export function fehaRaised(entries: LedgerEntry[]): { raised: boolean; because: 
 }
 
 /**
- * The Order the claims are read under, or undefined.
+ * The Order the claims are read under — the PROPOSED one — or undefined.
+ *
+ * A proposal, never a decision: only an attorney confirms which Order governs,
+ * and nothing in the portal records that they have. So the matrix is told it
+ * is a proposal and marks every element that rests on it.
  *
  * Undefined rather than a default. A guess here would silently change what
  * duty the employer owed, and the matrix reports the element as needing
  * authority instead — which is the true state of a case whose industry nobody
  * has classified.
  */
-export function settledOrder(stored: StoredReading): string | undefined {
+export function proposedOrder(stored: StoredReading): string | undefined {
   const choice = stored.wageOrder as WageOrderChoice | undefined
   return choice?.proposal?.order || undefined
 }
@@ -224,16 +230,16 @@ export async function runStage(
 ): Promise<StoredReading> {
   const began = Date.now()
   const meter = new Meter()
+  // Only this stage's own bookkeeping. The other stages' is on file, and the
+  // store merges key by key (mergeReading): carrying the caller's copy here
+  // would let a stage that ran alongside this one be written back over.
   const took = (patch: StoredReading): StoredReading => ({
     ...patch,
-    took: { ...(stored.took ?? {}), [stage]: Math.round((Date.now() - began) / 1000) },
-    spent: { ...(stored.spent ?? {}), [stage]: meter.spent },
+    took: { [stage]: Math.round((Date.now() - began) / 1000) },
+    spent: { [stage]: meter.spent },
     // Stamped against the reading INCLUDING this stage's own result, so the
     // Wage Order a claims stage was read under is the one in the patch.
-    stamps: {
-      ...(stored.stamps ?? {}),
-      [stage]: stampFor(entries, stage, { ...stored, ...patch }),
-    },
+    stamps: { [stage]: stampFor(entries, stage, { ...stored, ...patch }) },
   })
 
   if (stage === 'wage order') {
@@ -250,12 +256,12 @@ export async function runStage(
           : 'No FEHA claims are defined.',
       })
     }
-    const matrix = await buildMatrix(entries, FEHA_CLAIMS, { wageOrder: settledOrder(stored), meter })
+    const matrix = await buildMatrix(entries, FEHA_CLAIMS, { wageOrder: proposedOrder(stored), meter })
     return claimsRead(stage, { claims3: matrix.findings, fehaSkipped: undefined }, matrix)
   }
 
   if (stage === 'claims 1' || stage === 'claims 2') {
-    const matrix = await buildMatrix(entries, claimsFor(stage), { wageOrder: settledOrder(stored), meter })
+    const matrix = await buildMatrix(entries, claimsFor(stage), { wageOrder: proposedOrder(stored), meter })
     return claimsRead(stage, stage === 'claims 1' ? { claims1: matrix.findings } : { claims2: matrix.findings }, matrix)
   }
 
@@ -264,7 +270,7 @@ export async function runStage(
   /**
    * A claims stage, as far as it got.
    *
-   * On DAYEON KIM's file the account ran out of credit mid-reading: all five
+   * On one client's file the account ran out of credit mid-reading: all five
    * claims of a stage failed, and the stage was stored as read, empty, and
    * stamped current. Nothing shows the failures, so the panel called it done
    * and the night would never have read it again. Now a stage that read

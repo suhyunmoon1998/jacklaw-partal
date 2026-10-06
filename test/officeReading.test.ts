@@ -94,7 +94,7 @@ describe('an answer the client took back', () => {
   })
 
   it('does not call an answer "taken back" when the questionnaire grew a gate above it', () => {
-    // Roberto Paco Garcia answered "when did you start?" months before Module 1
+    // One client answered "when did you start?" months before Module 1
     // put "do you know the exact date?" in front of it. He withdrew nothing.
     const answeredBeforeTheGate: Answers = { still_employed: 'yes', start_date: 'March 2022' }
     const withheld = withheldAnswers(QUESTIONNAIRE_SECTIONS, answeredBeforeTheGate)

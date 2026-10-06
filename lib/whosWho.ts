@@ -4,7 +4,7 @@
  * The corpus asks for this in three places at once: people are extracted when
  * a new answer arrives (sec. 13.2), the map is updated with the chronology and
  * the claim matrix (sec. 13.5), and people changes are part of what a
- * submission returns (sec. 17.D). None of it existed. On Dayeon Kim's file the
+ * submission returns (sec. 17.D). None of it existed. On one client's file the
  * manager who ordered the tip work and the servers who later rotated it — a
  * decision-maker and a room of similarly-situated employees — had nowhere to
  * live, and a case is not developed from facts alone.
@@ -19,7 +19,7 @@
  * nicknames and descriptions are kept as they are. Folding them together would
  * manufacture a single witness out of three descriptions and put a name on a
  * deposition notice that nobody ever gave. Only spellings of the same string
- * are folded — DAYEON KIM into Dayeon Kim — and possible identity is left as a
+ * are folded — MINJI PARK into Minji Park — and possible identity is left as a
  * question for the office.
  */
 
@@ -97,14 +97,14 @@ export function alignmentOf(name: string, clientName: string | string[]): Alignm
 /**
  * Whether this might be the client under another name.
  *
- * Dayeon Kim worked as "Dani Kim", and that string is in the ledger as an
+ * One client worked as "Jenny Park", and that string is in the ledger as an
  * actor like any other — so she arrived on her own witness map. A shared
  * surname is not proof they are the same person, and dropping the row would
  * hide a real witness who happens to be a relative. So it is kept, and the
  * next step says to check.
  */
 export function maybeTheClient(name: string, clientName: string | string[]): boolean {
-  // "manager Kim (김매니져)" shares only a surname, and the record calls them by
+  // "manager Park (박매니져)" shares only a surname, and the record calls them by
   // a role over her. The ledger writes the client by name or as "client",
   // never as somebody's manager or boss.
   if (COMPANY.test(name)) return false
@@ -122,9 +122,9 @@ const OTHER_NAME = /\b(other name|another name|also known as|a\.?k\.?a\.?|goes b
 /**
  * Names the record itself says are hers.
  *
- * DAYEON KIM's f003 reads "The other name the client used at the job was Dani
- * Kim", with both names as its actors — and the brief, handed only her own
- * name, put Dani Kim on the witness map to be checked. That is the record's
+ * One client's f003 reads "The other name the client used at the job was Jenny
+ * Park", with both names as its actors — and the brief, handed only her own
+ * name, put Jenny Park on the witness map to be checked. That is the record's
  * statement of who she is, not a guess from a surname, so it is taken: the
  * fact has to say another name was hers, name the client among its actors,
  * and carry the other name in its own words.

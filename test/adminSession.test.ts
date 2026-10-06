@@ -69,6 +69,15 @@ describe('checking the password itself', () => {
     expect(correctAdminPassword('')).toBe(false)
   })
 
+  it('takes whatever password the office set, short or long, while the portal is tested', () => {
+    // Owner, 2026-10-06: no minimum length for now.
+    process.env.ADMIN_PASSWORD = 'synthetic'
+    expect(correctAdminPassword('synthetic')).toBe(true)
+    expect(correctAdminPassword('synthetiC')).toBe(false)
+    process.env.ADMIN_PASSWORD = 'x'.repeat(40)
+    expect(correctAdminPassword('x'.repeat(40))).toBe(true)
+  })
+
   it('lets nobody in when no password is configured', () => {
     // An unset variable must not become an open door.
     expect(correctAdminPassword('')).toBe(false)

@@ -16,7 +16,7 @@ import { bareFactId, blocked, citationsIn, factIdsIn, readsAsEstimated, releaseT
  * stands in for it.
  */
 const brief = (over: Partial<Brief> = {}): Brief => ({
-  clientName: 'Dayeon Kim',
+  clientName: 'Minji Park',
   caseType: 'Wage & Hour',
   factCount: 204,
   readOn: null,
@@ -55,7 +55,7 @@ const issue = (over: Record<string, unknown> = {}) =>
 /**
  * The ledger as it actually is.
  *
- * case_facts stores `client-1789103134380:f001`, and the readings cite the
+ * case_facts stores `client-1700000000002:f001`, and the readings cite the
  * same fact both ways — whole in an element's `facts`, bare in prose. This
  * shipped once comparing a bare id against a prefixed set, which reported
  * every one of a real client's 204 facts as missing. The fixture carries the
@@ -63,9 +63,9 @@ const issue = (over: Record<string, unknown> = {}) =>
  */
 const LEDGER = {
   factIds: new Set([
-    'client-1789103134380:f068',
-    'client-1789103134380:f136',
-    'client-1789103134380:f163',
+    'client-1700000000002:f068',
+    'client-1700000000002:f136',
+    'client-1700000000002:f163',
   ]),
 }
 const NO_LEDGER = { factIds: new Set<string>() }
@@ -130,7 +130,7 @@ describe('a fact id the ledger does not carry', () => {
 
 describe('contrary evidence', () => {
   it('blocks when an adverse fact did not survive into the document', () => {
-    // Dayeon Kim's own answer: she describes tip work after clocking out and
+    // The client's own answer: she describes tip work after clocking out and
     // separately answers that she did no work after her end time. A document
     // that drops the second is a document that will surprise somebody.
     const adverse = 'She answered that she did no work after her stated end time.'
@@ -164,9 +164,9 @@ describe('contrary evidence', () => {
   it('finds an adverse fact the brief carried with its client prefix stripped', () => {
     // The shape of a real reading: the adverse line cites a prefixed id, and
     // buildBrief writes it into the weaknesses without the prefix.
-    const adverse = 'client-1789103134380:f069 — she received a meal break on every day of five hours or more.'
+    const adverse = 'client-1700000000002:f069 — she received a meal break on every day of five hours or more.'
     const assembled = buildBrief({
-      clientName: 'Dayeon Kim',
+      clientName: 'Minji Park',
       caseType: 'Wage & Hour',
       analysis: null,
       findings: [{ claimId: 'meal-periods', standing: 'gaps to close', elements: [], adverse: [adverse], defense: '' }],
@@ -194,7 +194,7 @@ describe('an estimate written as a certainty', () => {
   })
 
   it('accepts the shapes a real reading actually writes', () => {
-    // All four are from Dayeon Kim's brief. Every one was objected to by the
+    // All four are from one client's brief. Every one was objected to by the
     // first version of this, which knew hedge words and a dollar range and
     // nothing else — so the office was told four times that its own carefully
     // qualified arithmetic was unsafe, which is how a check gets ignored.
@@ -258,11 +258,11 @@ describe('a document this test has no objection to', () => {
 
 describe('reading fact ids out of prose', () => {
   it('takes them with or without the client prefix', () => {
-    expect(factIdsIn('client-1789103134380:f068 and f136')).toEqual(['f068', 'f136'])
+    expect(factIdsIn('client-1700000000002:f068 and f136')).toEqual(['f068', 'f136'])
   })
 
   it('reduces an id to the part that identifies the fact', () => {
-    expect(bareFactId('client-1789103134380:f068')).toBe('f068')
+    expect(bareFactId('client-1700000000002:f068')).toBe('f068')
     expect(bareFactId('f068')).toBe('f068')
   })
 })
@@ -289,7 +289,7 @@ describe('the two forms a fact id is written in', () => {
                 state: 'supported',
                 reasoning: '',
                 wouldSettleIt: '',
-                facts: ['client-1789103134380:f068'],
+                facts: ['client-1700000000002:f068'],
               },
             ],
             adverse: [],
@@ -305,7 +305,7 @@ describe('the two forms a fact id is written in', () => {
 
   it('still catches one that is genuinely absent, whichever form it is in', () => {
     const problems = releaseTest(
-      brief({ overview: { summary: 'See client-1789103134380:f999.', baseline: [] }, questions: [{ text: 'q' }] }),
+      brief({ overview: { summary: 'See client-1700000000002:f999.', baseline: [] }, questions: [{ text: 'q' }] }),
       LEDGER
     )
     expect(problems.some(p => p.rule === 'fact not in ledger' && p.what.includes('f999'))).toBe(true)

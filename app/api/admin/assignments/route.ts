@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
 import { isAdmin } from '@/lib/adminAuth'
-import { DEFAULT_SET_ID, listAssignments } from '@/lib/questionSets'
+import { DEFAULT_SET_ID, isGeneratedQuestionSet, listAssignments } from '@/lib/questionSets'
 
 // GET /api/admin/assignments?clientId=xxx — every set assigned to one client
 export async function GET(req: NextRequest) {
@@ -37,6 +37,16 @@ export async function POST(req: NextRequest) {
     .eq('id', questionSetId)
     .maybeSingle()
   if (!set) return NextResponse.json({ error: 'Question set not found.' }, { status: 404 })
+
+  // A follow-up round is one client's, and it goes out from that client's
+  // Follow-ups tab after somebody has read it — never from here, where it
+  // could reach another client unread.
+  if (await isGeneratedQuestionSet(questionSetId)) {
+    return NextResponse.json(
+      { error: "These questions were written for one client's follow-up round. They go out from that client's Follow-ups tab, after review, and cannot be assigned to anyone else." },
+      { status: 409 }
+    )
+  }
 
   const { data, error } = await supabase
     .from('client_question_set_assignments')

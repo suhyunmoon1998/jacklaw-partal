@@ -262,3 +262,45 @@ describe('measuring the question and not the run-up to it', () => {
     )
   })
 })
+
+describe('what the client actually reads, when it is not English', () => {
+  const choice = (over: Partial<FollowUp> = {}) =>
+    q({
+      type: 'select',
+      label: 'How often did this happen?',
+      options: ['Every shift', 'Some shifts', 'I am not sure'],
+      ...over,
+    })
+
+  it('passes a translation that says the same thing', () => {
+    const ok = choice({
+      inTheirLanguage: { label: '이런 일이 얼마나 자주 있었나요?', helpText: '', options: ['매번', '가끔', '잘 모르겠어요'] },
+    })
+    expect(vet(ok)).toEqual([])
+  })
+
+  it('catches a translation with a choice the English does not have', () => {
+    const extra = choice({
+      inTheirLanguage: { label: '이런 일이 얼마나 자주 있었나요?', helpText: '', options: ['매번', '가끔', '없음', '잘 모르겠어요'] },
+    })
+    expect(vet(extra).join(' ')).toContain('4 choices in the client')
+  })
+
+  it('catches a translation with no way to say "I don\'t know" in her own words', () => {
+    const forced = choice({
+      inTheirLanguage: { label: '¿Con qué frecuencia pasó esto?', helpText: '', options: ['Cada turno', 'Algunos turnos', 'Nunca'] },
+    })
+    expect(vet(forced).join(' ')).toContain('in their own language')
+  })
+
+  it('catches two questions in one, in the client\'s language', () => {
+    const two = q({ inTheirLanguage: { label: '几点开始？几点结束？', helpText: '', options: [] } })
+    expect(vet(two).join(' ')).toContain("more than one thing in the client's language")
+  })
+
+  it('catches help text the client would never see', () => {
+    const missing = q({ helpText: 'Count the days you remember.', inTheirLanguage: { label: '¿Qué hacía antes de marcar su entrada?', helpText: '', options: [] } })
+    expect(vet(missing).join(' ')).toContain('help text in English')
+  })
+})
+

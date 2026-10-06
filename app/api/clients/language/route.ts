@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'clientId and a known lang are required.' }, { status: 400 })
   }
 
-  const denied = denyClient(req, clientId)
+  const denied = await denyClient(req, clientId)
   if (denied) return denied
 
   const { error } = await getSupabase()

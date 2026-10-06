@@ -151,7 +151,7 @@ describe('an order that would otherwise be a trap', () => {
 
 describe('progress carried over from an older questionnaire', () => {
   it('does not read past 100%', () => {
-    // Flora Sanchez-Adame and Roberto Paco Garcia hold twenty section indices
+    // Two clients hold twenty section indices
     // from the version before Module 1 cut it to ten.
     const legacy = progress({ completedSections: Array.from({ length: 20 }, (_, i) => i) })
     const views = stepViews({ module1: sent() }, { module1: legacy })
@@ -210,7 +210,7 @@ describe('a step sent a second time', () => {
 })
 
 describe('a client who answered everything and never pressed Submit', () => {
-  // Ester, since 30 July: nineteen section indices from the old questionnaire
+  // One client, since 30 July: nineteen section indices from the old questionnaire
   // and submitted still false.
   const views = stepViews(
     { module1: sent() },

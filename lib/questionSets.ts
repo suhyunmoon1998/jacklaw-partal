@@ -222,6 +222,33 @@ export function defaultQuestionSet(): QuestionSet {
   }
 }
 
+/**
+ * How the note on a question set written for one client's follow-up round
+ * begins (lib/followUpStore.ts writes it).
+ */
+export const GENERATED_SET_NOTE = 'Generated follow-up round'
+
+/**
+ * Whether a question set was written for one client's follow-up round.
+ *
+ * Such a set is that client's: its questions quote her answers back to her
+ * ("Earlier you said…") and name her managers. It goes out from her Follow-ups
+ * tab, after a person has read it, and from nowhere else. It used to be saved
+ * as an ordinary active set, so it sat in every client's Assign list under the
+ * same name as every other round — one click away from a stranger, unread.
+ *
+ * Fails closed: if the rounds cannot be read, a set is treated as generated.
+ */
+export async function isGeneratedQuestionSet(setId: string): Promise<boolean> {
+  const supabase = getSupabase()
+  const [{ data: set, error: setErr }, { data: plan, error: planErr }] = await Promise.all([
+    supabase.from('question_sets').select('description').eq('id', setId).maybeSingle(),
+    supabase.from('follow_up_plans').select('id').eq('question_set_id', setId).limit(1),
+  ])
+  if (setErr || planErr) return true
+  return String(set?.description ?? '').startsWith(GENERATED_SET_NOTE) || (plan ?? []).length > 0
+}
+
 export async function listQuestionSets(includeArchived = true): Promise<QuestionSet[]> {
   const supabase = getSupabase()
 
@@ -240,7 +267,15 @@ export async function listQuestionSets(includeArchived = true): Promise<Question
     return acc
   }, {})
 
-  return (sets ?? []).map(row => toQuestionSet(row as SetRow, counts[row.id] ?? 0))
+  // A round written for one client is not part of the library anyone can
+  // assign from (isGeneratedQuestionSet). Its own note marks it even if its
+  // plan row could not be read.
+  const { data: plans } = await supabase.from('follow_up_plans').select('question_set_id').range(0, 99_999)
+  const generated = new Set((plans ?? []).map(p => String(p.question_set_id)))
+
+  return (sets ?? [])
+    .filter(row => !generated.has(String(row.id)) && !String(row.description ?? '').startsWith(GENERATED_SET_NOTE))
+    .map(row => toQuestionSet(row as SetRow, counts[row.id] ?? 0))
 }
 
 export async function getQuestionSetDetail(id: string): Promise<QuestionSetDetail | null> {

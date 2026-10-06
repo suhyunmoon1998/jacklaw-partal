@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { alsoOn } from '@/lib/samePerson'
 
-const names: Record<string, string> = { f1: 'Chungdam La.inc', f2: 'Tour anglese. inc', f3: 'Guhara. inc' }
+const names: Record<string, string> = { f1: 'Bluebird Diner, Inc.', f2: 'Seaside Tours Inc', f3: 'Maple Kitchen, Inc.' }
 const nameOf = (id: string) => names[id] ?? ''
 
 describe('telling one person on two cases from two people', () => {
@@ -10,20 +10,20 @@ describe('telling one person on two cases from two people', () => {
     // and phone read as a duplicate record — and one of them was a live case.
     const out = alsoOn(
       [
-        { id: 'a', phone: '4243332514', caseFolderId: 'f1' },
-        { id: 'b', phone: '(424) 333-2514', caseFolderId: 'f2' },
+        { id: 'a', phone: '5550102514', caseFolderId: 'f1' },
+        { id: 'b', phone: '(555) 010-2514', caseFolderId: 'f2' },
       ],
       nameOf
     )
-    expect(out.get('a')).toEqual(['Tour anglese. inc'])
-    expect(out.get('b')).toEqual(['Chungdam La.inc'])
+    expect(out.get('a')).toEqual(['Seaside Tours Inc'])
+    expect(out.get('b')).toEqual(['Bluebird Diner, Inc.'])
   })
 
   it('says nothing about somebody on one case', () => {
     const out = alsoOn(
       [
-        { id: 'a', phone: '4243332514', caseFolderId: 'f1' },
-        { id: 'b', phone: '2135774446', caseFolderId: 'f2' },
+        { id: 'a', phone: '5550102514', caseFolderId: 'f1' },
+        { id: 'b', phone: '5550104446', caseFolderId: 'f2' },
       ],
       nameOf
     )
@@ -35,8 +35,8 @@ describe('telling one person on two cases from two people', () => {
     // on this same case" would be noise, and would hide the duplicate.
     const out = alsoOn(
       [
-        { id: 'a', phone: '4243332514', caseFolderId: 'f1' },
-        { id: 'b', phone: '4243332514', caseFolderId: 'f1' },
+        { id: 'a', phone: '5550102514', caseFolderId: 'f1' },
+        { id: 'b', phone: '5550102514', caseFolderId: 'f1' },
       ],
       nameOf
     )
@@ -61,13 +61,13 @@ describe('telling one person on two cases from two people', () => {
   it('lists every other case when there are more than two', () => {
     const out = alsoOn(
       [
-        { id: 'a', phone: '4243332514', caseFolderId: 'f1' },
-        { id: 'b', phone: '4243332514', caseFolderId: 'f2' },
-        { id: 'c', phone: '4243332514', caseFolderId: 'f3' },
+        { id: 'a', phone: '5550102514', caseFolderId: 'f1' },
+        { id: 'b', phone: '5550102514', caseFolderId: 'f2' },
+        { id: 'c', phone: '5550102514', caseFolderId: 'f3' },
       ],
       nameOf
     )
-    expect(out.get('a')?.sort()).toEqual(['Guhara. inc', 'Tour anglese. inc'])
+    expect(out.get('a')?.sort()).toEqual(['Maple Kitchen, Inc.', 'Seaside Tours Inc'])
   })
 
   it('tells an unassigned row which case the person is already on, and not the reverse', () => {
@@ -75,12 +75,12 @@ describe('telling one person on two cases from two people', () => {
     // is worth knowing about. Useless the other: "also on nothing" is noise.
     const out = alsoOn(
       [
-        { id: 'onACase', phone: '4243332514', caseFolderId: 'f1' },
-        { id: 'unassigned', phone: '4243332514', caseFolderId: null },
+        { id: 'onACase', phone: '5550102514', caseFolderId: 'f1' },
+        { id: 'unassigned', phone: '5550102514', caseFolderId: null },
       ],
       nameOf
     )
-    expect(out.get('unassigned')).toEqual(['Chungdam La.inc'])
+    expect(out.get('unassigned')).toEqual(['Bluebird Diner, Inc.'])
     expect(out.has('onACase')).toBe(false)
   })
 })

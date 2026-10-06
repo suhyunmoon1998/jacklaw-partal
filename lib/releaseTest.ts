@@ -123,7 +123,7 @@ export function citationsIn(text: string): string[] {
 /**
  * A fact id with the client off the front.
  *
- * The ledger stores ids as `client-1789103134380:f001` and the readings cite
+ * The ledger stores ids as `client-1700000000002:f001` and the readings cite
  * them both ways — whole in an element's `facts`, bare in prose. The client id
  * is identical on every one of them and carries nothing, so both sides are
  * reduced to the part that identifies the fact before they are compared.
@@ -305,7 +305,7 @@ export function releaseTest(
   //
   // Compared with the client prefix stripped from both sides. buildBrief
   // writes each adverse fact into the weaknesses through shortFact, so
-  // `client-1789103134380:f069` arrives as `f069`; matching the raw text
+  // `client-1700000000002:f069` arrives as `f069`; matching the raw text
   // against that found none of them, and a real file was marked "not to be
   // sent out" for 91 adverse facts that were all on the page.
   for (const f of brief.claims) {

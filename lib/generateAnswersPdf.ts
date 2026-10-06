@@ -57,7 +57,7 @@ function formatAnswer(val: AnswerValue | undefined, question: Question): string 
  * printed as they were given — which is what View Answers shows. The modules'
  * reading (their branches, their retractions) belongs to the default
  * questionnaire and knows none of a set's question ids: run over a set, it
- * filed nothing, and Jingwen Du's "Vehicle, DOT & July 31 Termination" printed
+ * filed nothing, and one client's follow-up set printed
  * "No answers submitted yet." over thirty-five answers.
  */
 export function answersToPrint(

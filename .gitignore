@@ -19,3 +19,7 @@ npm-debug.log*
 
 # Scratch bundles from validating a layer against a real ledger.
 .*.mjs
+
+# Claude Code settings are per machine and have held keys; never commit them.
+.claude/settings.local.json
+.claude/settings.json

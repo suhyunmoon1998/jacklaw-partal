@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { timingSafeEqual } from 'crypto'
 import { getSupabase } from '@/lib/supabase'
+import { optedOutNumbers } from '@/lib/numberOptOut'
+import { phoneKey } from '@/lib/phoneNumber'
 import { ModuleId } from '@/lib/modules'
 import {
   Chasing,
@@ -160,6 +162,8 @@ export async function GET(req: NextRequest) {
    * office would rather be plainly in English than confidently wrong — and so
    * is the extra query it needed.
    */
+  // A number that opted out on any of its rows is opted out on all of them.
+  const stoppedNumbers = optedOutNumbers(clients ?? [])
   const targets = new Map<string, ReminderTarget>(
     (clients ?? []).map(c => [
       c.id,
@@ -168,7 +172,7 @@ export async function GET(req: NextRequest) {
         name: c.name ?? '',
         phone: c.phone ?? '',
         lang: resolveLang(c.portal_lang),
-        optedOut: Boolean(c.sms_opt_out),
+        optedOut: Boolean(c.sms_opt_out) || stoppedNumbers.has(phoneKey(String(c.phone ?? ''))),
       },
     ])
   )

@@ -123,7 +123,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
     // it: a re-read because its model moved must not throw away ten claims and
     // a chronology that are still current. If the Order it settles differs,
     // the claims stages go stale on their own stamp and are run again.
-    const merged = await saveStage(params.id, fingerprint, { ...stored, ...patch })
+    const merged = await saveStage(params.id, fingerprint, patch, stored)
     const now = stampsNow(entries, merged)
     const problems = merged.wageOrder ? checkChoice(merged.wageOrder as WageOrderChoice) : []
     return NextResponse.json({

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
-import { eleanorServiceSecret, isEleanorService, maskEmail, maskPhone, sendFingerprint } from '@/lib/eleanorService'
+import { eleanorServiceSecret, isEleanorService, maskEmail, maskPhone, scrubNumbers, sendFingerprint } from '@/lib/eleanorService'
 import { asModule, performModuleSend, planModuleSend } from '@/lib/moduleSend'
 import { deliverReminder, planManualReminder, publicOrigin, reminderPreview } from '@/lib/reminderSend'
 import { Chasing } from '@/lib/reminderSchedule'
@@ -30,6 +30,16 @@ export const dynamic = 'force-dynamic'
  */
 
 const noStore = { 'Cache-Control': 'no-store' }
+
+/** Outside 8 am to 9 pm in Los Angeles: nothing is sent, and Eleanor is told so. */
+const quietHours = (kind: 'module' | 'reminder') => ({
+  status: 409,
+  body: {
+    ok: false,
+    reason: 'QuietHours',
+    explanation: `It is outside 8 am to 9 pm in Los Angeles, so the ${kind === 'module' ? 'invitation' : 'reminder'} was not sent. Ask for it again in the morning.`,
+  },
+})
 const reply = (body: Record<string, unknown>, status = 200) => NextResponse.json(body, { status, headers: noStore })
 
 const clientIdOf = (value: unknown) => (typeof value === 'string' && /^[A-Za-z0-9_-]{1,100}$/.test(value.trim()) ? value.trim() : null)
@@ -132,6 +142,9 @@ async function prepare(request: Request, secret: string): Promise<Preview> {
         alreadySentAt: earlier?.sent_at ?? null,
       },
       run: async () => {
+        // A text from the office at 11:30 at night is not one a client should
+        // get because an approval was tapped late. The same hours as updates.
+        if (!isUpdateSendingHour(new Date())) return quietHours('module')
         const outcome = await performModuleSend(plan, 'eleanor')
         const body = outcome.body
         // Never hand the full address or number back.
@@ -142,9 +155,9 @@ async function prepare(request: Request, secret: string): Promise<Preview> {
             recorded: body.recorded === true,
             textSent: typeof body.sms === 'string' && body.sms.length > 0,
             emailSent: typeof body.email === 'string' && body.email.length > 0,
-            error: typeof body.error === 'string' ? body.error : undefined,
-            textError: typeof body.smsError === 'string' ? body.smsError : undefined,
-            emailError: typeof body.emailError === 'string' ? body.emailError : undefined,
+            error: typeof body.error === 'string' ? scrubNumbers(body.error) : undefined,
+            textError: typeof body.smsError === 'string' ? scrubNumbers(body.smsError) : undefined,
+            emailError: typeof body.emailError === 'string' ? scrubNumbers(body.emailError) : undefined,
           },
         }
       },
@@ -178,6 +191,7 @@ async function prepare(request: Request, secret: string): Promise<Preview> {
       withPicture: Boolean(message.mediaUrl),
     },
     run: async () => {
+      if (!isUpdateSendingHour(new Date())) return quietHours('reminder')
       const delivered = await deliverReminder(getSupabase(), item, origin)
       return {
         status: delivered.status === 'skipped' ? 409 : 200,
@@ -185,7 +199,7 @@ async function prepare(request: Request, secret: string): Promise<Preview> {
           ok: delivered.status === 'sent',
           recorded: delivered.status !== 'skipped',
           textSent: delivered.status === 'sent',
-          error: delivered.error,
+          error: scrubNumbers(delivered.error),
         },
       }
     },
@@ -235,7 +249,21 @@ async function prepareUpdate(request: Extract<Request, { kind: 'update' }>, secr
       }
       const delivered = await deliverClientUpdate(plan)
       if (delivered.status === 'sent') return { status: 200, body: { ok: true, textSent: true } }
-      return { status: 502, body: { ok: false, reason: 'NotSent', explanation: `The text did not go out: ${delivered.error}. It can be approved again.` } }
+      console.error(`eleanor update to ${maskPhone(plan.phone)} did not go out: ${scrubNumbers(delivered.error)}`)
+      // Only a refusal Twilio gave says the text did not go out. A dropped
+      // connection or a server error may follow a text that went, so it is
+      // reported as not known, and Eleanor keeps her claim on it for the day.
+      if (delivered.uncertain) {
+        return {
+          status: 502,
+          body: {
+            ok: false,
+            reason: 'DeliveryUnknown',
+            explanation: 'The text service did not say whether the text went out. It may have, so do not send it again today; check with the client.',
+          },
+        }
+      }
+      return { status: 502, body: { ok: false, reason: 'NotSent', explanation: 'The text service refused the text, so it did not go out. It can be approved again.' } }
     },
   }
 }

@@ -49,14 +49,14 @@ describe('choosing who the nightly run reads next', () => {
   })
 
   it('still reads a client who was given a round before readings were run', () => {
-    // Branden's twenty questions were written from the fact ledger alone, with
+    // One client's twenty questions were written from the fact ledger alone, with
     // no reading on file. Keying the queue off the round alone would have left
     // him — and everyone else read in those days — never read at all.
     const out = ask({
-      clients: [who('branden')],
-      finishedModule2: ['branden'],
-      haveFacts: ['branden'],
-      haveRound: ['branden'],
+      clients: [who('luis')],
+      finishedModule2: ['luis'],
+      haveFacts: ['luis'],
+      haveRound: ['luis'],
     })
     expect(out.map(w => w.needs)).toEqual(['reading'])
   })

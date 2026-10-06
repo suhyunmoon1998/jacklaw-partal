@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
 import { isAdmin } from '@/lib/adminAuth'
-import { getQuestionSetDetail, replaceQuestions, setNameColumns } from '@/lib/questionSets'
+import { getQuestionSetDetail, isGeneratedQuestionSet, replaceQuestions, setNameColumns } from '@/lib/questionSets'
 
 // POST /api/admin/question-sets/[id]/duplicate  { name? }
 // Also the way to fork the built-in onboarding questionnaire into an editable set.
@@ -11,6 +11,15 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
 
   const source = await getQuestionSetDetail(params.id)
   if (!source) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+  // A copy of one client's follow-up round would carry her answers and her
+  // managers' names into the library.
+  if (await isGeneratedQuestionSet(params.id)) {
+    return NextResponse.json(
+      { error: "These questions were written for one client's follow-up round and quote her own answers, so they cannot be copied into the library." },
+      { status: 409 }
+    )
+  }
 
   const body = await req.json().catch(() => ({}))
   const name = String(body?.name ?? '').trim() || `${source.name} (Copy)`

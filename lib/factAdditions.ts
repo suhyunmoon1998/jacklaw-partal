@@ -4,8 +4,8 @@
  * The office reads a client's answers into the ledger, reads the case, and
  * sends follow-up questions to settle what the reading could not. The answers
  * to those questions had no way back in. The only door was "read the answers
- * again", which renumbers every fact and throws away the reading. So DAYEON
- * KIM's twenty follow-up answers sat outside the ledger. They included the
+ * again", which renumbers every fact and throws away the reading. So one
+ * client's twenty follow-up answers sat outside the ledger. They included the
  * restaurant's street address, which the claims reading then reported as
  * unknown. They also included her correction of the one answer the defense
  * would most like to quote.

@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
   const clientId = req.nextUrl.searchParams.get('clientId')
   if (!clientId) return NextResponse.json({ state: null }, { status: 400 })
 
-  const denied = denyClient(req, clientId)
+  const denied = await denyClient(req, clientId)
   if (denied) return denied
 
   const { data } = await getSupabase()
@@ -72,14 +72,23 @@ export async function GET(req: NextRequest) {
 }
 
 // POST /api/questionnaire  { clientId, answers, completedSections, submitted }
+/**
+ * The most a save may carry. A full intake with every free-text answer written
+ * out runs to tens of kilobytes; anything near this is not a questionnaire.
+ */
+const MAX_BODY_BYTES = 512 * 1024
+
 export async function POST(req: NextRequest) {
   // The damages reading's clock (below) runs from here: maxDuration counts the
   // whole request, the emails sent before it included.
   const began = Date.now()
+  if (Number(req.headers.get('content-length') ?? 0) > MAX_BODY_BYTES) {
+    return NextResponse.json({ error: 'That is more than a questionnaire can hold.' }, { status: 413 })
+  }
   const { clientId, answers, completedSections, submitted, module } = await req.json()
   if (!clientId) return NextResponse.json({ error: 'Missing clientId' }, { status: 400 })
 
-  const denied = denyClient(req, clientId)
+  const denied = await denyClient(req, clientId)
   if (denied) return denied
 
   const moduleId = asModule(module)
@@ -94,6 +103,12 @@ export async function POST(req: NextRequest) {
   const wasSubmitted = Boolean(
     moduleId === 'module1' ? existing?.submitted : existing?.m2_submitted
   )
+  // Submitted stays submitted. A save could once say `submitted: false` and
+  // then `true` again, and every turn of that sent the firm its notification,
+  // paid for a translation of every answer and — for Module 2, until the
+  // submission time was recorded — started a paid damages reading. Reopening a
+  // module is the office's to do, not a client's save.
+  const nowSubmitted = wasSubmitted || submitted === true
 
   const { error } = await supabase
     .from('questionnaire_states')
@@ -101,7 +116,7 @@ export async function POST(req: NextRequest) {
       client_id: clientId,
       answers,
       [column.sections]: completedSections,
-      [column.submitted]: submitted ?? false,
+      [column.submitted]: nowSubmitted,
       [column.saved]: new Date().toISOString(),
       // Every write touches last_saved so the office can see the file moved,
       // whichever module the client was in.
@@ -116,14 +131,14 @@ export async function POST(req: NextRequest) {
   // Onboarding status speaks for Module 1, which is the questionnaire every
   // client receives. Module 2 progress shows on its own row in the admin panel.
   if (moduleId === 'module1') {
-    const status = submitted ? 'completed' : completedSections.length > 0 ? 'in_progress' : 'not_started'
+    const status = nowSubmitted ? 'completed' : completedSections.length > 0 ? 'in_progress' : 'not_started'
     await supabase.from('clients').update({ onboarding_status: status }).eq('id', clientId)
   }
 
   // Notify the firm the moment a client's intake first reaches 100% (submitted transitions false -> true).
   // Keyed off the DB's prior state rather than the client's request, so it fires exactly once even if
   // the client retries the save or the browser is closed right after submit.
-  if (submitted && !wasSubmitted) {
+  if (nowSubmitted && !wasSubmitted) {
     const { data: client } = await supabase
       .from('clients')
       .select('name, case_type, portal_lang')
@@ -132,7 +147,7 @@ export async function POST(req: NextRequest) {
 
     if (client) {
       // Whichever says the client wrote in something other than English: the
-      // portal language, or the answers themselves. Gustavo Arce Cordero reads
+      // portal language, or the answers themselves. One client reads
       // the portal in English and answered in Spanish, so neither alone is
       // enough.
       const lang = [client.portal_lang, submissionLanguage(answers)].find(l => l && l !== 'en') ?? 'en'

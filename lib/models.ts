@@ -48,11 +48,11 @@
  * stage's stamp and the damages fingerprint, so readings taken on Opus 5 show
  * as stale until they are read again.
  *
- * MEASURED on DAYEON KIM's file, 218 facts, same input for every model:
+ * MEASURED on one client's file, 218 facts, same input for every model:
  *
  *   MATRIX, Opus 5 against 5.5 (claims 1) — all five standings the same, 17
  *   of 20 elements the same. Two of the three that moved went more careful,
- *   not less: 5.5 would not place 1101 Vermont inside the City of Los Angeles
+ *   not less: 5.5 would not place the employer's street address inside the City of Los Angeles
  *   from a mailing address, where Opus 5 had. It wrote 27.2k tokens to Opus
  *   5's 21.7k, so this stage cost about the same; the spine wrote less.
  *
@@ -63,9 +63,9 @@
  *   four allowed and the reading stopped at the second stage.
  *
  *   SPINE — back on Opus 5. Read again on Opus 5.5, every one of the four
- *   files came back thin in the way Sonnet did: anomalies 13 -> 4 (AARON OH),
- *   10 -> 2 (DAYEON KIM), 7 -> 4, 5 -> 2; date conflicts and events down by
- *   about half. What AARON OH lost was the unpaid minutes either side of the
+ *   files came back thin in the way Sonnet did: anomalies 13 -> 4 (one file),
+ *   10 -> 2 (another), 7 -> 4, 5 -> 2; date conflicts and events down by
+ *   about half. What the first file lost was the unpaid minutes either side of the
  *   shift, the ban on early clock-ins, meal counts that do not reconcile and
  *   a schedule that does not add up — the follow-up engine asks from these.
  *   Three calls a file; Opus 5 costs about $0.20 more a reading.
@@ -89,7 +89,7 @@
  *   Opus: 0 refused. The saving was about $0.25 a round.
  *
  *   PASTED QUESTIONS — Haiku 4.5, the office's choice over Sonnet 5 on
- *   2026-09-25, made with what follows in front of it. A 21-item sheet into Chinese, Xilong Wang's
+ *   2026-09-25, made with what follows in front of it. A 21-item sheet into Chinese, one client's
  *   vehicle, DOT and termination questions. Both translated every question,
  *   kept every gate and dropped nothing. Haiku 4.5 turned the five-part DOT
  *   requirement (CDL, medical card, logs, inspection) into one yes/no, so a
@@ -100,8 +100,8 @@
  *   item as a checklist with "None" and "Not sure". Half the price, a few
  *   cents a paste.
  *
- *   EXTRACTION — Opus 5.5 at medium, measured 2026-09-30 on Maiya
- *   Soukpaseuth's 157 answers, three ways, nothing saved:
+ *   EXTRACTION — Opus 5.5 at medium, measured 2026-09-30 on one
+ *   client's 157 answers, three ways, nothing saved:
  *     Opus 5.5 medium  $1.80  108s  229 facts  5 contradictions
  *     Opus 5.5 low     $1.25   67s  206 facts  7 contradictions
  *     Sonnet 5 medium  $0.62   70s  200 facts  2 contradictions
@@ -115,7 +115,7 @@
  *   left at medium until the office decides the $0.55 is worth it.
  *
  *   TRANSLATION — thinking costs nothing here: Sonnet wrote 808 tokens at
- *   medium and 794 at low for Xilong Wang's 23 answers, about a cent either
+ *   medium and 794 at low for one client's 23 answers, about a cent either
  *   way, with the same English. Not a place to save.
  */
 
@@ -141,7 +141,7 @@ export const EXTRACTION_MODEL = pick('MODEL_EXTRACTION', OPUS)
 
 /**
  * How hard extraction thinks. Its own dial because extraction is the largest
- * single cost of a client — about $1.56 of Jingwen Du's, $1.34 of it output —
+ * single cost of a client — about $1.56 of one client's, $1.34 of it output —
  * and most of that output is thinking.
  */
 export const EXTRACTION_EFFORT = pickEffort('EFFORT_EXTRACTION', 'medium')

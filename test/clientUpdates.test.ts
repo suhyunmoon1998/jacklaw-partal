@@ -18,13 +18,20 @@ type Row = Record<string, unknown>
 let tables: Record<string, Row[]> = {}
 const texts: { to: string; body: string }[] = []
 let failNextText = false
+let dropNextText = false
 
 function from(table: string) {
   const filters: [string, unknown][] = []
-  const rows = () => (tables[table] ?? []).filter(row => filters.every(([column, value]) => row[column] === value))
+  const among: [string, unknown[]][] = []
+  const rows = () =>
+    (tables[table] ?? []).filter(
+      row => filters.every(([column, value]) => row[column] === value) && among.every(([column, values]) => values.includes(row[column]))
+    )
   const api: Record<string, unknown> = {
     select: () => api,
     eq: (column: string, value: unknown) => { filters.push([column, value]); return api },
+    in: (column: string, values: unknown[]) => { among.push([column, values]); return api },
+    limit: () => api,
     maybeSingle: async () => ({ data: rows()[0] ?? null, error: null }),
     then: (resolve: (value: unknown) => void) => resolve({ data: rows(), error: null }),
     // An update writes nothing in the portal's database: any write here fails the test.
@@ -42,6 +49,7 @@ vi.mock('@/lib/twilio', async importOriginal => ({
   isConfigured: () => textingOn,
   sendSms: vi.fn(async (to: string, body: string) => {
     if (failNextText) { failNextText = false; return { ok: false, error: 'Carrier rejected' } }
+    if (dropNextText) { dropNextText = false; return { ok: false, error: 'socket hang up', uncertain: true } }
     texts.push({ to, body })
     return { ok: true, id: `SM${texts.length}` }
   }),
@@ -245,10 +253,32 @@ describe('the route', () => {
     failNextText = true
     const failed = await send(previewed.fingerprint, 'working_on_it')
     expect(failed.status).toBe(502)
-    expect(await failed.json()).toMatchObject({ ok: false, reason: 'NotSent', explanation: 'The text did not go out: Carrier rejected. It can be approved again.' })
+    // A refusal Twilio gave: not sent, and said in fixed words — Twilio's own
+    // can name the number, and these are kept and shown in Eleanor.
+    expect(await failed.json()).toMatchObject({ ok: false, reason: 'NotSent', explanation: 'The text service refused the text, so it did not go out. It can be approved again.' })
     const retried = await send(previewed.fingerprint, 'working_on_it')
     expect(retried.status).toBe(200)
     expect(texts).toHaveLength(1)
+  })
+
+  it('a dropped connection is not called "not sent": the text may have gone, so Eleanor keeps her claim', async () => {
+    const previewed = await (await GET(request(`${base}?kind=update&clientId=c1&sentences=working_on_it`, { auth: `Bearer ${SECRET}` }))).json()
+    dropNextText = true
+    const dropped = await send(previewed.fingerprint, 'working_on_it')
+    expect(dropped.status).toBe(502)
+    const body = await dropped.json()
+    expect(body.reason).toBe('DeliveryUnknown')
+    expect(body.explanation).toContain('do not send it again today')
+    expect(JSON.stringify(body)).not.toMatch(/010-1234|5550101234/)
+  })
+
+  it('a client on another case who said STOP is not texted on this one', async () => {
+    // One person, two rows. The flag was set on the first; the second row was
+    // added later and started without it.
+    tables.clients.push({ id: 'c9', name: 'Maria Synthetic', phone: '5550101234', portal_lang: 'es', sms_opt_out: true })
+    const stop = await GET(request(`${base}?kind=update&clientId=c1&sentences=working_on_it`, { auth: `Bearer ${SECRET}` }))
+    expect(stop.status).toBe(409)
+    expect((await stop.json()).reason).toBe('OptedOut')
   })
 
   it('never texts late at night, a client who said STOP, or with texting off', async () => {

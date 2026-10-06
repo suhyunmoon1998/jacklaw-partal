@@ -214,7 +214,7 @@ function brief(g: Gaps, entries: LedgerEntry[], lang: Lang, limit: number): stri
   ].filter(Boolean)
 
   return `THE CLIENT READS: ${LANGUAGE_NAME[lang]}
-${lang === 'en' ? 'Leave inTheirLanguage null.' : `Write every question twice: in English, and in ${LANGUAGE_NAME[lang]}. The ${LANGUAGE_NAME[lang]} is what she will actually read, so write it as a native question at a sixth-grade level — not as a translation of the English. The English is there so the office can check it.`}
+${lang === 'en' ? 'Leave inTheirLanguage null.' : `Write every question twice: in English, and in ${LANGUAGE_NAME[lang]}. The ${LANGUAGE_NAME[lang]} is what she will actually read, and the English is how the office checks it — so the two must say the same thing: the same question, the same choices in the same order, the same help text. Write the ${LANGUAGE_NAME[lang]} as a native speaker would ask it, at a sixth-grade level, not word for word; but add nothing to it and leave nothing out of it that the English does not.`}
 
 ASK AT MOST ${limit} QUESTIONS.
 

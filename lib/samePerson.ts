@@ -18,7 +18,7 @@ export interface OnACase {
   caseFolderId?: string | null
 }
 
-/** Digits only, so (424) 333-2514 and 4243332514 are one person. */
+/** Digits only, so (555) 010-2514 and 5550102514 are one person. */
 const digits = (phone: string): string => String(phone ?? '').replace(/\D/g, '')
 
 /**

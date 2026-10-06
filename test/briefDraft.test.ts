@@ -42,12 +42,12 @@ describe('a sentence that is on file', () => {
   })
 
   it('accepts a prefixed fact id as the same fact', () => {
-    expect(check('trial-facts', s({ facts: ['client-1789103134380:f069'] }), ctx)).toEqual([])
+    expect(check('trial-facts', s({ facts: ['client-1700000000002:f069'] }), ctx)).toEqual([])
   })
 })
 
 describe('the voice of a brief a court reads', () => {
-  // The first DAYEON KIM trial drafts said "the file does not resolve which is
+  // The first trial drafts said "the file does not resolve which is
   // right" — the office talking to itself.
   it('flags the office\'s file named in a trial section', () => {
     expect(check('trial-facts', s({ text: 'The file does not resolve which is right.' }), ctx).join(' ')).toMatch(/"The file"/)

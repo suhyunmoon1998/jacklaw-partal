@@ -19,7 +19,7 @@ import {
  * The field values are the ones the production ledger actually carries.
  */
 const fact = (over: Partial<LedgerFact> = {}): LedgerFact => ({
-  id: 'client-1789103134380:f035',
+  id: 'client-1700000000002:f035',
   proposition: 'She usually worked 6.5 to 7 hours a day.',
   verbatim: 'about 6 and half to 7 hours',
   status: 'REPORTED',
@@ -36,7 +36,7 @@ const fact = (over: Partial<LedgerFact> = {}): LedgerFact => ({
 
 const input = (over: Record<string, unknown> = {}) =>
   ({
-    clientName: 'Dayeon Kim',
+    clientName: 'Minji Park',
     caseType: 'Wage & Hour',
     ledger: [fact()],
     spine: null,
@@ -189,13 +189,13 @@ describe('what cuts against, all in one place', () => {
       input({
         spine: {
           restingOnTestimonyAlone: [
-            { facts: ['client-1789103134380:f107', 'client-1789103134380:f109'], note: 'x' },
+            { facts: ['client-1700000000002:f107', 'client-1700000000002:f109'], note: 'x' },
           ],
         },
       })
     )
     expect(brief.weaknesses[0].from).toBe('f107, f109')
-    expect(shortIds('client-1789103134380:f068')).toBe('f068')
+    expect(shortIds('client-1700000000002:f068')).toBe('f068')
   })
 })
 

@@ -1,4 +1,5 @@
 import { getSupabase } from '@/lib/supabase'
+import { numberOptedOut } from '@/lib/numberOptOut'
 import { Lang } from '@/lib/langs'
 import { resolveLang } from '@/lib/reminderSchedule'
 import { usablePhone } from '@/lib/assignmentInvite'
@@ -89,6 +90,9 @@ export async function planClientUpdate(
   if (client.sms_opt_out) return refuse('OptedOut')
   const phone = usablePhone(String(client.phone ?? ''))
   if (!phone) return refuse('NoPhone')
+  const stopped = await numberOptedOut(phone)
+  if (stopped === null) return refuse('Unreadable')
+  if (stopped) return refuse('OptedOut')
 
   const lang = resolveLang(client.portal_lang)
   const name = String(client.name ?? '')
@@ -111,7 +115,11 @@ export async function planClientUpdate(
  * Sends the text. Called only after the seal matched and inside sending
  * hours; Eleanor has already recorded the claim on her side.
  */
-export async function deliverClientUpdate(plan: UpdatePlan): Promise<{ status: 'sent'; providerId: string } | { status: 'failed'; error: string }> {
+export async function deliverClientUpdate(
+  plan: UpdatePlan
+): Promise<{ status: 'sent'; providerId: string } | { status: 'failed'; error: string; uncertain: boolean }> {
   const sent = await sendSms(plan.phone, plan.body)
-  return sent.ok ? { status: 'sent', providerId: sent.id } : { status: 'failed', error: sent.error }
+  return sent.ok
+    ? { status: 'sent', providerId: sent.id }
+    : { status: 'failed', error: sent.error, uncertain: sent.uncertain === true }
 }

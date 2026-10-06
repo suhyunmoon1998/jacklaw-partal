@@ -9,7 +9,7 @@ import { defenceRecords, isEmployerStatement } from '@/lib/defenceRecord'
  * the defendant's position until something shows it is being advanced.
  */
 const fact = (over: Partial<LedgerFact> = {}): LedgerFact => ({
-  id: 'client-1789103134380:f132',
+  id: 'client-1700000000002:f132',
   proposition: 'The manager said the store would not pay for tip-sorting time.',
   verbatim: '팁은 가게 책임이 아니다',
   verbatimEnglish: 'Tips are not the store’s responsibility',
@@ -21,7 +21,7 @@ const fact = (over: Partial<LedgerFact> = {}): LedgerFact => ({
 })
 
 const brief = (over: Partial<Brief> = {}): Brief => ({
-  clientName: 'Dayeon Kim',
+  clientName: 'Minji Park',
   caseType: 'Wage & Hour',
   factCount: 0,
   readOn: null,
@@ -47,7 +47,7 @@ const claim = (over: Record<string, unknown> = {}) =>
     claimId: 'off-the-clock',
     standing: 'gaps to close',
     elements: [{ key: 'hours', state: 'partial', reasoning: '', wouldSettleIt: 'Punch records.' }],
-    adverse: ['client-1789103134380:f067 — she does not believe wages are owed.'],
+    adverse: ['client-1700000000002:f067 — she does not believe wages are owed.'],
     defense: 'The employer will say the schedule was extended to cover it.',
     ...over,
   }) as never

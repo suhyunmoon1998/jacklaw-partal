@@ -53,29 +53,50 @@ export async function readReading(clientId: string, against: string): Promise<Re
 }
 
 /**
+ * One stage's result laid over what is on file.
+ *
+ * Three layers, newest last: what the caller had when the stage began
+ * (`carry`), what is on file now (`base`), and what this stage produced
+ * (`patch`). The order is the point. A stage takes minutes, and another stage
+ * may be stored meanwhile — the panel and the night can overlap — so what is
+ * on file now must win over the caller's older copy, or a stage that finished
+ * second would put back the first one's stale result. Only this stage's own
+ * keys come from the patch.
+ *
+ * Per-stage bookkeeping (what each stage took, cost, and was stamped with) is
+ * merged the same way, key by key. A patch that replaced it once wiped the
+ * other stages' stamps, and a chronology current a minute before showed as
+ * stale.
+ */
+export function mergeReading(base: StoredReading, patch: StoredReading, carry: StoredReading = {}): StoredReading {
+  return {
+    ...carry,
+    ...base,
+    ...patch,
+    took: { ...(carry.took ?? {}), ...(base.took ?? {}), ...(patch.took ?? {}) },
+    stamps: { ...(carry.stamps ?? {}), ...(base.stamps ?? {}), ...(patch.stamps ?? {}) },
+    spent: { ...(carry.spent ?? {}), ...(base.spent ?? {}), ...(patch.spent ?? {}) },
+  }
+}
+
+/**
  * Merges one stage's result into what is on file.
  *
  * A fingerprint that differs from the stored one starts the reading over: the
  * facts have moved, and stages read against different ledgers must not be
- * stitched into one reading that is true of neither.
+ * stitched into one reading that is true of neither — so only `carry`, the
+ * caller's own copy, is kept under the stage, and its stamps show the rest as
+ * stale.
  */
 export async function saveStage(
   clientId: string,
   fingerprint: string,
-  patch: StoredReading
+  patch: StoredReading,
+  carry: StoredReading = {}
 ): Promise<StoredReading> {
   const existing = await readReading(clientId, fingerprint)
   const base = existing && !existing.stale ? existing.reading : {}
-  // Per-stage bookkeeping is merged, not replaced. A patch that carried only
-  // its own stage's stamp once wiped the others', and a chronology current a
-  // minute before showed as stale.
-  const merged: StoredReading = {
-    ...base,
-    ...patch,
-    took: { ...(base.took ?? {}), ...(patch.took ?? {}) },
-    stamps: { ...(base.stamps ?? {}), ...(patch.stamps ?? {}) },
-    spent: { ...(base.spent ?? {}), ...(patch.spent ?? {}) },
-  }
+  const merged = mergeReading(base, patch, carry)
 
   const { error } = await getSupabase()
     .from('case_readings')

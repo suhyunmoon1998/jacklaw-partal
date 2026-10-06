@@ -29,7 +29,7 @@ const fact = (over: Partial<FactSnapshot> = {}): FactSnapshot => ({
 })
 
 const brief = (over: Partial<Brief> = {}): Brief => ({
-  clientName: 'Dayeon Kim',
+  clientName: 'Minji Park',
   caseType: 'Wage & Hour',
   factCount: 0,
   readOn: null,
@@ -95,16 +95,16 @@ describe('only what rests on a changed fact is read again', () => {
   const b = brief({
     claims: [
       claim('meal-periods', 'supported', [
-        { key: 'relieved of duty', state: 'supported', facts: ['client-1789103134380:f068'] },
+        { key: 'relieved of duty', state: 'supported', facts: ['client-1700000000002:f068'] },
       ]),
       claim('rest-breaks', 'supported', [
-        { key: 'ten minutes', state: 'supported', facts: ['client-1789103134380:f501'] },
+        { key: 'ten minutes', state: 'supported', facts: ['client-1700000000002:f501'] },
       ]),
     ],
   })
 
   it('matches a prefixed element against a prefixed change', () => {
-    const { affected } = affectedBy(b, new Set(['client-1789103134380:f068']))
+    const { affected } = affectedBy(b, new Set(['client-1700000000002:f068']))
     expect(affected.claims).toEqual(['meal-periods'])
   })
 
@@ -136,7 +136,7 @@ describe('only what rests on a changed fact is read again', () => {
     // The damages reading writes bare ids in prose; the change carries the
     // prefixed ledger id. Both sides are reduced before they are matched.
     expect(
-      affectedBy(withDamages, new Set(['client-1789103134380:f068'])).affected.damages
+      affectedBy(withDamages, new Set(['client-1700000000002:f068'])).affected.damages
     ).toEqual(['Meal periods'])
     expect(factsUnder(withDamages).damages.get('Overtime')).toEqual(new Set(['f900']))
   })
@@ -177,7 +177,7 @@ describe('what the conclusion now is', () => {
 
 describe('two answers that disagree', () => {
   it('leaves both standing rather than taking the newer one', () => {
-    // Dayeon Kim: she describes work after clocking out and separately answers
+    // One client: she describes work after clocking out and separately answers
     // that she did none. The ledger keeps both as DISPUTED, and so does this.
     const disputed = fact({ status: 'DISPUTED', verbatim: 'I did no work after I clocked out' })
     const open = unresolvedIn([disputed, fact({ id: 'f070' })])

@@ -16,7 +16,7 @@ import { MissingItem } from '@/lib/missingInformation'
  * an attorney end up being asked nothing.
  */
 const brief = (over: Partial<Brief> = {}): Brief => ({
-  clientName: 'Dayeon Kim',
+  clientName: 'Minji Park',
   caseType: 'Wage & Hour',
   factCount: 204,
   readOn: null,

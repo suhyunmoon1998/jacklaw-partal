@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
   const clientId = req.nextUrl.searchParams.get('clientId')
   if (!clientId) return NextResponse.json({ ok: false, sent: [], sends: [] }, { status: 400 })
 
-  const denied = denyClient(req, clientId)
+  const denied = await denyClient(req, clientId)
   if (denied) return denied
 
   const { data, error } = await getSupabase()

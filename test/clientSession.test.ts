@@ -12,8 +12,8 @@ const KEY = 'a-long-random-session-secret'
 
 describe('a client session cookie', () => {
   it('names the client it was minted for', () => {
-    const s = mintClientSession('client-1789103134380', KEY)!
-    expect(clientFromSession(s.value, KEY)).toBe('client-1789103134380')
+    const s = mintClientSession('client-1700000000002', KEY)!
+    expect(clientFromSession(s.value, KEY)).toBe('client-1700000000002')
   })
 
   it('cannot be edited into a cookie for somebody else', () => {

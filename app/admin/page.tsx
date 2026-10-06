@@ -40,6 +40,8 @@ interface AdminClient {
   tags: string[]
   /** The language the portal writes to them in; empty until one is known. */
   portalLang: string
+  /** Texts and calls to this number are stopped (the client's STOP, or the office's). */
+  smsOptOut?: boolean
   onboardingStatus: string
   createdAt: string
   questionnaire: { completedSections: number[]; submitted: boolean; lastSaved: string }
@@ -1347,6 +1349,22 @@ export default function AdminPage() {
     fetchClients()
   }
 
+  /**
+   * Stops texts and calls to this client's number, on every case it is on.
+   * The office can always honour a request to stop; only the client can opt
+   * back in, by texting START.
+   */
+  const handleStopTexting = async (clientId: string) => {
+    if (!confirm('Stop all texts and calls to this number, on every case it is on? Only the client can turn them back on, by texting START.')) return
+    const res = await fetch('/api/admin/clients', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: clientId, stopTexting: true }),
+    }).catch(() => null)
+    if (!res?.ok) alert('The opt-out could not be recorded. Please try again.')
+    fetchClients()
+  }
+
   const handleUpdateCaseName = async (clientId: string, caseName: string) => {
     setAllClients(prev => prev.map(c => (c.id === clientId ? { ...c, caseName } : c)))
     const res = await fetch('/api/admin/clients', {
@@ -1662,6 +1680,7 @@ export default function AdminPage() {
               onAddClient={folderId => setAddingClient({ folderId })}
               onRetagClient={handleRetagClient}
               onSetLang={handleSetLang}
+              onStopTexting={handleStopTexting}
             />
           </>
         )}

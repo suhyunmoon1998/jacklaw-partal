@@ -112,7 +112,7 @@ describe('the claims the matrix is allowed to reason about', () => {
 })
 
 describe('handing a claim to the matrix', () => {
-  it('quotes the Order once one is settled, and says it is missing until then', async () => {
+  it('quotes the Order once one is proposed, and says it is missing until then', async () => {
     // The bug this covers: with an Order supplied the element kept its
     // "AUTHORITY NOT ON FILE" line anyway, so the model went on reporting the
     // duty as unsettled while the text of Order 5 section 12 sat in front of
@@ -121,7 +121,7 @@ describe('handing a claim to the matrix', () => {
     const rest = claimById('rest-periods')!
 
     const open = briefForTest(rest)
-    expect(open).toContain('an IWC Wage Order, not yet settled')
+    expect(open).toContain('an IWC Wage Order, none proposed yet')
     expect(open).toContain('AUTHORITY NOT ON FILE')
     // Assert on the Order's own heading, not on a phrase from its text: the
     // Brinker holding quotes and discusses the same language, so a loose match
@@ -131,8 +131,18 @@ describe('handing a claim to the matrix', () => {
     const settled = briefForTest(rest, '5')
     expect(settled).toContain('=== IWC Wage Order 5, § 12 ===')
     expect(settled).toMatch(/ten \(10\)\s*\n?\s*minutes net rest time/i)
-    expect(settled).not.toContain('not yet settled')
+    expect(settled).not.toContain('none proposed yet')
     expect(settled).not.toContain('AUTHORITY NOT ON FILE')
+    // A proposal, and said to be one: which Order governs is an attorney's
+    // call, and nothing records that one has made it.
+    expect(settled).toContain('the Order PROPOSED for this employer; not confirmed by an attorney')
+  })
+
+  it('never tells the matrix that the office has settled the Order', async () => {
+    const { readFileSync } = await import('fs')
+    const src = readFileSync('lib/claimMatrix.ts', 'utf8')
+    expect(src).not.toMatch(/office has settled that it governs/i)
+    expect(src).toMatch(/A WAGE ORDER YOU WERE GIVEN IS PROPOSED, NOT DECIDED/)
   })
 
   it('hands over the cases that decide an element, with their edges', async () => {

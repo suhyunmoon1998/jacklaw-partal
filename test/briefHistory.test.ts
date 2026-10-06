@@ -15,7 +15,7 @@ const fact = (over: Partial<FactSnapshot> = {}): FactSnapshot => ({
 })
 
 const brief = (over: Partial<Brief> = {}): Brief => ({
-  clientName: 'Dayeon Kim',
+  clientName: 'Minji Park',
   caseType: 'Wage & Hour',
   factCount: 1,
   readOn: '2026-09-20T00:00:00Z',

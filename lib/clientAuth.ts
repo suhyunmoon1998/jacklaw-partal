@@ -16,11 +16,12 @@ import { createHmac, timingSafeEqual } from 'crypto'
  * script cannot read it, so it cannot be copied out of one browser into a
  * request for somebody else's case.
  *
- * What this is NOT: proof of who the person is. Sign-in is still a phone
- * number with no code sent to it, so anyone who knows a client's number can
- * still get a cookie for that client. That is the next piece of work. This one
- * closes the larger hole — reading any file without having any credential at
- * all — and it is the floor everything else stands on.
+ * What this is NOT: proof of who the person is. Sign-in is a phone number
+ * with no code sent to it, so anyone who knows a client's number can get a
+ * cookie for that client. A texted code was built on 2026-10-06 and taken out
+ * the same day at the owner's request, while the portal is being tested; it is
+ * in the repository's history for when it is wanted. This closes the larger
+ * hole — reading any file without having any credential at all.
  */
 
 export const CLIENT_COOKIE = 'jlp_client_session'

@@ -1,5 +1,6 @@
 import { SupabaseClient } from '@supabase/supabase-js'
 import { getSupabase } from '@/lib/supabase'
+import { numberOptedOut } from '@/lib/numberOptOut'
 import { ModuleId } from '@/lib/modules'
 import {
   Chasing,
@@ -189,6 +190,9 @@ export async function planManualReminder(
   if (client.sms_opt_out) return refuse('OptedOut')
   const phone = usablePhone(String(client.phone ?? ''))
   if (!phone) return refuse('NoPhone')
+  const stopped = await numberOptedOut(phone)
+  if (stopped === null) return refuse('Unreadable')
+  if (stopped) return refuse('OptedOut')
 
   const used = new Set((loggedRes.data ?? []).map(row => row.kind as ReminderKind))
   const next = LADDER.find(rung => rung.channel === 'sms' && !used.has(rung.kind))

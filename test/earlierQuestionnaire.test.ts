@@ -18,13 +18,13 @@ describe('answers given to the questionnaire before September 3', () => {
   })
 
   it('does not read an answer twice when the current questionnaire already has it', () => {
-    const parts = read({ full_name: 'Carla Linares', days_per_week: '5' })
+    const parts = read({ full_name: 'Ana Torres', days_per_week: '5' })
     expect(ids(parts).filter(id => id === 'full_name')).toHaveLength(1)
     expect(parts.find(p => p.text.includes('[full_name]'))!.title).not.toContain('earlier version')
   })
 
   it('leaves out an answer the earlier version itself would have hidden', () => {
-    // Ester: "did you pay for tools" no, so "were you reimbursed" was never a
+    // One client: "did you pay for tools" no, so "were you reimbursed" was never a
     // live question, whatever is stored under it.
     const parts = read({ paid_for_tools: 'no', tools_reimbursed: 'no' })
     expect(ids(parts)).toContain('paid_for_tools')

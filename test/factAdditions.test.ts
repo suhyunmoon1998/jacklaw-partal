@@ -11,7 +11,7 @@ const fact = (n: number, pinpoint: string, over: Partial<LedgerEntry> = {}): Led
   supersededBy: null, supersededWhy: null, ...over,
 })
 
-// DAYEON KIM's ledger was read from the intake alone; her follow-up set came after.
+// One client's ledger was read from the intake alone; her follow-up set came after.
 const ledger = [
   fact(12, 'employer_address — What is the employer\'s street address? intake questionnaire, section: The Employer', { status: 'UNKNOWN' }),
   fact(67, 'm2_owed_now — Do you think the employer still owes you unpaid wages?'),
@@ -21,7 +21,7 @@ const followUp = {
   title: 'Question set: A few more questions about your job',
   rows: [
     { id: 'q1_tip_days', label: 'How many days a week did you do the tip work?', answer: '1' },
-    { id: 'q18_address', label: 'What is the street address of the restaurant where you worked?', answer: '1101 Vermont Ave #103, Los Angeles, CA 90006' },
+    { id: 'q18_address', label: 'What is the street address of the restaurant where you worked?', answer: '4500 Sample Blvd #12, Los Angeles, CA 90010' },
     { id: 'q10_extra', label: 'Anything else?', answer: 'no' },
     { id: 'q19_owed_check', label: 'Which of these is closest to what you meant?', answer: '' },
   ],

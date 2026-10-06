@@ -43,7 +43,7 @@ export interface Waiting {
  *
  * Nineteen of the twenty sections counts: the twentieth was "Additional
  * Information" (prior complaints, prior attorneys, notes), and the office
- * counted Ester, who stopped there, as finished (2026-09-27). The current
+ * counted a client who stopped there as finished (2026-09-27). The current
  * Module 1 has ten sections, so nineteen completed can only be the earlier
  * version.
  */
@@ -124,7 +124,7 @@ export interface Outcome {
  * The night used to take the first client in the queue, do one step, and
  * stop — so a client who finished Module 2 waited a night for facts, a night
  * or two for the reading and another for a round, behind everyone ahead of
- * them. Jingwen Du and Xilong Wang finished on 2026-09-17 and had nothing
+ * them. Two clients finished on 2026-09-17 and had nothing
  * eight days later. The 300-second ceiling still rules: a step is begun only
  * while there is room for the longest one of its kind ever measured, and the
  * first step of a run is always begun, as before.

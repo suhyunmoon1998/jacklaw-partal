@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
 import { clearClientCookie, sessionClient, setClientCookie } from '@/lib/clientAuth'
+import { phoneKey, phoneVariants } from '@/lib/phoneNumber'
 
 /**
  * Signing a client in to one of their cases.
@@ -10,8 +11,9 @@ import { clearClientCookie, sessionClient, setClientCookie } from '@/lib/clientA
  * the cookie would be a cookie for whatever id was typed, and every route
  * behind it would be back to where it started.
  *
- * Sign-in is still a phone number with no code sent to it. What this adds is
- * that the portal now has to be signed in to at all, and to the case being
+ * Sign-in is a phone number with no code sent to it (the texted code was
+ * taken out while the portal is tested; see lib/clientAuth.ts). What this adds
+ * is that the portal has to be signed in to at all, and to the case being
  * read — not that the person is who they say they are.
  */
 
@@ -33,7 +35,7 @@ export async function POST(req: NextRequest) {
     .from('clients')
     .select('id')
     .eq('id', clientId)
-    .eq('phone', digits)
+    .in('phone', phoneVariants(phoneKey(digits)))
     .maybeSingle()
 
   // Wrong pairing and no such client answer alike: this should not become a

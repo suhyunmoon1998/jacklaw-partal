@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
+import { phoneKey, phoneVariants } from '@/lib/phoneNumber'
 
 /**
  * POST /api/clients/lookup  { phone: "3105550000" }
@@ -14,6 +15,9 @@ import { getSupabase } from '@/lib/supabase'
  *
  * Ordered oldest first so the case someone has been working on longest is the
  * one offered at the top.
+ *
+ * A number matches however its row was typed (3105550000, 13105550000,
+ * +13105550000): an exact match left some clients unable to sign in at all.
  */
 export async function POST(req: NextRequest) {
   const { phone } = await req.json()
@@ -23,7 +27,7 @@ export async function POST(req: NextRequest) {
   const { data, error } = await getSupabase()
     .from('clients')
     .select('id, name, phone, case_type, case_name, onboarding_status, case_folder_id, created_at')
-    .eq('phone', digits)
+    .in('phone', phoneVariants(phoneKey(digits)))
     .order('created_at', { ascending: true })
 
   if (error) {

@@ -88,12 +88,18 @@ function QuestionRow({
   keep,
   onToggle,
   locked,
+  flagged,
+  back,
 }: {
   q: Question
   meta?: FollowUpPlan['questions'][number]
   keep: boolean
   onToggle: () => void
   locked: boolean
+  /** vet() found something wrong with it; it starts unticked. */
+  flagged: boolean
+  /** What she will read, translated back into English for the reviewer. */
+  back?: { label: string; options: string[] }
 }) {
   const theirs = q.ko ?? q.es ?? q.zh
   return (
@@ -131,6 +137,14 @@ function QuestionRow({
                   only after {q.showIf.questionId}
                 </span>
               )}
+              {flagged && (
+                <span
+                  title="Something about this question needs rewriting — see the list above. It starts unticked."
+                  className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200"
+                >
+                  flagged
+                </span>
+              )}
               {!keep && (
                 <span className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-red-50 text-red-600 border border-red-200">
                   struck
@@ -143,6 +157,13 @@ function QuestionRow({
               <>
                 <p className="text-[15px] text-gray-900 leading-relaxed">{theirs.label}</p>
                 <p className="text-sm text-gray-500 mt-1.5 leading-relaxed">{q.label}</p>
+                {back?.label && (
+                  <p className="text-xs text-amber-800 mt-1.5 leading-relaxed">
+                    <span className="font-semibold">What she will read, back in English: </span>
+                    {back.label}
+                    <span className="text-amber-600"> (machine translation, for checking only)</span>
+                  </p>
+                )}
               </>
             ) : (
               <p className="text-[15px] text-gray-900 leading-relaxed">{q.label}</p>
@@ -156,6 +177,7 @@ function QuestionRow({
                     <span>
                       {theirs?.options?.[i] ?? o}
                       {theirs?.options?.[i] && <span className="text-gray-400"> \u00b7 {o}</span>}
+                      {back?.options?.[i] && <span className="text-amber-700"> \u00b7 back: {back.options[i]}</span>}
                     </span>
                   </li>
                 ))}
@@ -220,6 +242,7 @@ export default function FollowUps({
 }) {
   const [plans, setPlans] = useState<FollowUpPlan[] | null>(null)
   const [questions, setQuestions] = useState<Question[]>([])
+  const [back, setBack] = useState<Record<string, { label: string; options: string[] }>>({})
   /** Question ids still in the round. Everything else is struck. */
   const [keep, setKeep] = useState<Set<string>>(new Set())
   const [running, setRunning] = useState(false)
@@ -234,9 +257,14 @@ export default function FollowUps({
       const body = await res.json()
       if (!res.ok) throw new Error(body?.error || 'Could not load the rounds.')
       const qs: Question[] = body.questions ?? []
+      const latestPlan: FollowUpPlan | undefined = (body.plans ?? [])[0]
+      // A question vet() found fault with starts unticked: sending it is a
+      // choice somebody makes, not something that happens by not looking.
+      const faulty = new Set((latestPlan?.vetProblems ?? []).map(p => p.id))
       setPlans(body.plans ?? [])
       setQuestions(qs)
-      setKeep(new Set(qs.map(q => q.id)))
+      setBack(body.backTranslations ?? {})
+      setKeep(new Set(qs.filter(q => !faulty.has(q.id)).map(q => q.id)))
     } catch (err) {
       setError((err as Error).message)
       setPlans([])
@@ -462,6 +490,8 @@ export default function FollowUps({
                 q={q}
                 meta={metaFor(q.id)}
                 keep={keep.has(q.id)}
+                flagged={latest.vetProblems.some(p => p.id === q.id)}
+                back={back[q.id]}
                 locked={reviewed || Boolean(busy)}
                 onToggle={() =>
                   setKeep(prev => {
