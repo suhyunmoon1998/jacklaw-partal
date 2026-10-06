@@ -3,7 +3,7 @@ import { getSupabase } from '@/lib/supabase'
 import { advancesTo, getAssignmentDetail } from '@/lib/questionSets'
 import { notifyFirmAssignmentCompleted } from '@/lib/sendAssignmentEmail'
 import { AnswerValue, AssignmentStatus } from '@/types'
-import { sessionClient } from '@/lib/clientAuth'
+import { verifiedSessionClient } from '@/lib/clientAuth'
 
 /**
  * The signed-in client has to be the assignment's owner.
@@ -13,8 +13,8 @@ import { sessionClient } from '@/lib/clientAuth'
  * and stopped nobody. The cookie is the only part of the request the browser
  * cannot write.
  */
-function authorize(req: NextRequest, assignmentClientId: string): boolean {
-  const who = sessionClient(req)
+async function authorize(req: NextRequest, assignmentClientId: string): Promise<boolean> {
+  const who = await verifiedSessionClient(req)
   return !!who && who === assignmentClientId
 }
 
@@ -26,7 +26,7 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
   const assignment = await getAssignmentDetail(params.id, { forClient: true })
   if (!assignment) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  if (!authorize(req, assignment.clientId)) {
+  if (!(await authorize(req, assignment.clientId))) {
     return NextResponse.json({ error: 'This questionnaire belongs to a different client.' }, { status: 403 })
   }
   if (assignment.status === 'draft') {
@@ -50,7 +50,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
     .maybeSingle()
 
   if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  if (!authorize(req, row.client_id)) {
+  if (!(await authorize(req, row.client_id))) {
     return NextResponse.json({ error: 'This questionnaire belongs to a different client.' }, { status: 403 })
   }
   if (row.status === 'draft') {

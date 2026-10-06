@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { ADMIN_COOKIE, correctAdminPassword, isAdmin, mintAdminSession } from '@/lib/adminAuth'
+import { ADMIN_COOKIE, ADMIN_PASSWORD_MIN_LENGTH, adminPasswordTooShort, correctAdminPassword, isAdmin, mintAdminSession } from '@/lib/adminAuth'
 
 /**
  * The one place the admin password is checked.
@@ -31,6 +31,17 @@ export async function POST(req: NextRequest) {
     // past a variable that was never set, and the remedy is the deployment's.
     return NextResponse.json(
       { error: 'No admin password is configured for this deployment.' },
+      { status: 500 }
+    )
+  }
+
+  // Said before the guess is looked at, so the answer is the same whatever was
+  // typed: a short password cannot sign anyone in, right or wrong.
+  if (adminPasswordTooShort()) {
+    return NextResponse.json(
+      {
+        error: `The admin password set for this deployment is shorter than ${ADMIN_PASSWORD_MIN_LENGTH} characters, so it cannot be used to sign in. Set a longer one in Vercel and redeploy, or sign in from Eleanor.`,
+      },
       { status: 500 }
     )
   }

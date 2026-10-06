@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ recorded: false }, { status: 400 })
   }
 
-  const denied = denyClient(req, clientId)
+  const denied = await denyClient(req, clientId)
   if (denied) return denied
 
   const { error } = await getSupabase()

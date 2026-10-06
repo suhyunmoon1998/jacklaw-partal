@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
 import { denyClient } from '@/lib/clientAuth'
+import { isAdmin } from '@/lib/adminAuth'
 
 // GET /api/documents/[id]/view  → redirect to signed URL
 export async function GET(req: NextRequest, props: { params: Promise<{ id: string }> }) {
@@ -11,8 +12,10 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
     .eq('id', params.id)
     .maybeSingle()
 
-  // A file is one client's, and the id in the URL is not a claim to it.
-  const denied = denyClient(req, doc?.client_id)
+  // A file is one client's, and the id in the URL is not a claim to it. The
+  // office reads every client's files: the admin panel's View and Download
+  // link here, and answered 401 until staff were let in.
+  const denied = isAdmin(req) ? null : await denyClient(req, doc?.client_id)
   if (denied) return denied
 
   if (!doc?.storage_path) {
@@ -22,7 +25,7 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
   const { data, error } = await getSupabase()
     .storage
     .from('documents')
-    .createSignedUrl(doc.storage_path, 60 * 60) // 1 hour
+    .createSignedUrl(doc.storage_path, 120) // long enough to load; it lands in browser history
 
   if (error || !data?.signedUrl) {
     return NextResponse.json({ error: 'Could not generate URL' }, { status: 500 })

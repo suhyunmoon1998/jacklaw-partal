@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest'
-import { correctAdminPassword, mintAdminSession, validAdminSession } from '@/lib/adminAuth'
+import { ADMIN_PASSWORD_MIN_LENGTH, adminPasswordTooShort, correctAdminPassword, mintAdminSession, validAdminSession } from '@/lib/adminAuth'
 
 /**
  * What stands between a public URL and a law office's entire client list.
@@ -67,6 +67,17 @@ describe('checking the password itself', () => {
   it('never lets an empty password in', () => {
     process.env.ADMIN_PASSWORD = SECRET
     expect(correctAdminPassword('')).toBe(false)
+  })
+
+  it('lets nobody in with a password short enough to guess, even typed exactly', () => {
+    // The login has no attempt limit, by the owner's decision, so length is
+    // the lock. A seven-character key once sat in this repository.
+    process.env.ADMIN_PASSWORD = 'abc1234'
+    expect(adminPasswordTooShort()).toBe(true)
+    expect(correctAdminPassword('abc1234')).toBe(false)
+    process.env.ADMIN_PASSWORD = 'x'.repeat(ADMIN_PASSWORD_MIN_LENGTH)
+    expect(adminPasswordTooShort()).toBe(false)
+    expect(correctAdminPassword('x'.repeat(ADMIN_PASSWORD_MIN_LENGTH))).toBe(true)
   })
 
   it('lets nobody in when no password is configured', () => {

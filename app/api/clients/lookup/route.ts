@@ -1,68 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabase } from '@/lib/supabase'
+import { verifiedPhone } from '@/lib/clientAuth'
+import { caseChoices, clientsOnNumber } from '@/lib/clientCases'
+
+export const dynamic = 'force-dynamic'
 
 /**
- * POST /api/clients/lookup  { phone: "3105550000" }
+ * POST /api/clients/lookup
  *
- * Every case on that number, not one.
+ * The cases on the number this browser has just proved it holds.
  *
- * A client suing two employers has two rows, because a row carries one set of
- * questionnaire answers and the two employers' facts are not the same facts.
- * This used to be .maybeSingle(), which returns nothing at all when a number
- * matches twice — so the moment the office put a real second case on a real
- * number, that person could not sign in to either.
- *
- * Ordered oldest first so the case someone has been working on longest is the
- * one offered at the top.
+ * It used to take a phone number in the body and answer, to anyone, with the
+ * name and the case on it — so an employer who knew a worker's number learned
+ * the worker was a client, and what the case was called. Now it takes nothing
+ * from the caller: the number comes from the cookie the texted code set
+ * (app/api/clients/code/verify), and without one the answer is empty.
  */
 export async function POST(req: NextRequest) {
-  const { phone } = await req.json()
-  const digits = String(phone ?? '').replace(/\D/g, '')
-  if (!digits) return NextResponse.json({ clients: [] })
-
-  const { data, error } = await getSupabase()
-    .from('clients')
-    .select('id, name, phone, case_type, case_name, onboarding_status, case_folder_id, created_at')
-    .eq('phone', digits)
-    .order('created_at', { ascending: true })
-
-  if (error) {
-    console.error('lookup error:', error)
-    return NextResponse.json({ clients: [] }, { status: 500 })
+  const number = verifiedPhone(req)
+  if (!number) {
+    return NextResponse.json({ clients: [] }, { status: 401, headers: { 'Cache-Control': 'no-store' } })
   }
-
-  const rows = data ?? []
-
-  // The case folder is what the client recognises — it is the employer they are
-  // suing — so the picker is labelled with it rather than with a row id. Read
-  // only when there is a choice to make.
-  let folders: Record<string, string> = {}
-  if (rows.length > 1) {
-    const ids = rows.map(r => r.case_folder_id).filter(Boolean) as string[]
-    if (ids.length) {
-      const { data: f } = await getSupabase().from('case_folders').select('id, name').in('id', ids)
-      folders = Object.fromEntries((f ?? []).map(x => [x.id, x.name]))
-    }
+  try {
+    const clients = await caseChoices(await clientsOnNumber(number))
+    return NextResponse.json({ clients }, { headers: { 'Cache-Control': 'no-store' } })
+  } catch (err) {
+    console.error('lookup error:', err instanceof Error ? err.message : err)
+    return NextResponse.json({ clients: [] }, { status: 500, headers: { 'Cache-Control': 'no-store' } })
   }
-
-  return NextResponse.json({
-    clients: rows.map(c => ({
-      id: c.id,
-      name: c.name,
-      phone: c.phone,
-      case_type: c.case_type,
-      // Whatever names this case on screen: the folder, else the note the
-      // office wrote on the client, else the kind of case.
-      case_label:
-        (c.case_folder_id && folders[c.case_folder_id]) ||
-        (c.case_name ?? '').trim() ||
-        c.case_type ||
-        '',
-      onboarding_status: c.onboarding_status,
-      // Two cases with no folder and no note would otherwise read identically
-      // on the picker, and the client could not tell which was which. The date
-      // the office opened the case always differs.
-      opened: c.created_at,
-    })),
-  })
 }

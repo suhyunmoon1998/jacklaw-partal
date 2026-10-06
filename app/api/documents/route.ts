@@ -7,7 +7,7 @@ export async function GET(req: NextRequest) {
   const clientId = req.nextUrl.searchParams.get('clientId')
   if (!clientId) return NextResponse.json({ documents: [] }, { status: 400 })
 
-  const denied = denyClient(req, clientId)
+  const denied = await denyClient(req, clientId)
   if (denied) return denied
 
   const { data, error } = await getSupabase()
@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
   }
 
-  const denied = denyClient(req, clientId)
+  const denied = await denyClient(req, clientId)
   if (denied) return denied
 
   let storagePath: string | null = null
@@ -100,7 +100,7 @@ export async function DELETE(req: NextRequest) {
     .maybeSingle()
 
   // Whose file it is decides, not who is holding the id.
-  const denied = denyClient(req, doc?.client_id)
+  const denied = await denyClient(req, doc?.client_id)
   if (denied) return denied
 
   if (doc?.storage_path) {

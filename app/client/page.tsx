@@ -57,8 +57,18 @@ interface FoundCase {
 
 export default function LoginPage() {
   const [phone, setPhone] = useState('')
+  const [code, setCode] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  /**
+   * Where the sign-in is: the number, then the code texted to it, then — for a
+   * person on more than one case — which case. Nothing about the number is
+   * shown until the code comes back right.
+   */
+  const [step, setStep] = useState<'phone' | 'code'>('phone')
+  /** When a new code may be asked for, so a second tap does not text twice. */
+  const [resendAt, setResendAt] = useState(0)
+  const [now, setNow] = useState(() => Date.now())
   /**
    * The cases on this number, once there is more than one to choose between.
    * A client suing two employers has a row per employer, because a row holds
@@ -72,6 +82,12 @@ export default function LoginPage() {
     const session = getSession()
     if (session) router.replace(nextPath())
   }, [router])
+
+  useEffect(() => {
+    if (step !== 'code') return
+    const timer = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(timer)
+  }, [step])
 
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const raw = e.target.value.replace(/[^\d\s\-()]/g, '')
@@ -88,27 +104,23 @@ export default function LoginPage() {
     new Set(choices.map(c => `${c.case_label}|${c.case_type}|${openedOn(c.opened, lang)}`)).size <
       choices.length
 
-  /**
-   * The session the portal actually runs on is the cookie the server sets.
-   *
-   * What is kept locally is the name and the case type, for drawing; every
-   * request for anything of this client's is answered on the cookie, which the
-   * browser cannot write.
-   */
-  const signIn = async (client: FoundCase) => {
-    const res = await fetch('/api/clients/session', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ phone: normalizePhone(phone), clientId: client.id }),
-    }).catch(() => null)
-
-    if (!res?.ok) {
-      const body = res ? await res.json().catch(() => ({})) : {}
-      setError(body.error ?? t('not_found'))
-      setLoading(false)
-      return
+  const say = (reason: unknown) => {
+    const known: Record<string, Parameters<typeof t>[0]> = {
+      code_invalid: 'code_invalid',
+      code_too_many: 'code_too_many',
+      wait: 'code_wait',
+      unavailable: 'code_unavailable',
+      not_found: 'not_found',
     }
+    return t(known[String(reason)] ?? 'code_invalid')
+  }
 
+  /**
+   * Remembered locally for drawing — the name and the case type. Every request
+   * for anything of this client's is answered on the cookie the server set,
+   * which the browser cannot write.
+   */
+  const remember = (client: { id: string; name: string; case_type?: string }) => {
     setSession({
       clientId: client.id,
       phone: normalizePhone(phone),
@@ -118,29 +130,98 @@ export default function LoginPage() {
     router.replace(nextPath())
   }
 
+  const askForCode = async () => {
+    setError('')
+    setLoading(true)
+    const res = await fetch('/api/clients/code', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone: normalizePhone(phone), lang }),
+    }).catch(() => null)
+    setLoading(false)
+    if (!res?.ok) {
+      const body = res ? await res.json().catch(() => ({})) : {}
+      setError(say(body.error ?? 'unavailable'))
+      return
+    }
+    setCode('')
+    setStep('code')
+    setResendAt(Date.now() + 60_000)
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    await askForCode()
+  }
+
+  const handleCode = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
     setLoading(true)
-
-    const normalized = normalizePhone(phone)
-    const res = await fetch('/api/clients/lookup', {
+    const res = await fetch('/api/clients/code/verify', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ phone: normalized }),
-    })
-    const { clients } = await res.json()
-    const found: FoundCase[] = clients ?? []
-
-    // One case is the ordinary path and nothing about it changes. Two means the
-    // office has this person on two matters, and only they can say which one
-    // they came here for.
-    if (found.length === 1) { await signIn(found[0]); return }
-    else if (found.length > 1) setChoices(found)
-    else setError(t('not_found'))
-
+      body: JSON.stringify({ phone: normalizePhone(phone), code }),
+    }).catch(() => null)
+    const body = res ? await res.json().catch(() => ({})) : {}
+    if (!res?.ok) {
+      setError(say(body.error ?? 'unavailable'))
+      setLoading(false)
+      return
+    }
+    // One case is the ordinary path. Two means the office has this person on
+    // two matters, and only they can say which one they came here for.
+    if (body.signedIn) { remember(body.signedIn); return }
+    setChoices(body.cases ?? [])
     setLoading(false)
   }
+
+  const signIn = async (client: FoundCase) => {
+    const res = await fetch('/api/clients/session', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ clientId: client.id }),
+    }).catch(() => null)
+
+    if (!res?.ok) {
+      const body = res ? await res.json().catch(() => ({})) : {}
+      setError(body.error ?? t('not_found'))
+      setLoading(false)
+      return
+    }
+    remember(client)
+  }
+
+  const startOver = () => {
+    setChoices([])
+    setPhone('')
+    setCode('')
+    setStep('phone')
+    setError('')
+  }
+
+  const waitSeconds = Math.max(0, Math.ceil((resendAt - now) / 1000))
+
+  const errorBox = error ? (
+    <div className="bg-red-50 border border-red-200 rounded-xl p-4">
+      <div className="flex gap-3">
+        <svg className="w-5 h-5 text-red-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M12 3a9 9 0 100 18A9 9 0 0012 3z" />
+        </svg>
+        <p className="text-red-700 text-sm leading-snug">{error}</p>
+      </div>
+    </div>
+  ) : null
+
+  const spinner = (
+    <span className="flex items-center justify-center gap-2">
+      <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+      </svg>
+      {t('checking')}
+    </span>
+  )
 
   return (
     <div className="min-h-screen bg-white flex flex-col animate-fade-in">
@@ -192,14 +273,15 @@ export default function LoginPage() {
                     </svg>
                   </button>
                 ))}
+                {errorBox}
                 <button
-                  onClick={() => { setChoices([]); setPhone(''); }}
+                  onClick={startOver}
                   className="text-sm text-gray-400 hover:text-navy transition-colors pt-1"
                 >
                   {t('use_another_number')}
                 </button>
               </div>
-            ) : (
+            ) : step === 'phone' ? (
             <form onSubmit={handleSubmit} className="space-y-5" noValidate>
               <div>
                 <label htmlFor="phone" className="label">{t('phone_label')}</label>
@@ -218,32 +300,58 @@ export default function LoginPage() {
                 <p className="mt-2 text-xs text-gray-400">{t('phone_hint')}</p>
               </div>
 
-              {error && (
-                <div className="bg-red-50 border border-red-200 rounded-xl p-4">
-                  <div className="flex gap-3">
-                    <svg className="w-5 h-5 text-red-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M12 3a9 9 0 100 18A9 9 0 0012 3z" />
-                    </svg>
-                    <p className="text-red-700 text-sm leading-snug">{error}</p>
-                  </div>
-                </div>
-              )}
+              {errorBox}
 
               <button
                 type="submit"
-                disabled={loading || normalizePhone(phone).length < 7}
+                disabled={loading || normalizePhone(phone).length < 10}
                 className="btn-primary"
               >
-                {loading ? (
-                  <span className="flex items-center justify-center gap-2">
-                    <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                    </svg>
-                    {t('checking')}
-                  </span>
-                ) : t('continue_btn')}
+                {loading ? spinner : t('continue_btn')}
               </button>
+            </form>
+            ) : (
+            <form onSubmit={handleCode} className="space-y-5" noValidate>
+              <p className="text-sm text-gray-600">{t('code_sent')}</p>
+              <div>
+                <label htmlFor="code" className="label">{t('code_label')}</label>
+                <input
+                  id="code"
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={6}
+                  value={code}
+                  onChange={e => { setCode(e.target.value.replace(/\D/g, '').slice(0, 6)); setError('') }}
+                  placeholder="000000"
+                  className="input-field text-lg tracking-[0.4em]"
+                  autoFocus
+                  autoComplete="one-time-code"
+                  disabled={loading}
+                />
+                <p className="mt-2 text-xs text-gray-400">{t('code_hint')}</p>
+              </div>
+
+              {errorBox}
+
+              <button type="submit" disabled={loading || code.length !== 6} className="btn-primary">
+                {loading ? spinner : t('verify_btn')}
+              </button>
+
+              <div className="flex items-center justify-between gap-3 text-sm">
+                <button
+                  type="button"
+                  onClick={() => { void askForCode() }}
+                  disabled={loading || waitSeconds > 0}
+                  className="text-gold font-semibold disabled:text-gray-300"
+                >
+                  {t('code_resend')}{waitSeconds > 0 ? ` (${waitSeconds})` : ''}
+                </button>
+                <button type="button" onClick={startOver} className="text-gray-400 hover:text-navy transition-colors">
+                  {t('use_another_number')}
+                </button>
+              </div>
+              <p className="text-xs text-gray-400">{t('code_none')}</p>
             </form>
             )}
           </div>

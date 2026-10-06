@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server'
-import { createHmac, timingSafeEqual } from 'crypto'
+import { createHmac, randomBytes, timingSafeEqual } from 'crypto'
 
 /**
  * Who is allowed to read a client's file.
@@ -58,7 +58,29 @@ export function validAdminSession(token: string | undefined, secret: string): bo
 }
 
 /**
- * The password itself, checked in constant time.
+ * The shortest admin password the login accepts.
+ *
+ * The login has no attempt limit, by the owner's decision (see
+ * app/api/admin/login), so the password's length is the whole lock. An earlier
+ * admin key was seven characters and sat in this public repository; anything
+ * that short can be guessed by trying. Eleanor's one-click sign-in does not use
+ * the password, so the office is never locked out by this.
+ */
+export const ADMIN_PASSWORD_MIN_LENGTH = 16
+
+/** True when a password is set but too short to sign in with. */
+export function adminPasswordTooShort(): boolean {
+  const secret = process.env.ADMIN_PASSWORD ?? ''
+  return secret.length > 0 && secret.length < ADMIN_PASSWORD_MIN_LENGTH
+}
+
+/** A key that lives as long as the process, so both sides compare at one length. */
+const COMPARE_KEY = randomBytes(32)
+const digest = (s: string) => createHmac('sha256', COMPARE_KEY).update(s).digest()
+
+/**
+ * The password itself, checked in constant time — over keyed digests of both
+ * sides, so not even its length shows in the time taken.
  *
  * Separate from the session so the login route is the only thing in the app
  * that ever compares it.
@@ -66,7 +88,8 @@ export function validAdminSession(token: string | undefined, secret: string): bo
 export function correctAdminPassword(entered: string): boolean {
   const secret = process.env.ADMIN_PASSWORD
   if (!secret || !entered) return false
-  return sameString(entered, secret)
+  if (secret.length < ADMIN_PASSWORD_MIN_LENGTH) return false
+  return timingSafeEqual(digest(entered), digest(secret))
 }
 
 export function isAdmin(req: NextRequest): boolean {

@@ -1,63 +1,65 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
-import { clearClientCookie, sessionClient, setClientCookie } from '@/lib/clientAuth'
+import { clearClientCookie, setClientCookie, verifiedPhone, verifiedSessionClient } from '@/lib/clientAuth'
+import { phoneKey } from '@/lib/signInCode'
+
+export const dynamic = 'force-dynamic'
+
+const noStore = { 'Cache-Control': 'no-store' }
 
 /**
  * Signing a client in to one of their cases.
  *
- * The pairing is checked here and not taken on trust: the caller says "this
- * phone, this case", and the row has to actually carry that number. Otherwise
- * the cookie would be a cookie for whatever id was typed, and every route
- * behind it would be back to where it started.
- *
- * Sign-in is still a phone number with no code sent to it. What this adds is
- * that the portal now has to be signed in to at all, and to the case being
- * read — not that the person is who they say they are.
+ * Only a browser that has just answered the code texted to a number can pick
+ * a case, and only a case on that number (app/api/clients/code/verify). The
+ * session it gets is bound to the number, so it ends when the office changes
+ * the client's number (lib/clientAuth.ts).
  */
 
 /** GET — which case, if any, this browser is signed in to. */
 export async function GET(req: NextRequest) {
-  return NextResponse.json({ clientId: sessionClient(req) })
+  return NextResponse.json({ clientId: await verifiedSessionClient(req) }, { headers: noStore })
 }
 
 export async function POST(req: NextRequest) {
+  const number = verifiedPhone(req)
+  if (!number) {
+    return NextResponse.json({ error: 'Sign in with the code we text you first.' }, { status: 401, headers: noStore })
+  }
   const body = await req.json().catch(() => ({}))
   const clientId = typeof body?.clientId === 'string' ? body.clientId.trim() : ''
-  const digits = String(body?.phone ?? '').replace(/\D/g, '')
-
-  if (!clientId || digits.length < 7) {
-    return NextResponse.json({ error: 'A phone number and a case are required.' }, { status: 400 })
+  if (!clientId) {
+    return NextResponse.json({ error: 'Choose a case.' }, { status: 400, headers: noStore })
   }
 
-  const { data } = await getSupabase()
+  const { data, error } = await getSupabase()
     .from('clients')
-    .select('id')
+    .select('id, name, phone, case_type')
     .eq('id', clientId)
-    .eq('phone', digits)
     .maybeSingle()
-
-  // Wrong pairing and no such client answer alike: this should not become a
-  // way to ask whether an id exists.
-  if (!data) {
-    return NextResponse.json({ error: 'We could not find that case.' }, { status: 404 })
+  if (error) {
+    return NextResponse.json({ error: 'The portal could not check your sign-in. Please try again.' }, { status: 503, headers: noStore })
   }
 
-  const res = NextResponse.json({ clientId: data.id })
-  if (!setClientCookie(res, data.id)) {
+  // A case on another number answers like no case at all: this must not
+  // become a way to ask whether an id exists.
+  if (!data || phoneKey(String(data.phone ?? '')) !== number) {
+    return NextResponse.json({ error: 'We could not find that case.' }, { status: 404, headers: noStore })
+  }
+
+  const res = NextResponse.json({ clientId: data.id, name: data.name, case_type: data.case_type ?? '' }, { headers: noStore })
+  if (!setClientCookie(res, data.id, String(data.phone ?? ''))) {
     // Refused rather than waved through: without the signing secret a session
     // cannot be verified later, and a portal that lets everyone in because it
     // is misconfigured is the thing this exists to prevent.
-    return NextResponse.json(
-      { error: 'This portal is not configured for sign-in yet.' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'This portal is not configured for sign-in yet.' }, { status: 500, headers: noStore })
   }
   return res
 }
 
 /** DELETE — signing out. */
 export async function DELETE() {
-  const res = NextResponse.json({ clientId: null })
+  const res = NextResponse.json({ clientId: null }, { headers: noStore })
   clearClientCookie(res)
   return res
 }

@@ -8,7 +8,7 @@ export async function GET(req: NextRequest) {
   const clientId = req.nextUrl.searchParams.get('clientId')
   if (!clientId) return NextResponse.json({ assignments: [] }, { status: 400 })
 
-  const denied = denyClient(req, clientId)
+  const denied = await denyClient(req, clientId)
   if (denied) return denied
 
   const assignments = await listAssignments(clientId, { visibleToClient: true })
