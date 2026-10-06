@@ -14,6 +14,7 @@
 
 import { NextRequest } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
+import { numberOptedOut } from '@/lib/numberOptOut'
 import { Lang } from '@/lib/langs'
 
 const FIRM = '866 JACK LAW'
@@ -72,7 +73,11 @@ export async function lookupClientSms(
     .eq('id', clientId)
     .maybeSingle()
   if (!data) return { phone: '', optedOut: false }
-  return { phone: usablePhone(String(data.phone ?? '')), optedOut: Boolean(data.sms_opt_out) }
+  const phone = usablePhone(String(data.phone ?? ''))
+  // The person, not the row: another case on this number may have said stop.
+  // A number that cannot be checked is treated as stopped.
+  const stopped = phone ? await numberOptedOut(phone) : false
+  return { phone, optedOut: Boolean(data.sms_opt_out) || stopped !== false }
 }
 
 export async function lookupClientPhone(clientId: string): Promise<string> {

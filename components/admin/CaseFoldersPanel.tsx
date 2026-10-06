@@ -44,6 +44,8 @@ export interface PanelClient extends ClientWork {
   tags: string[]
   /** The language the portal writes to them in; empty until one is known. */
   portalLang: string
+  /** Texts and calls to this number are stopped. */
+  smsOptOut?: boolean
   documentCount: number
   createdAt: string
   questionnaire: { submitted: boolean; completedSections: number[]; lastSaved: string }
@@ -71,6 +73,8 @@ export interface ClientActions<C extends PanelClient = PanelClient> {
   onAddClient: (folderId: string | null) => void
   onRetagClient: (clientId: string, tags: string[]) => void
   onSetLang: (clientId: string, lang: string) => void
+  /** Stops texts and calls to this client's number, on every case it is on. */
+  onStopTexting?: (clientId: string) => void
 }
 
 const KEY = {}
@@ -648,6 +652,20 @@ function FolderDetail<C extends PanelClient>({
                       <option key={l.code} value={l.code}>{LANG_ENGLISH_NAME[l.code]}</option>
                     ))}
                   </select>
+                  {c.smsOptOut ? (
+                    <p className="mt-1 text-[10px] font-semibold text-red-700" title="The client asked to stop. Only they can turn it back on, by texting START.">
+                      Texts &amp; calls stopped
+                    </p>
+                  ) : actions.onStopTexting ? (
+                    <button
+                      type="button"
+                      onClick={() => actions.onStopTexting?.(c.id)}
+                      className="mt-1 block text-[10px] text-gray-400 hover:text-red-700 underline underline-offset-2"
+                      title="The client asked us to stop, by phone or in a text the portal could not read as one"
+                    >
+                      Stop texts &amp; calls
+                    </button>
+                  ) : null}
                 </div>
 
                 <span className="hidden lg:block text-xs text-gray-400 whitespace-nowrap w-20 text-right">

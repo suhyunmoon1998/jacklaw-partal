@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 
@@ -16,10 +16,16 @@ const texts: { to: string; body: string }[] = []
 
 function from(table: string) {
   const filters: [string, unknown][] = []
-  const rows = () => (tables[table] ?? []).filter(row => filters.every(([column, value]) => row[column] === value))
+  const among: [string, unknown[]][] = []
+  const rows = () =>
+    (tables[table] ?? []).filter(
+      row => filters.every(([column, value]) => row[column] === value) && among.every(([column, values]) => values.includes(row[column]))
+    )
   const api: Record<string, unknown> = {
     select: () => api,
     eq: (column: string, value: unknown) => { filters.push([column, value]); return api },
+    in: (column: string, values: unknown[]) => { among.push([column, values]); return api },
+    limit: () => api,
     maybeSingle: async () => ({ data: rows()[0] ?? null, error: null }),
     then: (resolve: (value: unknown) => void) => resolve({ data: rows(), error: null }),
     insert: async (row: Row) => {
@@ -63,7 +69,17 @@ import { NextRequest } from 'next/server'
 const SECRET = 'synthetic-eleanor-service-secret-0123456789'
 const daysAgo = (n: number) => new Date(Date.now() - n * 86_400_000).toISOString()
 
+// 11:00 in Los Angeles: Eleanor's sends keep the same hours as the office's
+// texts (8 am to 9 pm), so the suite must not depend on when it is run.
+const MORNING = new Date('2026-10-05T18:00:00.000Z')
+
+afterEach(() => {
+  vi.useRealTimers()
+})
+
 beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(MORNING)
   texts.length = 0
   process.env.ELEANOR_PORTAL_SERVICE_SECRET = SECRET
   tables = {
@@ -202,3 +218,18 @@ describe('one way to send', () => {
     expect(eleanor).not.toMatch(/placeCall/)
   })
 })
+
+describe('sends at night', () => {
+  it('sends no reminder outside 8 am to 9 pm in Los Angeles, and says why', async () => {
+    const url = 'https://portal.test/api/eleanor/sends?kind=reminder&clientId=c1&chasing=module1'
+    const previewed = await (await GET(request(url, { auth: `Bearer ${SECRET}` }))).json()
+    vi.setSystemTime(new Date('2026-10-06T06:30:00.000Z')) // 23:30 in Los Angeles
+    const late = await POST(request('https://portal.test/api/eleanor/sends', {
+      method: 'POST', auth: `Bearer ${SECRET}`, body: { kind: 'reminder', clientId: 'c1', chasing: 'module1', fingerprint: previewed.fingerprint },
+    }))
+    expect(late.status).toBe(409)
+    expect((await late.json()).reason).toBe('QuietHours')
+    expect(texts).toHaveLength(0)
+  })
+})
+

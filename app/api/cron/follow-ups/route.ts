@@ -79,9 +79,13 @@ const START_DAMAGES_BY = 150
 
 function authorised(req: NextRequest): boolean {
   // Vercel's scheduler sends the secret as a bearer token. An admin can also
-  // run it by hand from the panel, which is how a backlog gets cleared without
-  // waiting for midnight.
-  if (isAdmin(req)) return true
+  // run it by hand, by opening the address, which is how a backlog gets cleared
+  // without waiting for midnight — but only by opening it: the browser sends
+  // the admin cookie with a link followed from another site too, and a page
+  // anywhere could otherwise start a full paid run. Sec-Fetch-Site is "none"
+  // for an address typed or bookmarked and "same-origin" from the portal.
+  const site = req.headers.get('sec-fetch-site')
+  if (isAdmin(req) && (site === 'none' || site === 'same-origin')) return true
   const secret = process.env.CRON_SECRET
   if (!secret) return false
   const auth = req.headers.get('authorization')
@@ -467,12 +471,13 @@ export async function GET(req: NextRequest) {
                 : next.needs === 'damages'
                   ? await readDamages(next, began)
                   : await writeRound(next)
-        console.log(`cron follow-ups: ${next.name} — ${outcome.did ?? outcome.reason ?? ''}`)
+        // The id, not the name: these logs are kept by the host.
+        console.log(`cron follow-ups: ${next.clientId} — ${outcome.did ?? outcome.reason ?? ''}`)
         if (outcome.ran) await clearSkip(next.clientId, next.needs)
         else await recordSkip(next.clientId, next.needs, String(outcome.reason ?? 'did not advance'))
         return outcome
       } catch (err) {
-        console.error(`cron follow-ups: ${next.name}:`, err)
+        console.error(`cron follow-ups: ${next.clientId}:`, err instanceof Error ? err.message : err)
         await recordSkip(next.clientId, next.needs, err instanceof Error ? err.message : 'failed')
         throw err
       }

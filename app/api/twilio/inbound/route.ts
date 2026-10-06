@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createHmac, timingSafeEqual } from 'crypto'
 import { getSupabase } from '@/lib/supabase'
 import { toE164 } from '@/lib/twilio'
-import { readsAs } from '@/lib/optOut'
+import { readReply } from '@/lib/optOut'
+import { maskPhone } from '@/lib/eleanorService'
+import { tellOfficePossibleStop } from '@/lib/inboundNotice'
+import { phoneKey, phoneVariants } from '@/lib/signInCode'
 
 /**
  * POST /api/twilio/inbound — what a client texts back.
@@ -70,24 +73,33 @@ export async function POST(req: NextRequest) {
   const from = String(form.get('From') ?? '')
   const body = String(form.get('Body') ?? '')
 
-  const meaning = readsAs(body)
+  const { meaning, maybeStop } = readReply(body)
   const stopping = meaning === 'stop'
   const starting = meaning === 'start'
 
   // The number arrives as +1XXXXXXXXXX; the column holds bare digits.
   const e164 = toE164(from)
-  const digits = (e164 ?? from).replace(/\D/g, '').replace(/^1(?=\d{10}$)/, '')
+  const digits = phoneKey(e164 ?? from)
+  // Logs carry a masked number and never the words: a client's message to their
+  // lawyer does not belong in a hosting provider's logs.
+  const masked = maskPhone(digits || from)
 
   if (!stopping && !starting) {
     // Everything else is a client talking to their lawyer — "I already sent it",
-    // "who is this", a question in Korean. It is not for this endpoint to answer,
-    // but the office needs to know it happened, and until now it was dropped.
-    console.warn(`twilio inbound: reply from ${digits || from} not a keyword: ${body.slice(0, 160)}`)
+    // "who is this", a question in Korean. It is not for this endpoint to
+    // answer. One that might be a request to stop goes to the office to read.
+    if (maybeStop && digits.length >= 10) {
+      const { data: rows } = await getSupabase().from('clients').select('name').in('phone', phoneVariants(digits))
+      await tellOfficePossibleStop({ from: digits, body, clients: (rows ?? []).map(r => String(r.name ?? '')).filter(Boolean) })
+      console.warn(`twilio inbound: reply from ${masked} may mean stop; sent to the office to read`)
+    } else {
+      console.warn(`twilio inbound: reply from ${masked} not a keyword (${body.length} characters)`)
+    }
     return empty()
   }
 
   if (digits.length < 10) {
-    console.error(`twilio inbound: ${stopping ? 'STOP' : 'START'} from unusable number ${from}`)
+    console.error(`twilio inbound: ${stopping ? 'STOP' : 'START'} from an unusable number`)
     return empty()
   }
 
@@ -101,11 +113,11 @@ export async function POST(req: NextRequest) {
   const { data, error } = await getSupabase()
     .from('clients')
     .update({ sms_opt_out: stopping })
-    .in('phone', [digits, `1${digits}`, `+1${digits}`])
+    .in('phone', phoneVariants(digits))
     .select('id')
 
   if (error) {
-    console.error('twilio inbound: could not record opt-out for', digits, error)
+    console.error(`twilio inbound: could not record the opt-out for ${masked} (${error.message})`)
     return empty()
   }
 
@@ -115,13 +127,13 @@ export async function POST(req: NextRequest) {
   // thing this endpoint can notice.
   if (!data || data.length === 0) {
     console.error(
-      `twilio inbound: ${stopping ? 'STOP' : 'START'} from ${digits} matched NO client row — ` +
+      `twilio inbound: ${stopping ? 'STOP' : 'START'} from ${masked} matched NO client row — ` +
         `the opt-out was NOT recorded and this person is still on the reminder ladder`
     )
     return empty()
   }
 
-  console.info(`twilio inbound: ${stopping ? 'STOP' : 'START'} from ${digits} applied to ${data.length} row(s)`)
+  console.info(`twilio inbound: ${stopping ? 'STOP' : 'START'} from ${masked} applied to ${data.length} row(s)`)
   return empty()
 }
 

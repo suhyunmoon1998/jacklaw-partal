@@ -25,7 +25,18 @@ export function isConfigured(): boolean {
 
 export type SendResult =
   | { ok: true; id: string }
-  | { ok: false; error: string; unconfigured?: true }
+  | {
+      ok: false
+      error: string
+      unconfigured?: true
+      /**
+       * Twilio may have taken the message anyway: the connection failed, or it
+       * answered with a server error, which its documentation says "may or may
+       * not have been processed". A caller must not offer to send again as if
+       * nothing had gone out.
+       */
+      uncertain?: true
+    }
 
 /**
  * US numbers, in the form Twilio wants.
@@ -61,11 +72,16 @@ async function post(path: string, form: Record<string, string>): Promise<SendRes
     })
     const body = await res.json().catch(() => ({}))
     if (!res.ok) {
-      return { ok: false, error: body?.message ? String(body.message) : `Twilio ${res.status}` }
+      return {
+        ok: false,
+        error: body?.message ? String(body.message) : `Twilio ${res.status}`,
+        ...(res.status >= 500 ? { uncertain: true as const } : {}),
+      }
     }
     return { ok: true, id: String(body.sid ?? '') }
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : 'Twilio request failed' }
+    // Sent and not answered looks the same from here as never sent.
+    return { ok: false, error: err instanceof Error ? err.message : 'Twilio request failed', uncertain: true }
   }
 }
 

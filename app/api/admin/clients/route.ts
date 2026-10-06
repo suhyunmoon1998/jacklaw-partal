@@ -4,6 +4,7 @@ import { isLang } from '@/lib/langs'
 import { MODULES_GIVEN_ON_CREATE, moduleSectionCount } from '@/lib/modules'
 import { isAdmin } from '@/lib/adminAuth'
 import { eraseClientFiles, forgetClientTranslations, isClientId } from '@/lib/clientErasure'
+import { numberOptedOut, stopTextingNumber } from '@/lib/numberOptOut'
 
 
 /**
@@ -35,7 +36,7 @@ export async function GET(req: NextRequest) {
 
   const { data: clients, error } = await getSupabase()
     .from('clients')
-    .select('id, name, phone, case_type, case_name, case_folder_id, tags, portal_lang, onboarding_status, created_at')
+    .select('id, name, phone, case_type, case_name, case_folder_id, tags, portal_lang, onboarding_status, created_at, sms_opt_out')
     .order('created_at', { ascending: false })
 
   if (error) return NextResponse.json({ error: 'Fetch failed' }, { status: 500 })
@@ -95,6 +96,7 @@ export async function GET(req: NextRequest) {
     caseFolderId: c.case_folder_id ?? null,
     tags: c.tags ?? [],
     portalLang: c.portal_lang ?? '',
+    smsOptOut: Boolean(c.sms_opt_out),
     onboardingStatus: c.onboarding_status,
     createdAt: c.created_at,
     questionnaire: qMap[c.id]
@@ -172,6 +174,11 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // A person who told the office to stop on one case has told it for every
+  // case: the new row starts opted out if the number already is.
+  const stopped = await numberOptedOut(digits)
+  if (stopped === null) return NextResponse.json({ error: 'Could not check whether this number opted out. Try again.' }, { status: 503 })
+
   const id = `client-${Date.now()}`
   const { data, error } = await getSupabase()
     .from('clients')
@@ -180,6 +187,7 @@ export async function POST(req: NextRequest) {
       name,
       phone: digits,
       case_type: caseType,
+      sms_opt_out: stopped,
       // A starting language, so the first thing sent to a client who has answered
       // nothing yet still reads in theirs. The moment they pick one in the portal
       // themselves, that write wins — this is a seed, not a setting.
@@ -253,6 +261,22 @@ export async function PATCH(req: NextRequest) {
   if ('tags' in body) patch.tags = tagged(body.tags)
   // '' clears it, which puts the client back to being guessed from their answers.
   if ('portalLang' in body) patch.portal_lang = isLang(body.portalLang) ? body.portalLang : null
+
+  // The office can always honour a request to stop — said on the phone, or in
+  // a text the webhook could not read as one — on every case with the number.
+  // Only the client can opt back in, by texting START.
+  if (body.stopTexting === true) {
+    const { data: row } = await getSupabase().from('clients').select('phone').eq('id', id).maybeSingle()
+    if (!row) return NextResponse.json({ error: 'That client is not on file.' }, { status: 404 })
+    try {
+      await stopTextingNumber(String(row.phone ?? ''))
+      const { error } = await getSupabase().from('clients').update({ sms_opt_out: true }).eq('id', id)
+      if (error) throw new Error(error.message)
+    } catch (err) {
+      return NextResponse.json({ error: (err as Error).message }, { status: 500 })
+    }
+    if (!Object.keys(patch).length) return NextResponse.json({ success: true })
+  }
 
   if (!Object.keys(patch).length) {
     return NextResponse.json({ error: 'Nothing to update' }, { status: 400 })

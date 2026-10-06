@@ -83,7 +83,7 @@ export async function sendIntakeNotificationEmails(
     forOffice[id] = `${text}\n\n— as written: ${String(filed[id])}`
   }
   if (incomplete) {
-    console.error('some answers could not be put into English for', clientName)
+    console.error('some answers could not be put into English for the firm notification')
   }
 
   try {
