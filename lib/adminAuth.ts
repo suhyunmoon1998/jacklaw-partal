@@ -57,22 +57,11 @@ export function validAdminSession(token: string | undefined, secret: string): bo
   return sameString(signature, sign(expires, secret))
 }
 
-/**
- * The shortest admin password the login accepts.
- *
- * The login has no attempt limit, by the owner's decision (see
- * app/api/admin/login), so the password's length is the whole lock. An earlier
- * admin key was seven characters and sat in this public repository; anything
- * that short can be guessed by trying. Eleanor's one-click sign-in does not use
- * the password, so the office is never locked out by this.
+/*
+ * No minimum length (owner, 2026-10-06, while the portal is tested): whatever
+ * ADMIN_PASSWORD is set to signs in. The login has no attempt limit either, so
+ * the password's length is the whole lock — set a long one before real use.
  */
-export const ADMIN_PASSWORD_MIN_LENGTH = 16
-
-/** True when a password is set but too short to sign in with. */
-export function adminPasswordTooShort(): boolean {
-  const secret = process.env.ADMIN_PASSWORD ?? ''
-  return secret.length > 0 && secret.length < ADMIN_PASSWORD_MIN_LENGTH
-}
 
 /** A key that lives as long as the process, so both sides compare at one length. */
 const COMPARE_KEY = randomBytes(32)
@@ -88,7 +77,6 @@ const digest = (s: string) => createHmac('sha256', COMPARE_KEY).update(s).digest
 export function correctAdminPassword(entered: string): boolean {
   const secret = process.env.ADMIN_PASSWORD
   if (!secret || !entered) return false
-  if (secret.length < ADMIN_PASSWORD_MIN_LENGTH) return false
   return timingSafeEqual(digest(entered), digest(secret))
 }
 

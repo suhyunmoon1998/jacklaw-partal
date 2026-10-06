@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { timingSafeEqual } from 'crypto'
 import { getSupabase } from '@/lib/supabase'
 import { optedOutNumbers } from '@/lib/numberOptOut'
-import { phoneKey } from '@/lib/signInCode'
+import { phoneKey } from '@/lib/phoneNumber'
 import { ModuleId } from '@/lib/modules'
 import {
   Chasing,

@@ -10,7 +10,7 @@
  */
 
 import { getSupabase } from '@/lib/supabase'
-import { phoneKey, phoneVariants } from '@/lib/signInCode'
+import { phoneKey, phoneVariants } from '@/lib/phoneNumber'
 
 /**
  * Whether any row with this number has opted out. Null when it could not be

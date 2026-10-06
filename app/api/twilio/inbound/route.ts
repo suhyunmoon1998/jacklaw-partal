@@ -5,7 +5,7 @@ import { toE164 } from '@/lib/twilio'
 import { readReply } from '@/lib/optOut'
 import { maskPhone } from '@/lib/eleanorService'
 import { tellOfficePossibleStop } from '@/lib/inboundNotice'
-import { phoneKey, phoneVariants } from '@/lib/signInCode'
+import { phoneKey, phoneVariants } from '@/lib/phoneNumber'
 
 /**
  * POST /api/twilio/inbound — what a client texts back.
