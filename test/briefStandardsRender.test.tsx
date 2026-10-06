@@ -21,7 +21,7 @@ const fact = (id: string): LedgerFact => ({
 describe('the sheets, drawn', () => {
   it('draws the factual sheet under the template’s twelve numbered headings, in order', () => {
     const ledger = [fact('f001'), fact('f002'), fact('f003')]
-    const brief = buildFactualBrief({ clientName: 'Dayeon Kim', caseType: 'Wage & Hour', ledger, spine: null, readOn: null })
+    const brief = buildFactualBrief({ clientName: 'Minji Park', caseType: 'Wage & Hour', ledger, spine: null, readOn: null })
     const view = byTemplate({ brief, ledger, baseline: [], spine: null })
     render(<FactualDocument brief={brief} view={view} ledger={ledger} />)
 
@@ -33,7 +33,7 @@ describe('the sheets, drawn', () => {
 
   it('draws the trial-readiness section on the case brief, saying it is not a trial brief', () => {
     const brief = buildBrief({
-      clientName: 'Dayeon Kim',
+      clientName: 'Minji Park',
       caseType: 'Wage & Hour',
       analysis: null,
       findings: [],

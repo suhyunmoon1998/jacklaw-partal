@@ -18,7 +18,7 @@ const work = (over: Partial<ClientWork> = {}): ClientWork => ({
 })
 
 describe('a client who was only ever sent a question set', () => {
-  // Jingwen Du and Xilong Wang, 2026-09-04.
+  // Two clients, 2026-09-04.
   const finishedTheSet = work({ assignments: { total: 1, completed: 1 } })
 
   it('is not called "Not Started" once they have finished it', () => {

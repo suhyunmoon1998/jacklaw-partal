@@ -3,7 +3,7 @@ import { Brief } from '@/lib/caseBrief'
 import { FOR_A_PERSON, adversarialPass } from '@/lib/adversarialPass'
 
 const brief = (over: Partial<Brief> = {}): Brief => ({
-  clientName: 'Dayeon Kim',
+  clientName: 'Minji Park',
   caseType: 'Wage & Hour',
   factCount: 0,
   readOn: null,

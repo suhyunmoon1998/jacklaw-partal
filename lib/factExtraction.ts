@@ -467,7 +467,7 @@ old fact true replaces nothing. Never replace a fact with one that says less.
 A hedged answer replaces nothing. "Probably", "I think", "I don't remember well" — or an answer
 that still does not know what the old fact said was not known — leaves the specific earlier
 answer standing. Both stay, and the contradiction check that follows records the conflict.
-DAYEON KIM said she did not remember when or how many times her rest breaks were interrupted,
+One client said she did not remember when or how many times her rest breaks were interrupted,
 but probably rested fully; that did not make her earlier answer, that she answered a work phone
 during them, untrue, and it did not tell anyone on how many days a break was lost. A client changing
 an answer is itself a fact the office must see, so the reason must name both versions; the old

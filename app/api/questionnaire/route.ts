@@ -132,7 +132,7 @@ export async function POST(req: NextRequest) {
 
     if (client) {
       // Whichever says the client wrote in something other than English: the
-      // portal language, or the answers themselves. Gustavo Arce Cordero reads
+      // portal language, or the answers themselves. One client reads
       // the portal in English and answered in Spanish, so neither alone is
       // enough.
       const lang = [client.portal_lang, submissionLanguage(answers)].find(l => l && l !== 'en') ?? 'en'

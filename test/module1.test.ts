@@ -523,11 +523,11 @@ describe('answers stored in the language the client read', () => {
 describe('coming back to a questionnaire that changed underneath you', () => {
   // The two clients who were mid-intake when Module 1 shipped, as their rows
   // actually stand in the database.
-  const ESTER_COMPLETED = Array.from({ length: 19 }, (_, i) => i)
+  const EARLIER_COMPLETED = Array.from({ length: 19 }, (_, i) => i)
 
   it('lands on the first section that still wants something, not on Submit', () => {
     const partly: Answers = {
-      full_name: 'Ester',
+      full_name: 'Elena',
       dob: '1980-01-01',
       address: '1 Test St',
       city_state_zip: 'Los Angeles, CA 90017',
@@ -543,7 +543,7 @@ describe('coming back to a questionnaire that changed underneath you', () => {
     const landed = visible[at]
     expect(landed.questions.some(q => isVisible(q, live) && !hasAnswer(live[q.id]))).toBe(true)
     // A stale count of nineteen would have clamped to the end.
-    expect(ESTER_COMPLETED.length).toBeGreaterThan(visible.length - 1)
+    expect(EARLIER_COMPLETED.length).toBeGreaterThan(visible.length - 1)
   })
 
   it('sends someone who has finished everything to the last section', () => {

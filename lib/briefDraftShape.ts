@@ -67,7 +67,7 @@ export const KEYS_OF: Record<DraftKind, DraftKey[]> = {
 
 /**
  * How far a sentence is established, in the words the firm's own factual
- * summaries use (Factual Summary Concord 1.0, BMW 1.0): CONFIRMED by a
+ * summaries use (the office's own sample summaries): CONFIRMED by a
  * record, CLIENT-REPORTED, an INFERENCE, or UNRESOLVED because the facts
  * under it conflict or are unknown. Computed in code from the ledger status
  * of the facts it cites — never taken from the model.

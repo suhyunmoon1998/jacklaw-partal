@@ -7,8 +7,8 @@ import { QuestionnaireSection } from '@/types'
  * narrowed to Module 1 (commit 781946c) and the wage-and-hour detail moved to
  * Module 2 under new question ids — so everything a client answered on this
  * version under an id the current questionnaire no longer has became invisible
- * to fact extraction, which reads by the current definitions. Carla Linares
- * answered 69 questions and would have been read on 14; Branden's July answers
+ * to fact extraction, which reads by the current definitions. One client
+ * answered 69 questions and would have been read on 14; another's July answers
  * held the days-per-week figure his damages reading said was missing.
  *
  * Read-only. Nothing renders from this; lib/factExtraction.ts reads the

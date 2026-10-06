@@ -121,8 +121,8 @@ export const shortIds = (s: string) => s.replace(/\bclient-\d+:/g, '')
  *
  * The extraction fills `corroboration` with whatever supports a fact, and on
  * a file with no records in it that is always another of her own answers: a
- * fact id, or the id of the question she answered. Of 91 entries on Dayeon
- * Kim's ledger, 91 are internal and none names a document, a witness or a
+ * fact id, or the id of the question she answered. Of 91 entries on one
+ * client's ledger, 91 are internal and none names a document, a witness or a
  * record.
  *
  * That is worth having — it is internal consistency, and inconsistency is

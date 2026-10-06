@@ -19,7 +19,7 @@ const claim = (claimId: string, standing: string, elements: Finding['elements'],
 
 describe('the fact reference on a page a person reads', () => {
   it('drops the client id, which is identical on every one of them', () => {
-    expect(shortRef('client-1789099693038:f068 — he did no work during the meal')).toBe(
+    expect(shortRef('client-1700000000001:f068 — he did no work during the meal')).toBe(
       'f068 — he did no work during the meal'
     )
   })

@@ -3,7 +3,7 @@ import { answersToPrint, generateAnswersPdf } from '@/lib/generateAnswersPdf'
 import { answersForReading } from '@/lib/modules'
 import { QuestionnaireSection } from '@/types'
 
-// The shape of Jingwen Du's "Vehicle, DOT & July 31 Termination": one flat
+// The shape of one client's follow-up set: one flat
 // section, question ids made from the question text.
 const set: QuestionnaireSection[] = [
   {
@@ -42,8 +42,8 @@ describe('printing an assigned question set', () => {
   })
 
   it('draws a set longer than an empty one', async () => {
-    const full = await generateAnswersPdf('Jingwen Du', 'Wage & Hour', '', answers, { sections: set, title: set[0].title })
-    const empty = await generateAnswersPdf('Jingwen Du', 'Wage & Hour', '', {}, { sections: set, title: set[0].title })
+    const full = await generateAnswersPdf('Mei Lin', 'Wage & Hour', '', answers, { sections: set, title: set[0].title })
+    const empty = await generateAnswersPdf('Mei Lin', 'Wage & Hour', '', {}, { sections: set, title: set[0].title })
     expect(full.length).toBeGreaterThan(empty.length)
   })
 })

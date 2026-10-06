@@ -9,9 +9,9 @@ import { AnswerValue } from '@/types'
  *
  * One place, because two did it differently. The admin panel's extraction
  * read the questionnaire and every answered question set; the nightly run read
- * the questionnaire alone. Jingwen Du and Xilong Wang were read by the night,
+ * the questionnaire alone. Two clients were read by the night,
  * so the forty-four answers each gave on 9/4 about the vehicle, DOT and the
- * July 31 termination — and Jingwen's work-history clarification — were never
+ * July 31 termination — and one of them's work-history clarification — were never
  * in their facts, and the rounds written from those facts asked them again.
  */
 export async function gatherExtractionInput(clientId: string) {

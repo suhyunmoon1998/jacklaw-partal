@@ -278,7 +278,7 @@ export function readingSectionDone(
  * `filed` is everything the client stands behind — the answers in effect, plus
  * the ones a later version of the questionnaire orphaned by putting a new
  * question in front of them. Those are still the client's own word and belong
- * in the file; dropping them would lose eight of Roberto Paco Garcia's answers
+ * in the file; dropping them would lose eight of one client's answers
  * for no better reason than that Module 1 added a gate above them.
  *
  * `retracted` is the narrow, real case: they answered, then changed the question

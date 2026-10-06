@@ -50,7 +50,7 @@ export const maxDuration = 300
 /**
  * Seconds into the run after which no NEW stage of a reading is begun.
  *
- * The longest stage measured is now the spine at 149 seconds (Branden,
+ * The longest stage measured is now the spine at 149 seconds (one client,
  * 2026-09-25), with claims 1 at 131; begun by this mark, either finishes
  * inside the 300-second ceiling. It was 170 when the longest known was 116,
  * which a 149-second spine begun at 169 would have overrun. Past it, whatever
@@ -60,7 +60,7 @@ const START_NO_STAGE_AFTER = 145
 
 /**
  * No extraction is begun after this. Every section is read at once, so a
- * file takes as long as its slowest section — 112 seconds for Jingwen Du's
+ * file takes as long as its slowest section — 112 seconds for one client's
  * 180 facts; 90 for the longest single section measured before that.
  */
 const START_FACTS_BY = 120

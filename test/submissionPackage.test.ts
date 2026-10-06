@@ -8,7 +8,7 @@ import {
 } from '@/lib/submissionPackage'
 
 const fact = (over: Partial<LedgerFact> = {}): LedgerFact => ({
-  id: 'client-1789103134380:f029',
+  id: 'client-1700000000002:f029',
   proposition: 'The client does not know her hourly rate.',
   verbatim: "I don't know",
   status: 'UNKNOWN',

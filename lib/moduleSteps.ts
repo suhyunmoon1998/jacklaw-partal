@@ -76,7 +76,7 @@ export interface StepView {
   /** The office has handed this over. Same thing as sentAt being set. */
   granted: boolean
   /**
-   * Every section answered, and never submitted. Ester has been sitting here
+   * Every section answered, and never submitted. One client has been sitting here
    * since July. A bar reading 100% beside "In progress" is a screen arguing
    * with itself, so the step list says what is actually left to do.
    */

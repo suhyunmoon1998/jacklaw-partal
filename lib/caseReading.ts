@@ -264,7 +264,7 @@ export async function runStage(
   /**
    * A claims stage, as far as it got.
    *
-   * On DAYEON KIM's file the account ran out of credit mid-reading: all five
+   * On one client's file the account ran out of credit mid-reading: all five
    * claims of a stage failed, and the stage was stored as read, empty, and
    * stamped current. Nothing shows the failures, so the panel called it done
    * and the night would never have read it again. Now a stage that read

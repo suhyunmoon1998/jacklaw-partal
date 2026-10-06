@@ -28,7 +28,7 @@ const fact: LedgerEntry = {
 
 describe('reading the Wage Order again', () => {
   it('keeps every other stage current, with what it took and cost', async () => {
-    // On DAYEON KIM's file a re-read Order came back the same and the
+    // On one client's file a re-read Order came back the same and the
     // chronology — untouched, and current a minute before — showed as stale,
     // because the stage was handed {} and its patch carried no other stamp.
     const entries = [fact]
@@ -49,7 +49,7 @@ describe('reading the Wage Order again', () => {
 })
 
 describe('a claims stage that did not read every claim', () => {
-  // On DAYEON KIM's file the account ran out of credit mid-reading. All five
+  // On one client's file the account ran out of credit mid-reading. All five
   // claims of claims 2 failed, and the stage was stored as read, empty, and
   // stamped current — so the panel called it done and the night skipped it.
   const entries = [fact]

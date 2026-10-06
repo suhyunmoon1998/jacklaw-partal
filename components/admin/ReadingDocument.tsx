@@ -5,7 +5,7 @@
  *
  * What was here before was accurate and unreadable: eleven-pixel type, every
  * claim folded into an accordion, and each supporting fact printed as
- * "client-1789099693038:f068 — …" so that the identifier was longer than the
+ * "client-1700000000001:f068 — …" so that the identifier was longer than the
  * sentence it introduced. The office was being handed a reference table and
  * asked to read it like a memo.
  *
@@ -44,7 +44,7 @@ export type Choice = {
 }
 
 /**
- * "client-1789099693038:f068 — he did no work" → "f068 — he did no work".
+ * "client-1700000000001:f068 — he did no work" → "f068 — he did no work".
  *
  * The client id is on every one of them and identical on every one of them,
  * so it carries no information and costs a third of the line.

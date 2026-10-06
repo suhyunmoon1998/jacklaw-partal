@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { roundAsText, RoundNote } from '@/lib/roundAsText'
 
 const note = (over: Partial<RoundNote> = {}): RoundNote => ({
-  clientName: 'DAYEON KIM',
+  clientName: 'MINJI PARK',
   questions: [
     {
       id: 'q01_last_day',

@@ -219,7 +219,7 @@ export const MIN_ANSWERS = 8
  *
  * Liquidated damages sit with the hours because they are priced on the same
  * hours as the minimum wage. In the records branch they were counted again from
- * the answers: on DAYEON KIM's file the minimum wage was 16.8 hours and the
+ * the answers: on one client's file the minimum wage was 16.8 hours and the
  * liquidated damages about 40, the same off-the-clock work counted twice two
  * different ways. Split shifts went the other way to keep the branches even —
  * the premium is one hour a day at the minimum wage and prices no hours worked.

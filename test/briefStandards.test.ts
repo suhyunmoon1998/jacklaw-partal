@@ -25,7 +25,7 @@ const fact = (over: Partial<LedgerFact> = {}): LedgerFact => ({
 
 const factual = (ledger: LedgerFact[], extra: Partial<Parameters<typeof byTemplate>[0]> = {}) =>
   byTemplate({
-    brief: buildFactualBrief({ clientName: 'Dayeon Kim', caseType: 'Wage & Hour', ledger, spine: null, readOn: null }),
+    brief: buildFactualBrief({ clientName: 'Minji Park', caseType: 'Wage & Hour', ledger, spine: null, readOn: null }),
     ledger,
     baseline: [],
     spine: null,
@@ -123,7 +123,7 @@ describe('the factual sheet, by the template', () => {
 })
 
 const brief = (over: Partial<Brief> = {}): Brief => ({
-  clientName: 'Dayeon Kim',
+  clientName: 'Minji Park',
   caseType: 'Wage & Hour',
   factCount: 1,
   readOn: null,

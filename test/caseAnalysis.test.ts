@@ -120,13 +120,13 @@ describe('the transcript the model reads', () => {
 })
 
 describe('follow-up answers', () => {
-  // DAYEON KIM gave the restaurant's address in a follow-up set. The reading
+  // One client gave the restaurant's address in a follow-up set. The reading
   // read only the questionnaire, so it went on calling the address unknown,
   // and re-running it read exactly what it had read before.
   const followUp = {
     title: 'Question set: A few more questions about your job',
     rows: [
-      { id: 'q18_address', label: 'What is the street address of the restaurant where you worked?', answer: '1101 Vermont Ave #103, Los Angeles, CA 90006' },
+      { id: 'q18_address', label: 'What is the street address of the restaurant where you worked?', answer: '4500 Sample Blvd #12, Los Angeles, CA 90010' },
       { id: 'q17_rest', label: 'Tell us about one shift.', answer: '' },
     ],
   }
@@ -137,7 +137,7 @@ describe('follow-up answers', () => {
     expect(text).toContain(LATER_ANSWERS)
     expect(text.indexOf('ANSWER: No')).toBeLessThan(text.indexOf(LATER_ANSWERS))
     expect(text).toContain('## Question set: A few more questions about your job')
-    expect(text).toContain('ANSWER: 1101 Vermont Ave #103, Los Angeles, CA 90006')
+    expect(text).toContain('ANSWER: 4500 Sample Blvd #12, Los Angeles, CA 90010')
   })
 
   it('leave the transcript as it was for a client who has none', () => {
@@ -151,7 +151,7 @@ describe('follow-up answers', () => {
     expect(analysisFingerprint(input({ sets: [] }))).toBe(none)
     const withSet = analysisFingerprint(input({ sets: [followUp] }))
     expect(withSet).not.toBe(none)
-    const changed = { ...followUp, rows: [{ ...followUp.rows[0], answer: '1102 Vermont Ave' }] }
+    const changed = { ...followUp, rows: [{ ...followUp.rows[0], answer: '4502 Sample Blvd' }] }
     expect(analysisFingerprint(input({ sets: [changed] }))).not.toBe(withSet)
   })
 })

@@ -172,12 +172,12 @@ describe('who gets chased', () => {
       { clientId: 'a', chasing: 'module1', sentAt: '2026-09-09T18:00:00Z', submitted: false },
       { clientId: 'b', chasing: 'module1', sentAt: '2026-09-14T18:00:00Z', submitted: false },
     ]
-    const sharedNumber = '4243332514'
+    const sharedNumber = '5550102514'
     const { due, skipped } = planReminders({
       steps,
       targets: new Map([
-        ['a', someone({ clientId: 'a', phone: sharedNumber, name: 'Aaron Oh' })],
-        ['b', someone({ clientId: 'b', phone: sharedNumber, name: 'Aaron Oh' })],
+        ['a', someone({ clientId: 'a', phone: sharedNumber, name: 'Daniel Cho' })],
+        ['b', someone({ clientId: 'b', phone: sharedNumber, name: 'Daniel Cho' })],
       ]),
       alreadySent: new Map(),
       now: MORNING,
@@ -321,7 +321,7 @@ describe('phone numbers as Twilio wants them', () => {
 
 describe('chasing a round of follow-up questions', () => {
   const who = new Map([
-    ['c1', { clientId: 'c1', name: 'Dayeon Kim', phone: '+12135774446', lang: 'ko' as const, optedOut: false }],
+    ['c1', { clientId: 'c1', name: 'Minji Park', phone: '+15550104446', lang: 'ko' as const, optedOut: false }],
   ])
 
   it('walks the same ladder a module does', () => {
@@ -382,7 +382,7 @@ describe('chasing a round of follow-up questions', () => {
 
 describe('what a follow-up round actually says', () => {
   it('does not tell somebody who finished that their questionnaire is waiting', () => {
-    const asked = reminderBody('day2', 'ko', { name: 'DAYEON KIM', link: 'x', subject: 'follow-up' })
+    const asked = reminderBody('day2', 'ko', { name: 'MINJI PARK', link: 'x', subject: 'follow-up' })
     expect(asked).toContain('답변 잘 봤습니다')
     expect(asked).not.toContain('아직 남아 있습니다')
     expect(asked).toContain('STOP')
@@ -400,7 +400,7 @@ describe('what a follow-up round actually says', () => {
   })
 
   it('leaves the first ask alone', () => {
-    const first = reminderBody('day2', 'ko', { name: 'DAYEON KIM', link: 'x' })
+    const first = reminderBody('day2', 'ko', { name: 'MINJI PARK', link: 'x' })
     expect(first).toContain('설문이 아직 남아 있습니다')
   })
 })
@@ -409,15 +409,15 @@ describe('the text that invites a client to a question set', () => {
   it('sends the front door, not a link that opens the case file', () => {
     // Sign-in is by phone. A phone is lent and screens are read over
     // shoulders, so a text must not carry a key to somebody's case.
-    const said = invitationSms('ko', 'DAYEON KIM', 'https://jacklaw-portal.vercel.app/')
+    const said = invitationSms('ko', 'MINJI PARK', 'https://jacklaw-portal.vercel.app/')
     expect(said).toContain('https://jacklaw-portal.vercel.app/client')
     expect(said).not.toMatch(/questionnaire\/[0-9a-f-]{8}/)
-    expect(said).toContain('DAYEON')
+    expect(said).toContain('MINJI')
     expect(said).toContain('STOP')
   })
 
   it('uses the first name only, because a full legal name reads as a summons', () => {
-    expect(invitationSms('en', 'Dayeon Kim', 'https://x')).toContain('Hi Dayeon,')
+    expect(invitationSms('en', 'Minji Park', 'https://x')).toContain('Hi Minji,')
   })
 
   it('writes it in every language', () => {

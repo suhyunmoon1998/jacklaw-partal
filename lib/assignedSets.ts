@@ -4,8 +4,8 @@
  *
  * They live in their own table and are not part of the questionnaire, so
  * nothing that reads `questionnaire_states.answers` alone sees them. The fact
- * extraction learned to gather them. The damages reading did not. On DAYEON
- * KIM's file it kept reporting the restaurant's address as unknown after she
+ * extraction learned to gather them. The damages reading did not. On one
+ * client's file it kept reporting the restaurant's address as unknown after she
  * had given it in a follow-up, and "Re-run" could not change that. Both now
  * gather them here, the same way.
  */
