@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 
 /*
@@ -8,9 +8,10 @@ import path from 'node:path'
  *
  * What is tested: that every sentence exists, by hand, in all four languages;
  * that only those sentences can be asked for; that what the client reads is
- * exactly what was previewed and sealed; that the text is claimed before it
- * goes out, so it never goes twice; and that a client who said STOP is never
- * texted. The database and Twilio are in memory. Synthetic people only.
+ * exactly what was previewed and sealed; that the portal writes no table of
+ * its own for these (Eleanor records each text before she asks for it); and
+ * that a client who said STOP is never texted. The database and Twilio are in
+ * memory. Synthetic people only.
  */
 
 type Row = Record<string, unknown>
@@ -26,39 +27,13 @@ function from(table: string) {
     eq: (column: string, value: unknown) => { filters.push([column, value]); return api },
     maybeSingle: async () => ({ data: rows()[0] ?? null, error: null }),
     then: (resolve: (value: unknown) => void) => resolve({ data: rows(), error: null }),
-    insert: (row: Row) => {
-      const result = (() => {
-        if (!(table in tables)) return { data: null, error: { code: '42P01', message: 'relation does not exist' } }
-        const list = tables[table]
-        // The partial unique index: one sending-or-sent row per client and seal.
-        if (table === 'client_updates' && list.some(r => r.client_id === row.client_id && r.seal === row.seal && ['sending', 'sent'].includes(String(r.status)))) {
-          return { data: null, error: { code: '23505', message: 'duplicate key' } }
-        }
-        const stored = { id: `u${list.length + 1}`, ...row }
-        list.push(stored)
-        return { data: { id: stored.id }, error: null }
-      })()
-      const chain: Record<string, unknown> = {
-        select: () => chain,
-        single: async () => result,
-        then: (resolve: (value: unknown) => void) => resolve({ error: result.error }),
-      }
-      return chain
-    },
-    update: (patch: Row) => {
-      const where: [string, unknown][] = []
-      const chain: Record<string, unknown> = {
-        eq: (column: string, value: unknown) => { where.push([column, value]); return chain },
-        then: (resolve: (value: unknown) => void) => {
-          for (const row of tables[table] ?? []) if (where.every(([c, v]) => row[c] === v)) Object.assign(row, patch)
-          resolve({ error: null })
-        },
-      }
-      return chain
-    },
+    // An update writes nothing in the portal's database: any write here fails the test.
+    insert: () => { writes.push(table); throw new Error(`unexpected insert into ${table}`) },
+    update: () => { writes.push(table); throw new Error(`unexpected update of ${table}`) },
   }
   return api
 }
+const writes: string[] = []
 
 let textingOn = true
 vi.mock('@/lib/supabase', () => ({ getSupabase: () => ({ from }) }))
@@ -84,6 +59,7 @@ const MORNING = new Date('2026-10-05T18:00:00.000Z')
 
 beforeEach(() => {
   texts.length = 0
+  writes.length = 0
   failNextText = false
   textingOn = true
   vi.useFakeTimers({ toFake: ['Date'] })
@@ -94,7 +70,6 @@ beforeEach(() => {
       { id: 'c1', name: 'Maria Synthetic Example', phone: '(555) 010-1234', portal_lang: 'es', sms_opt_out: false },
       { id: 'c2', name: 'Kim Synthetic', phone: '(555) 010-5678', portal_lang: 'ko', sms_opt_out: true },
     ],
-    client_updates: [],
   }
 })
 
@@ -121,6 +96,27 @@ describe('what an update can say', () => {
     }
   })
 
+  it('says a deposition is theirs only in its own sentence; the other says only that one is set in their case', () => {
+    expect(UPDATE_SENTENCE_KEYS).toEqual([
+      'date_mediation', 'date_trial', 'date_your_deposition', 'date_deposition', 'date_hearing', 'date_cmc',
+      'docs_received', 'answers_received', 'prepare_call', 'working_on_it',
+    ])
+    expect(UPDATE_BOOK.en.date_your_deposition).toBe('Your deposition is scheduled for {date}. We will contact you before then to prepare.')
+    expect(UPDATE_BOOK.en.date_deposition).toBe('A deposition in your case is scheduled for {date}. We will let you know if there is anything you need to do.')
+    expect(UPDATE_BOOK.en.date_cmc).toBe('The court has set a case management conference in your case for {date}. We will let you know if you need to be there.')
+    // The neutral sentence never says "your deposition", in any language.
+    expect(UPDATE_BOOK.en.date_deposition).not.toMatch(/your deposition/i)
+    expect(UPDATE_BOOK.es.date_deposition).not.toMatch(/^Su declaración/)
+    expect(UPDATE_BOOK.zh.date_deposition).not.toMatch(/^您的取证作证/)
+    expect(UPDATE_BOOK.ko.date_deposition).not.toMatch(/본인/)
+    expect(UPDATE_BOOK.ko.date_your_deposition).toMatch(/^본인의 증언 녹취/)
+    // Each names the term the client will hear: the English in Chinese and Korean, "deposición" in Spanish,
+    // and the conference's English name in all three.
+    expect(UPDATE_BOOK.es.date_deposition).toContain('(deposición)')
+    for (const lang of ['zh', 'ko'] as const) expect(UPDATE_BOOK[lang].date_deposition).toContain('deposition')
+    for (const lang of ['es', 'zh', 'ko'] as const) expect(UPDATE_BOOK[lang].date_cmc).toContain('case management conference')
+  })
+
   it('writes a day the way each language does, the same on every server', () => {
     expect(writeDay('2026-10-20', 'en')).toBe('Tuesday, October 20, 2026')
     expect(writeDay('2026-10-20', 'es')).toBe('martes 20 de octubre de 2026')
@@ -138,10 +134,13 @@ describe('what an update can say', () => {
       '', 'say_anything', 'date_mediation', 'date_mediation:2026-02-30', 'date_mediation:2026-10-04',
       'docs_received:2026-10-20', 'docs_received,docs_received', 'working_on_it:x:y',
       'docs_received,answers_received,prepare_call,working_on_it,date_trial:2026-11-01',
+      // One deposition said both ways.
+      'date_deposition:2026-10-20,date_your_deposition:2026-10-20', 'date_cmc',
     ]) {
       expect(parseUpdateSentences(bad, today).ok, bad).toBe(false)
     }
     expect(parseUpdateSentences(42, today).ok).toBe(false)
+    expect(parseUpdateSentences('date_deposition:2026-10-20,date_your_deposition:2026-10-27,date_cmc:2026-10-21', today).ok).toBe(true)
     expect(formatUpdateSentences([{ key: 'date_trial', date: '2026-11-02' }, { key: 'working_on_it' }])).toBe('date_trial:2026-11-02,working_on_it')
   })
 
@@ -205,7 +204,7 @@ describe('the route', () => {
     expect(texts).toHaveLength(0)
   })
 
-  it('previews the exact words in their language and in English, masked, and sends only what was previewed, once', async () => {
+  it('previews the exact words in their language and in English, masked, and sends only what was previewed', async () => {
     const previewed = await (await GET(request(previewUrl, { auth: `Bearer ${SECRET}` }))).json()
     expect(previewed.ok).toBe(true)
     expect(previewed.preview).toMatchObject({
@@ -216,7 +215,6 @@ describe('the route', () => {
     expect(previewed.preview.english).toContain('Tuesday, October 20, 2026')
     expect(JSON.stringify(previewed)).not.toMatch(/010-1234|5550101234/)
     expect(texts).toHaveLength(0)
-    expect(tables.client_updates).toHaveLength(0)
 
     // Their number changes after Jack approved: nothing is sent.
     tables.clients[0].phone = '(555) 010-9999'
@@ -228,19 +226,10 @@ describe('the route', () => {
     tables.clients[0].phone = '(555) 010-1234'
     const sent = await send(previewed.fingerprint)
     expect(sent.status).toBe(200)
-    expect(await sent.json()).toMatchObject({ ok: true, recorded: true, textSent: true })
+    expect(await sent.json()).toEqual({ ok: true, textSent: true })
     expect(texts).toEqual([{ to: '(555) 010-1234', body: previewed.preview.body }])
-    expect(tables.client_updates).toHaveLength(1)
-    expect(tables.client_updates[0]).toMatchObject({
-      client_id: 'c1', seal: previewed.fingerprint, day: '2026-10-05', sentences: 'date_mediation:2026-10-20,docs_received',
-      lang: 'es', status: 'sent', provider_id: 'SM1', requested_by: 'eleanor',
-    })
-
-    // The same approval again: the claim is taken, nothing goes twice.
-    const again = await send(previewed.fingerprint)
-    expect(again.status).toBe(409)
-    expect(await again.json()).toMatchObject({ ok: false, reason: 'AlreadySent' })
-    expect(texts).toHaveLength(1)
+    // Nothing is written here: Eleanor recorded the text, under this seal, before she asked.
+    expect(writes).toEqual([])
   })
 
   it('does not carry an approval to another day', async () => {
@@ -251,19 +240,18 @@ describe('the route', () => {
     expect(texts).toHaveLength(0)
   })
 
-  it('a failed text releases its claim, so it can be approved again', async () => {
+  it('a failed text says so, with the reason, so Eleanor can release it and it can be approved again', async () => {
     const previewed = await (await GET(request(`${base}?kind=update&clientId=c1&sentences=working_on_it`, { auth: `Bearer ${SECRET}` }))).json()
     failNextText = true
     const failed = await send(previewed.fingerprint, 'working_on_it')
     expect(failed.status).toBe(502)
-    expect(await failed.json()).toMatchObject({ ok: false, reason: 'NotSent', recorded: true })
-    expect(tables.client_updates[0]).toMatchObject({ status: 'failed', error: 'Carrier rejected' })
+    expect(await failed.json()).toMatchObject({ ok: false, reason: 'NotSent', explanation: 'The text did not go out: Carrier rejected. It can be approved again.' })
     const retried = await send(previewed.fingerprint, 'working_on_it')
     expect(retried.status).toBe(200)
     expect(texts).toHaveLength(1)
   })
 
-  it('never texts late at night, a client who said STOP, or with texting off, and never without its record', async () => {
+  it('never texts late at night, a client who said STOP, or with texting off', async () => {
     const previewed = await (await GET(request(`${base}?kind=update&clientId=c1&sentences=working_on_it`, { auth: `Bearer ${SECRET}` }))).json()
     vi.setSystemTime(new Date('2026-10-06T05:30:00.000Z')) // 22:30 PDT, still 5 October in Los Angeles
     const late = await send(previewed.fingerprint, 'working_on_it')
@@ -278,12 +266,6 @@ describe('the route', () => {
     const off = await GET(request(`${base}?kind=update&clientId=c1&sentences=working_on_it`, { auth: `Bearer ${SECRET}` }))
     expect((await off.json()).reason).toBe('TextingOff')
     textingOn = true
-
-    // Before the table exists the claim cannot be written, so nothing goes out.
-    delete tables.client_updates
-    const unrecorded = await send(previewed.fingerprint, 'working_on_it')
-    expect(unrecorded.status).toBe(503)
-    expect((await unrecorded.json()).reason).toBe('Unrecordable')
     expect(texts).toHaveLength(0)
   })
 
@@ -298,18 +280,16 @@ describe('the route', () => {
 
 describe('one way to send an update', () => {
   const read = (file: string) => readFileSync(path.join(process.cwd(), file), 'utf8')
-  it('the words come only from the book, through one sender, claimed before the text', () => {
+  it('the words come only from the book, through one sender, with no table of its own', () => {
     const route = read('app/api/eleanor/sends/route.ts')
     const sender = read('lib/clientUpdateSend.ts')
-    expect(route).toMatch(/deliverClientUpdate\(getSupabase\(\), plan, fingerprint\)/)
+    expect(route).toMatch(/deliverClientUpdate\(plan\)/)
     expect(sender).toMatch(/renderUpdate\(lang, name, parsed\.sentences\)/)
-    // The claim is inserted before the text is sent.
-    expect(sender.indexOf(".from('client_updates')")).toBeLessThan(sender.indexOf('await sendSms('))
+    // Once only is Eleanor's claim; the portal needs no migration for updates.
+    expect(route + sender).not.toMatch(/client_updates/)
+    expect(existsSync(path.join(process.cwd(), 'supabase/migrations/0026_client_updates.sql'))).toBe(false)
     // No translation service, no model.
     const book = read('lib/clientUpdates.ts')
     expect(book + sender).not.toMatch(/machineTranslate|translate\(|anthropic|openai|fetch\(/i)
-    const migration = read('supabase/migrations/0026_client_updates.sql')
-    expect(migration).toMatch(/grant select, insert, update, delete, references, trigger, truncate\s+on table public\.client_updates to service_role;/)
-    expect(migration).toMatch(/where status in \('sending', 'sent'\)/)
   })
 })

@@ -195,8 +195,10 @@ async function prepare(request: Request, secret: string): Promise<Preview> {
 /**
  * An update text. What is sealed is everything that decides what the client
  * receives — the number, the language, the name, the exact words — and the
- * firm's day, so an approval does not carry over to another day and the same
- * text reaches the same client at most once a day.
+ * firm's day, so an approval does not carry over to another day. Eleanor
+ * records each text under this seal before she asks for it, so the same text
+ * reaches the same client at most once a day; the answer here says whether it
+ * went, and only a refusal given here says it did not.
  */
 async function prepareUpdate(request: Extract<Request, { kind: 'update' }>, secret: string): Promise<Preview> {
   const planned = await planClientUpdate(request.clientId, request.sentences)
@@ -231,14 +233,9 @@ async function prepareUpdate(request: Extract<Request, { kind: 'update' }>, secr
           body: { ok: false, reason: 'QuietHours', explanation: 'It is outside 8 am to 9 pm in Los Angeles, so the update was not sent. Ask for it again in the morning.' },
         }
       }
-      const delivered = await deliverClientUpdate(getSupabase(), plan, fingerprint)
-      if (delivered.status === 'sent') return { status: 200, body: { ok: true, recorded: true, textSent: true } }
-      if (delivered.status === 'failed') {
-        return { status: 502, body: { ok: false, reason: 'NotSent', recorded: true, explanation: `The text did not go out: ${delivered.error}. It can be approved again.` } }
-      }
-      return delivered.reason === 'AlreadySent'
-        ? { status: 409, body: { ok: false, reason: 'AlreadySent', recorded: true, explanation: 'This exact update already went to them today. Nothing was sent again.' } }
-        : { status: 503, body: { ok: false, reason: 'Unrecordable', explanation: 'The portal could not record the text, so it was not sent.' } }
+      const delivered = await deliverClientUpdate(plan)
+      if (delivered.status === 'sent') return { status: 200, body: { ok: true, textSent: true } }
+      return { status: 502, body: { ok: false, reason: 'NotSent', explanation: `The text did not go out: ${delivered.error}. It can be approved again.` } }
     },
   }
 }

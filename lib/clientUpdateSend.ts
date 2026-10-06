@@ -1,4 +1,3 @@
-import { SupabaseClient } from '@supabase/supabase-js'
 import { getSupabase } from '@/lib/supabase'
 import { Lang } from '@/lib/langs'
 import { resolveLang } from '@/lib/reminderSchedule'
@@ -13,7 +12,13 @@ import { sendSms } from '@/lib/twilio'
  * shown and again at the send — so the seal over it (lib/eleanorService.ts)
  * catches a number, a language or a name that changed in between. The firm's
  * day is part of what is sealed, so an approval does not carry over to another
- * day, and the same text goes to the same client at most once a day.
+ * day.
+ *
+ * Once only is Eleanor's to hold: she records each text, under this seal, in
+ * her own database before she asks for it, and asks again only when this
+ * route said it did not go. So the portal keeps no table of its own for these
+ * and needs no migration; the answer it gives — sent, or not sent and why —
+ * is what she records.
  */
 
 export type UpdatePlan = {
@@ -103,43 +108,10 @@ export async function planClientUpdate(
 }
 
 /**
- * Claims the text, then sends it.
- *
- * The row is written BEFORE the text goes out, under a unique index on the
- * client and the seal for a row that is sending or sent. A second send of the
- * same approval loses that insert and nothing goes out twice; a crash between
- * the two costs one update, where the other order could cost a client two
- * copies. A failed text releases the claim, so it can be approved again.
+ * Sends the text. Called only after the seal matched and inside sending
+ * hours; Eleanor has already recorded the claim on her side.
  */
-export async function deliverClientUpdate(
-  db: SupabaseClient,
-  plan: UpdatePlan,
-  seal: string
-): Promise<{ status: 'sent' } | { status: 'failed'; error: string } | { status: 'skipped'; reason: 'AlreadySent' | 'Unrecordable' }> {
-  const { data: claimed, error: claimError } = await db
-    .from('client_updates')
-    .insert({
-      client_id: plan.clientId,
-      seal,
-      day: plan.day,
-      sentences: plan.sentences,
-      lang: plan.lang,
-      body: plan.body,
-      english: plan.english,
-      to_number: plan.phone,
-      status: 'sending',
-      requested_by: 'eleanor',
-    })
-    .select('id')
-    .single()
-  if (claimError || !claimed?.id) {
-    return { status: 'skipped', reason: claimError?.code === '23505' ? 'AlreadySent' : 'Unrecordable' }
-  }
-
+export async function deliverClientUpdate(plan: UpdatePlan): Promise<{ status: 'sent'; providerId: string } | { status: 'failed'; error: string }> {
   const sent = await sendSms(plan.phone, plan.body)
-  await db
-    .from('client_updates')
-    .update(sent.ok ? { status: 'sent', provider_id: sent.id } : { status: 'failed', error: sent.error })
-    .eq('id', claimed.id)
-  return sent.ok ? { status: 'sent' } : { status: 'failed', error: sent.error }
+  return sent.ok ? { status: 'sent', providerId: sent.id } : { status: 'failed', error: sent.error }
 }

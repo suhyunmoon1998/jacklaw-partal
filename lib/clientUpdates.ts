@@ -25,11 +25,20 @@ import { firstName } from '@/lib/reminderMessages'
 
 const FIRM = '866 JACK LAW'
 
+/*
+ * A deposition has two sentences. `date_deposition` says only that a
+ * deposition in their case is set and that the office will say if they need
+ * to do anything — true whoever is deposed. `date_your_deposition` says it is
+ * theirs; Eleanor proposes it only when the notice's title names them, and
+ * otherwise only Jack can choose it. A case management conference has its own.
+ */
 export const UPDATE_SENTENCE_KEYS = [
   'date_mediation',
   'date_trial',
+  'date_your_deposition',
   'date_deposition',
   'date_hearing',
+  'date_cmc',
   'docs_received',
   'answers_received',
   'prepare_call',
@@ -44,7 +53,14 @@ export type UpdateSentence = { key: UpdateSentenceKey; date?: string }
 export const UPDATE_SENTENCE_LIMIT = 4
 
 /** The sentences that carry a day, written out as {date}. */
-const DATED: ReadonlySet<UpdateSentenceKey> = new Set(['date_mediation', 'date_trial', 'date_deposition', 'date_hearing'])
+const DATED: ReadonlySet<UpdateSentenceKey> = new Set([
+  'date_mediation',
+  'date_trial',
+  'date_your_deposition',
+  'date_deposition',
+  'date_hearing',
+  'date_cmc',
+])
 
 export const isDatedSentence = (key: UpdateSentenceKey) => DATED.has(key)
 
@@ -62,8 +78,10 @@ export const UPDATE_BOOK: Record<Lang, Book> = {
     greeting: `${FIRM}: Hi {name}, here is an update on your case.`,
     date_mediation: 'Your mediation is scheduled for {date}. We will contact you before then to prepare.',
     date_trial: 'Your trial is scheduled to begin on {date}. We will contact you before then to prepare.',
-    date_deposition: 'Your deposition is scheduled for {date}. We will contact you before then to prepare.',
+    date_your_deposition: 'Your deposition is scheduled for {date}. We will contact you before then to prepare.',
+    date_deposition: 'A deposition in your case is scheduled for {date}. We will let you know if there is anything you need to do.',
     date_hearing: 'The court has set a hearing in your case for {date}. We will let you know if you need to be there.',
+    date_cmc: 'The court has set a case management conference in your case for {date}. We will let you know if you need to be there.',
     docs_received: 'We received the documents you uploaded. Thank you.',
     answers_received: 'We received your answers. Thank you.',
     prepare_call: 'We would like to set up a call with you. Please reply to this text with a good time, or call us at (866) 522-5529.',
@@ -74,8 +92,10 @@ export const UPDATE_BOOK: Record<Lang, Book> = {
     greeting: `${FIRM}: Hola {name}, le compartimos novedades sobre su caso.`,
     date_mediation: 'Su mediación está programada para el {date}. Nos comunicaremos con usted antes de esa fecha para prepararnos.',
     date_trial: 'Su juicio está programado para comenzar el {date}. Nos comunicaremos con usted antes de esa fecha para prepararnos.',
-    date_deposition: 'Su declaración (deposición) está programada para el {date}. Nos comunicaremos con usted antes de esa fecha para prepararnos.',
+    date_your_deposition: 'Su declaración (deposición) está programada para el {date}. Nos comunicaremos con usted antes de esa fecha para prepararnos.',
+    date_deposition: 'Hay una declaración (deposición) programada en su caso para el {date}. Le avisaremos si hay algo que usted deba hacer.',
     date_hearing: 'El tribunal fijó una audiencia en su caso para el {date}. Le avisaremos si necesita estar presente.',
+    date_cmc: 'El tribunal fijó para el {date} una conferencia sobre el manejo de su caso (case management conference). Le avisaremos si necesita estar presente.',
     docs_received: 'Recibimos los documentos que subió. Gracias.',
     answers_received: 'Recibimos sus respuestas. Gracias.',
     prepare_call: 'Nos gustaría programar una llamada con usted. Responda a este mensaje con un buen horario, o llámenos al (866) 522-5529.',
@@ -86,8 +106,10 @@ export const UPDATE_BOOK: Record<Lang, Book> = {
     greeting: `${FIRM}：您好 {name}，以下是您案件的最新进展。`,
     date_mediation: '您的调解定于{date}举行。在此之前，我们会联系您做准备。',
     date_trial: '您的庭审定于{date}开始。在此之前，我们会联系您做准备。',
-    date_deposition: '您的取证作证（deposition）定于{date}进行。在此之前，我们会联系您做准备。',
+    date_your_deposition: '您的取证作证（deposition）定于{date}进行。在此之前，我们会联系您做准备。',
+    date_deposition: '您的案件中有一项取证作证（deposition）定于{date}进行。如有需要您做的事，我们会通知您。',
     date_hearing: '法院已将您案件的听证安排在{date}。如需您出席，我们会通知您。',
+    date_cmc: '法院已将您案件的案件管理会议（case management conference）安排在{date}。如需您出席，我们会通知您。',
     docs_received: '我们已收到您上传的文件，谢谢。',
     answers_received: '我们已收到您的回答，谢谢。',
     prepare_call: '我们想和您约一个通话时间。请回复本短信告诉我们您方便的时间，或致电 (866) 522-5529。',
@@ -98,8 +120,10 @@ export const UPDATE_BOOK: Record<Lang, Book> = {
     greeting: `${FIRM}: {name}님, 사건 진행 상황을 알려 드립니다.`,
     date_mediation: '조정(mediation) 기일이 {date}로 잡혔습니다. 그 전에 준비를 위해 연락드리겠습니다.',
     date_trial: '재판이 {date}에 시작될 예정입니다. 그 전에 준비를 위해 연락드리겠습니다.',
-    date_deposition: '증언 녹취(deposition) 일정이 {date}로 잡혔습니다. 그 전에 준비를 위해 연락드리겠습니다.',
+    date_your_deposition: '본인의 증언 녹취(deposition) 일정이 {date}로 잡혔습니다. 그 전에 준비를 위해 연락드리겠습니다.',
+    date_deposition: '사건과 관련된 증언 녹취(deposition) 일정이 {date}로 잡혔습니다. 하셔야 할 일이 있으면 따로 알려 드리겠습니다.',
     date_hearing: '법원이 사건의 심리(hearing) 기일을 {date}로 정했습니다. 참석하셔야 하는 경우 따로 알려 드리겠습니다.',
+    date_cmc: '법원이 사건관리회의(case management conference) 기일을 {date}로 정했습니다. 참석하셔야 하는 경우 따로 알려 드리겠습니다.',
     docs_received: '올려 주신 서류를 잘 받았습니다. 감사합니다.',
     answers_received: '보내 주신 답변을 잘 받았습니다. 감사합니다.',
     prepare_call: '통화 일정을 잡고 싶습니다. 편하신 시간을 이 문자로 답장해 주시거나 (866) 522-5529 로 전화 주세요.',
@@ -186,7 +210,8 @@ export function parseUpdateSentences(
     } else if (date !== undefined) {
       return { ok: false, why: `${typed} carries no day.` }
     }
-    const identity = date ? `${typed}:${date}` : typed
+    // One deposition is said once: as theirs, or as one in their case, never both.
+    const identity = date ? `${typed === 'date_your_deposition' ? 'date_deposition' : typed}:${date}` : typed
     if (seen.has(identity)) return { ok: false, why: `${typed} is asked for twice.` }
     seen.add(identity)
     sentences.push(date ? { key: typed, date } : { key: typed })
