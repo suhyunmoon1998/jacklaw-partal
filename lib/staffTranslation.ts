@@ -4,9 +4,14 @@
  * These were sent to MyMemory's free, anonymous endpoint, one query string at
  * a time — a stranger's translation memory holding harassment accounts,
  * medical details and immigration-related answers, with no agreement about
- * what it keeps and every sentence sitting in URL logs on the way. Now they go
- * to the same provider that already reads the client's file for the office
- * (lib/officeTranslation.ts), in the body of a request, never in a URL.
+ * what it keeps and every sentence sitting in URL logs on the way.
+ *
+ * Now, with GOOGLE_TRANSLATE_API_KEY set, they go to Google Cloud Translation
+ * (lib/googleTranslate.ts) — the owner's choice, free within Google's monthly
+ * allowance and under terms that keep nothing — and nowhere else. Without the
+ * key they go to the same provider that already reads the client's file for
+ * the office (lib/officeTranslation.ts). Either way in the body of a request,
+ * never in a URL.
  *
  * Server-only, and only ever for staff: nothing translated here is shown to a
  * client. Callers keep what comes back (lib/translationCache.ts), so a text is
@@ -20,6 +25,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod'
 import { z } from 'zod'
 import { TRANSLATION_MODEL } from '@/lib/models'
+import { googleTextsToEnglish, googleTranslateKey } from '@/lib/googleTranslate'
 
 /** Texts per request: a file's answers and fact quotations, a few requests at most. */
 const BATCH = 40
@@ -51,6 +57,8 @@ export interface ToTranslate {
 export async function textsToEnglish(items: ToTranslate[]): Promise<Map<string, string>> {
   const out = new Map<string, string>()
   if (!items.length) return out
+  // Google when its key is set, and then only Google: no paid fallback.
+  if (googleTranslateKey()) return googleTextsToEnglish(items)
   if (!process.env.ANTHROPIC_API_KEY) {
     console.error('ANTHROPIC_API_KEY is not set, so client writing cannot be put into English for the office.')
     return out
