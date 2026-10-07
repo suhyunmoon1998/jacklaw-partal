@@ -78,7 +78,16 @@ export async function textsToEnglish(items: ToTranslate[]): Promise<Map<string, 
         messages: [
           {
             role: 'user',
-            content: JSON.stringify(batch.map(b => ({ key: b.key, language: b.from, text: b.text })), null, 2),
+            content: JSON.stringify(
+              batch.map(b => ({
+                key: b.key,
+                // 'auto' is a script nothing here names, and Spanish may turn out to be English.
+                language: b.from === 'auto' ? 'not stated — read it from the text' : b.from,
+                text: b.text,
+              })),
+              null,
+              2
+            ),
           },
         ],
       })

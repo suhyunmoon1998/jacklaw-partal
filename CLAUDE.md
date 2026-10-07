@@ -35,6 +35,7 @@ what is missing. Do not make it reachable by loosening a prompt.
 | `lib/followUp.ts` + `followUpShape.ts` | Next questions for the client; `vet()` rejects jargon, compound questions, missing "I don't know" |
 | `lib/followUpStore.ts` | Writes a round as a **draft** question set — the portal already hides drafts, and that is the review gate |
 | `lib/caseReading.ts` + `caseReadingStore.ts` | Runs the above in four stages and keeps the result |
+| `lib/authority/lookup.ts` | The authority on file, searched or read word for word, for Eleanor (`/api/eleanor/authority`, service secret). Same rule: she is handed the text, not asked to remember it |
 
 Shape modules (`*Shape.ts`) exist because importing a value from an engine
 pulls the Anthropic SDK and `node:fs` into the browser bundle. Admin panels

@@ -72,7 +72,9 @@ async function backInEnglish(questions: Question[]): Promise<Record<string, { la
   const theirs = questions.map(q => ({ id: q.id, t: q.ko ?? q.es ?? q.zh }))
   const texts = theirs.flatMap(({ t }) => (t ? [t.label ?? '', ...(t.options ?? [])] : []))
   if (!texts.length) return {}
-  const english = await toEnglishCached(texts)
+  // A Spanish question written without an accent is still Spanish: it is the
+  // Spanish the client will read.
+  const english = await toEnglishCached(texts, questions.some(q => !q.ko && q.es) ? 'es' : null)
   const out: Record<string, { label: string; options: string[] }> = {}
   let i = 0
   for (const { id, t } of theirs) {

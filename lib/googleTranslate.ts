@@ -35,12 +35,18 @@ export function googleTranslateKey(): string {
 }
 
 /**
- * Google's code for the client's language. Chinese is left for Google to
+ * Google's code for the client's language, where telling it is safe.
+ *
+ * Only Korean is named: Hangul is unambiguous. Chinese is left for Google to
  * read, because "zh" would be taken as simplified and a client may write
- * traditional.
+ * traditional. Spanish is left to it as well, because what is sent as Spanish
+ * is partly a judgement — words without accents, or a Spanish reader's
+ * "Septiembre 2024" — and an answer that turns out to be English comes back
+ * from Google as it went, where told "Spanish" it would come back altered.
+ * 'auto' is a script nothing here names; Google reads it.
  */
-function sourceCode(from: string): string | undefined {
-  return from === 'es' || from === 'ko' ? from : undefined
+export function sourceCode(from: string): string | undefined {
+  return from === 'ko' ? 'ko' : undefined
 }
 
 /** The texts of one language in requests Google will take. */

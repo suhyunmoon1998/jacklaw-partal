@@ -3,6 +3,7 @@ import { getSupabase } from '@/lib/supabase'
 import { generateAnswersPdfForOffice } from '@/lib/generateAnswersPdf'
 import { formatPhone } from '@/lib/auth'
 import { translateAnswersCached } from '@/lib/translationCache'
+import { answersLanguage } from '@/lib/machineTranslate'
 import { isAdmin } from '@/lib/adminAuth'
 
 /**
@@ -20,7 +21,7 @@ export async function GET(req: NextRequest) {
   if (!clientId) return NextResponse.json({ error: 'Missing clientId' }, { status: 400 })
 
   const [{ data: client }, { data: qState }] = await Promise.all([
-    getSupabase().from('clients').select('name, phone, case_type').eq('id', clientId).maybeSingle(),
+    getSupabase().from('clients').select('name, phone, case_type, portal_lang').eq('id', clientId).maybeSingle(),
     getSupabase().from('questionnaire_states').select('answers').eq('client_id', clientId).maybeSingle(),
   ])
 
@@ -28,8 +29,10 @@ export async function GET(req: NextRequest) {
 
   // The office reads case files in English, and the PDF's built-in font cannot
   // draw Chinese or Korean at all. Answers already in English cost nothing here:
-  // the translator only calls out for text it detects as another language.
-  const answers = await translateAnswersCached(qState?.answers ?? {})
+  // the translator only calls out for text it detects as another language —
+  // and, for a client who reads the portal in Spanish, for what they typed.
+  const raw = qState?.answers ?? {}
+  const answers = await translateAnswersCached(raw, answersLanguage(raw, client.portal_lang))
 
   const pdf = await generateAnswersPdfForOffice(
     client.name,

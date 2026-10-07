@@ -67,7 +67,10 @@ describe('what goes to Google', () => {
       expect(request.body.target).toBe('en')
       expect(request.body.format).toBe('text')
     }
-    expect(sent.map(r => r.body.source)).toEqual(['ko', 'es', undefined])
+    // Only Korean is named. Spanish is partly a judgement (no accents, a
+    // Spanish reader's "Septiembre 2024"), so Google reads it: an answer that
+    // was English comes back as it went instead of altered.
+    expect(sent.map(r => r.body.source)).toEqual(['ko', undefined, undefined])
     expect(sent[0].body.q).toEqual(['매니저가 소리를 질렀어요', '휴게 시간이 없었어요'])
   })
 
@@ -90,7 +93,7 @@ describe('what goes to Google', () => {
       errors.push(args.map(String).join(' '))
     })
     const { fetcher } = fakeGoogle(body =>
-      body.source === 'es'
+      body.q.includes('Me despidieron')
         ? Response.json({ error: { code: 429, status: 'RESOURCE_EXHAUSTED', message: 'Quota exceeded' } }, { status: 429 })
         : Response.json({ data: { translations: body.q.map(text => ({ translatedText: `EN(${text})` })) } })
     )

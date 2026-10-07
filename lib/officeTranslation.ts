@@ -14,20 +14,24 @@
  *
  * The original is never replaced. It is the client's own word and the record of
  * what they actually wrote; the English sits beside it.
+ *
+ * With GOOGLE_TRANSLATE_API_KEY set, the English comes from Google Cloud
+ * Translation through the translations the admin panel already keeps
+ * (lib/translationCache.ts), and from nothing else — the owner's choice,
+ * 2026-10-06. This file still asked Claude after that choice was made, so a
+ * Chinese client's notice was paid for, and failed outright while the firm's
+ * Anthropic account was out of credit. Without the key it asks Claude, with
+ * each question beside its answer.
  */
 
 import { TRANSLATION_MODEL } from '@/lib/models'
 import Anthropic from '@anthropic-ai/sdk'
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod'
 import { z } from 'zod'
+import { googleTranslateKey } from '@/lib/googleTranslate'
+import { LATIN_ONLY } from '@/lib/machineTranslate'
+import { englishOf } from '@/lib/translationCache'
 import { AnswerValue } from '@/types'
-
-/**
- * Latin script and the punctuation the portal's own languages use — which is
- * also, not by coincidence, exactly what the PDF's fonts can draw.
- */
-const LATIN_ONLY =
-  /^[\t\n\r -~ -ſ–—‘’“”•…€]*$/
 
 export interface EnglishRendering {
   /** Question id to the English of what the client wrote. */
@@ -93,6 +97,9 @@ export async function toEnglishForOffice(
   const ids = answersToTranslate(answers, clientLanguage)
   if (ids.length === 0) return { english: {}, incomplete: false }
 
+  // Google when its key is set, and then only Google: no paid model behind it.
+  if (googleTranslateKey()) return throughGoogle(answers, ids, clientLanguage)
+
   if (!process.env.ANTHROPIC_API_KEY) {
     console.error('ANTHROPIC_API_KEY is not set, so answers cannot be put into English for the office.')
     return { english: {}, incomplete: true }
@@ -150,4 +157,34 @@ export async function toEnglishForOffice(
     console.error('could not put answers into English for the office:', err)
     return { english: {}, incomplete: true }
   }
+}
+
+/**
+ * The same choice of answers, put into English by Google through the kept
+ * translations: what the admin panel has already shown costs nothing here.
+ *
+ * A Spanish reader's typed answers go as Spanish without Google being told the
+ * language, so one that was English comes back as it went and is left out.
+ * For anyone else, Latin-script answers read as English stay as they are.
+ */
+async function throughGoogle(
+  answers: Record<string, AnswerValue>,
+  ids: string[],
+  clientLanguage?: string | null
+): Promise<EnglishRendering> {
+  const texts = ids.map(id => String(answers[id]))
+  const out = await englishOf(texts, clientLanguage === 'es' ? 'es' : null)
+  const english: Record<string, string> = {}
+  let missing = 0
+  ids.forEach((id, i) => {
+    const { lang, english: back } = out[i]
+    if (!lang) return
+    if (!back) {
+      missing++
+      return
+    }
+    if (back.trim().toLowerCase() === texts[i].trim().toLowerCase()) return
+    english[id] = back.trim()
+  })
+  return { english, incomplete: missing > 0 }
 }

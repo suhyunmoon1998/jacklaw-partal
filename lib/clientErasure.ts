@@ -10,8 +10,8 @@
  */
 
 import { getSupabase } from '@/lib/supabase'
-import { cacheKey } from '@/lib/translationCache'
-import { answerText, detectLanguage } from '@/lib/machineTranslate'
+import { keysToForget } from '@/lib/translationCache'
+import { answerText } from '@/lib/machineTranslate'
 import { AnswerValue } from '@/types'
 
 /** A client id as the portal makes them. Anything else would name the wrong folder. */
@@ -48,15 +48,10 @@ export async function forgetClientTranslations(clientId: string): Promise<number
     ...(responses.data ?? []).map(r => answerText(r.answer as AnswerValue)),
     ...(facts.data ?? []).map(f => String(f.verbatim ?? '')),
   ]
-  const keys = Array.from(
-    new Set(
-      texts.flatMap(raw => {
-        const text = raw.trim()
-        const from = text ? detectLanguage(text) : null
-        return from ? [cacheKey(text, from, 'en')] : []
-      })
-    )
-  )
+  // Every language a text could have been kept under, not only what the
+  // detector reads it as today: a text kept as Spanish before the detector
+  // learned it was English must still be forgotten with its client.
+  const keys = keysToForget(texts)
   let forgotten = 0
   for (let i = 0; i < keys.length; i += 100) {
     const { error } = await db.from('translation_cache').delete().in('key', keys.slice(i, i + 100))

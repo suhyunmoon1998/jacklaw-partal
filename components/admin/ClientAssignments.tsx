@@ -11,7 +11,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { AnswerValue, Assignment, AssignmentDetail, QuestionSet, QuestionnaireState } from '@/types'
 import { LANG_ENGLISH_NAME, Lang, toLang } from '@/lib/langs'
-import { submissionLanguage } from '@/lib/machineTranslate'
+import { answersLanguage } from '@/lib/machineTranslate'
 import { englishFromServer } from '@/lib/translateInBrowser'
 import PasteQuestionsDialog from '@/components/admin/PasteQuestionsDialog'
 import SendAssignmentDialog from '@/components/admin/SendAssignmentDialog'
@@ -40,6 +40,7 @@ function shortDate(iso: string | null): string {
 export default function ClientAssignments({
   clientId,
   clientName,
+  portalLang,
   caseType,
   defaultState,
   defaultQuestionCount,
@@ -47,6 +48,8 @@ export default function ClientAssignments({
 }: {
   clientId: string
   clientName: string
+  /** The language the portal writes to this client in; empty until one is known. */
+  portalLang?: string
   caseType: string
   defaultState: QuestionnaireState
   defaultQuestionCount: number
@@ -186,13 +189,13 @@ export default function ClientAssignments({
     load()
   }
 
-  const viewAnsweredIn = viewing ? submissionLanguage(viewing.answers) : null
+  const viewAnsweredIn = viewing ? answersLanguage(viewing.answers, portalLang) : null
 
   useEffect(() => {
     if (!viewing || !viewAnsweredIn || viewTranslated || viewTranslating) return
     let live = true
     setViewTranslating(true)
-    englishFromServer(viewing.answers).then(result => {
+    englishFromServer(viewing.answers, viewAnsweredIn).then(result => {
       if (!live) return
       setViewTranslated(result)
       setViewTranslating(false)
