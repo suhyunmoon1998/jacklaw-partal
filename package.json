@@ -46,6 +46,9 @@
   "overrides": {
     "next": {
       "postcss": "^8.5.28"
-    }
+    },
+    "postcss-selector-parser": "^7.1.6",
+    "sharp": "^0.35.5",
+    "source-map-js": "^1.2.2"
   }
 }

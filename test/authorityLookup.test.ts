@@ -3,7 +3,7 @@ import { NextRequest } from 'next/server'
 import { POST } from '@/app/api/eleanor/authority/route'
 import { section } from '@/lib/authority'
 import { HOLDINGS } from '@/lib/authority/cases'
-import { PART_CHARS, normalizeKey, readAuthority, searchAuthority } from '@/lib/authority/lookup'
+import { PART_CHARS, citedInTitle, normalizeKey, readAuthority, searchAuthority } from '@/lib/authority/lookup'
 
 const SECRET = 'y'.repeat(40)
 const ask = (body: unknown, auth = true) =>
@@ -49,7 +49,7 @@ describe('reading a provision by the name a model writes', () => {
   })
 
   it('says what is not held, rather than anything about it', () => {
-    const [item] = readAuthority(['Labor Code § 226.8'])
+    const [item] = readAuthority(['Labor Code § 4600'])
     expect(item.onFile).toBe(false)
     expect(item.text).toBeUndefined()
     expect(item.note).toMatch(/NOT ON FILE/)
@@ -78,6 +78,31 @@ describe('reading a provision by the name a model writes', () => {
     expect(item.text).toContain(h.quote)
     expect(item.text).toContain(h.limits)
     expect(item.text).toMatch(/not yet reviewed by an attorney/)
+  })
+})
+
+describe('what to read beside a provision', () => {
+  it('reads the statutes a CACI title cites', () => {
+    expect(citedInTitle('2766A. Meal Break Violations—Essential Factual Elements (Lab. Code, §§ 226.7, 512)')).toEqual(['LAB 226.7', 'LAB 512'])
+    expect(citedInTitle('2743. Equal Pay Act—Retaliation—Essential Factual Elements (Lab. Code, § 1197.5(k))')).toEqual(['LAB 1197.5'])
+  })
+
+  it('names the instructions and holdings tied to a statute, and the statutes an instruction cites', () => {
+    const [statute] = readAuthority(['LAB 512'])
+    expect(statute.topics).toContain('Meal periods')
+    const keys = (statute.related ?? []).map(r => r.key)
+    expect(keys).toEqual(expect.arrayContaining(['CACI 2766A', 'brinker-provide-means-relieve']))
+    const [instruction] = readAuthority(['CACI 2766A'])
+    expect((instruction.related ?? []).map(r => r.key)).toEqual(['LAB 226.7', 'LAB 512'])
+  })
+
+  it('reaches the statute an instruction is built on now that it is held', () => {
+    expect((readAuthority(['CACI 2710'])[0].related ?? []).map(r => r.key)).toEqual(['LAB 970'])
+    const [safety] = readAuthority(['Lab. Code § 6310'])
+    expect(safety.onFile).toBe(true)
+    expect(safety.topics).toContain('Workplace Safety: Retaliation for Safety Complaints and Refusing Unsafe Work')
+    expect((safety.related ?? []).map(r => r.key)).toContain('CACI 4605')
+    expect(safety.fetched?.on).toBe('2026-10-06')
   })
 })
 
