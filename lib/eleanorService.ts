@@ -15,14 +15,17 @@ import { createHmac, timingSafeEqual } from 'crypto'
  * before it was set. It is compared in constant time and never accepted from
  * a cookie or a query string, so a link cannot carry it.
  *
- * It opens exactly two routes:
+ * It opens exactly these routes:
  *
- *   /api/eleanor/sends     what the admin panel's Send button does for a module,
- *                          the next reminder text, now, and an update text made
- *                          only of the fixed sentences in lib/clientUpdates.ts.
- *   /api/eleanor/analysis  one stage of the client's damages reading — the admin
- *                          panel's Run, the same code — which Eleanor reads back
- *                          from the shared database for its FACTS / DAMAGES screen.
+ *   /api/eleanor/sends      what the admin panel's Send button does for a module,
+ *                           the next reminder text, now, and an update text made
+ *                           only of the fixed sentences in lib/clientUpdates.ts.
+ *   /api/eleanor/analysis   one stage of the client's damages reading — the admin
+ *                           panel's Run, the same code — which Eleanor reads back
+ *                           from the shared database for its FACTS / DAMAGES screen.
+ *   /api/eleanor/claims     the hand-written claim catalog. No client data.
+ *   /api/eleanor/authority  the California authority on file, searched or read
+ *                           word for word (lib/authority/lookup.ts). No client data.
  *
  * It cannot change a file, send anything the admin panel would not, or reach
  * anything else.
