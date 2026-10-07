@@ -11,14 +11,16 @@ import { answerText } from '@/lib/machineTranslate'
 import { AnswerValue } from '@/types'
 
 export async function englishFromServer(
-  answers: Record<string, AnswerValue>
+  answers: Record<string, AnswerValue>,
+  /** The language the panel reads this client as (answersLanguage); Spanish sends unaccented answers too. */
+  language?: string | null
 ): Promise<Record<string, string>> {
   const asIs = () => Object.fromEntries(Object.entries(answers).map(([id, v]) => [id, answerText(v)]))
   try {
     const res = await fetch('/api/admin/translate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ answers }),
+      body: JSON.stringify({ answers, language: language ?? null }),
     })
     if (!res.ok) return asIs()
     const body = await res.json()

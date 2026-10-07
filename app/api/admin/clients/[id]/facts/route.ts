@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { isAdmin } from '@/lib/adminAuth'
 import { toEnglishCached } from '@/lib/translationCache'
+import { getSupabase } from '@/lib/supabase'
 import { extractFacts } from '@/lib/factExtraction'
 import { addArrivedAnswers } from '@/lib/factAdditionsRun'
 import { gatherExtractionInput as gather } from '@/lib/factInput'
@@ -42,19 +43,31 @@ export const maxDuration = 300
  * when it is not. From the cache: this ran every verbatim through the free
  * endpoint on every load, two hundred calls for one Korean file.
  */
-const withEnglish = (entries: { verbatim: string }[]) => toEnglishCached(entries.map(e => e.verbatim ?? ''))
+const withEnglish = (entries: { verbatim: string }[], language: string | null) =>
+  toEnglishCached(entries.map(e => e.verbatim ?? ''), language)
+
+/**
+ * The language the client reads the portal in, when it is one whose writing
+ * cannot be told from English by its script — Spanish, typed without accents.
+ * Null on any failure: the quotations are still read for their own language.
+ */
+async function portalLanguage(clientId: string): Promise<string | null> {
+  const { data } = await getSupabase().from('clients').select('portal_lang').eq('id', clientId).maybeSingle()
+  return typeof data?.portal_lang === 'string' ? data.portal_lang : null
+}
 
 export async function GET(req: NextRequest, props: { params: Promise<{ id: string }> }) {
   const params = await props.params
   if (!isAdmin(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   try {
-    const [entries, contradictions, searched, input] = await Promise.all([
+    const [entries, contradictions, searched, input, language] = await Promise.all([
       readLedger(params.id),
       readContradictions(params.id),
       lastSearch(params.id),
       // Only to count answers the ledger has not read. A failure here costs
       // the count, not the ledger.
       gather(params.id).catch(() => null),
+      portalLanguage(params.id).catch(() => null),
     ])
     return NextResponse.json({
       facts: standing(entries).length,
@@ -84,7 +97,7 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
        * on 68 and the open loop on 163 all arrived empty — and the brief drew
        * the sections that depend on them as though the record had none.
        */
-      snapshot: await withEnglish(entries).then(english =>
+      snapshot: await withEnglish(entries, language).then(english =>
         entries.map((e, i) => ({
           id: e.id,
           proposition: e.proposition,

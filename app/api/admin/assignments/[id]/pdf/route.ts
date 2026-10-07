@@ -5,6 +5,7 @@ import { getAssignmentDetail } from '@/lib/questionSets'
 import { generateAnswersPdfForOffice } from '@/lib/generateAnswersPdf'
 import { formatPhone } from '@/lib/auth'
 import { translateAnswersCached } from '@/lib/translationCache'
+import { answersLanguage } from '@/lib/machineTranslate'
 
 /**
  * Putting a client's own words into English takes longer than drawing a PDF.
@@ -23,13 +24,16 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
 
   const { data: client } = await getSupabase()
     .from('clients')
-    .select('name, phone, case_type')
+    .select('name, phone, case_type, portal_lang')
     .eq('id', assignment.clientId)
     .maybeSingle()
 
   // English for the office, and the only text the PDF font can draw — see the
   // note in the default questionnaire's PDF route.
-  const answers = await translateAnswersCached(assignment.answers)
+  const answers = await translateAnswersCached(
+    assignment.answers,
+    answersLanguage(assignment.answers, client?.portal_lang)
+  )
 
   const pdf = await generateAnswersPdfForOffice(
     client?.name ?? assignment.clientName,

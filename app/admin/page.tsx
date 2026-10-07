@@ -67,7 +67,7 @@ import { ModuleProgress, ModuleSend } from '@/lib/moduleSteps'
 import PasteQuestionsDialog from '@/components/admin/PasteQuestionsDialog'
 import SendAssignmentDialog from '@/components/admin/SendAssignmentDialog'
 import { LANGUAGES, LANG_ENGLISH_NAME, Lang, toLang } from '@/lib/langs'
-import { submissionLanguage } from '@/lib/machineTranslate'
+import { answersLanguage } from '@/lib/machineTranslate'
 import { englishFromServer } from '@/lib/translateInBrowser'
 
 const DEFAULT_QUESTION_COUNT = QUESTIONNAIRE_SECTIONS.reduce((n, s) => n + s.questions.length, 0)
@@ -216,14 +216,18 @@ function ClientDetailModal({
   const flags = staffFlags(shownAnswers)
   const totalSections = readingSections.length
 
+  /**
+   * The language this client answered in, or null if they answered in English.
+   * A client who reads the portal in Spanish counts as Spanish: answers typed
+   * without accents give no other sign.
+   */
+  const answeredIn = answersLanguage(qState.answers, client.portalLang)
+
   const handleTranslate = useCallback(async () => {
     setTranslating(true)
-    setTranslatedAnswers(await englishFromServer(qState.answers))
+    setTranslatedAnswers(await englishFromServer(qState.answers, answeredIn))
     setTranslating(false)
-  }, [qState.answers])
-
-  /** The language this client answered in, or null if they answered in English. */
-  const answeredIn = submissionLanguage(qState.answers)
+  }, [qState.answers, answeredIn])
 
   // Auto-translate as soon as a non-English submission is detected, so staff
   // read English by default instead of having to remember to click Translate.
@@ -597,6 +601,7 @@ function ClientDetailModal({
             <ClientAssignments
               clientId={client.id}
               clientName={client.name}
+              portalLang={client.portalLang}
               caseType={client.caseType}
               defaultState={qState}
               defaultQuestionCount={DEFAULT_QUESTION_COUNT}
