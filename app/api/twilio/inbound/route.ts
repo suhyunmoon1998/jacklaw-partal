@@ -6,9 +6,14 @@ import { readReply } from '@/lib/optOut'
 import { maskPhone } from '@/lib/eleanorService'
 import { tellOfficePossibleStop } from '@/lib/inboundNotice'
 import { phoneKey, phoneVariants } from '@/lib/phoneNumber'
+import { isCarrierKeyword, isEleanorMember, relayToEleanor } from '@/lib/eleanorTexts'
 
 /**
  * POST /api/twilio/inbound — what a client texts back.
+ *
+ * And what Jack and David text Eleanor: the firm uses this one number for both,
+ * and a text from a member's number is passed to Eleanor unread
+ * (lib/eleanorTexts.ts) before any of the client handling below.
  *
  * Twilio stops delivering to a number that replies STOP on its own, at the
  * account level, and this endpoint is not what makes that work. It is here so
@@ -72,6 +77,18 @@ export async function POST(req: NextRequest) {
 
   const from = String(form.get('From') ?? '')
   const body = String(form.get('Body') ?? '')
+
+  // A text from the firm's own people is for Eleanor (lib/eleanorTexts.ts), not
+  // for the client handling below: "stop the reminders for her" from Jack is an
+  // instruction, not an opt-out, and must not reach the office as one. A bare
+  // carrier keyword still goes through below, so an opt-out is never missed.
+  if (isEleanorMember(from) && !isCarrierKeyword(body)) {
+    const { outcome, status } = await relayToEleanor(form, req.headers.get('x-twilio-signature') ?? '')
+    if (outcome !== 'Relayed') {
+      console.error(`twilio inbound: a member's text could not be passed to Eleanor (${outcome}${status ? ` ${status}` : ''})`)
+    }
+    return empty()
+  }
 
   const { meaning, maybeStop } = readReply(body)
   const stopping = meaning === 'stop'
