@@ -10,8 +10,9 @@
  *
  * Four bodies of authority are on file, and they answer different questions:
  *
- *   STATUTES (Lab. Code, Bus. & Prof. Code, Code Civ. Proc.) — what is owed,
- *   what the remedy is, and how long there is to sue. From the Legislature.
+ *   STATUTES (Lab. Code; Gov. Code — FEHA and its leave sections; Bus. & Prof.
+ *   Code; Code Civ. Proc.) — what is owed, what the remedy is, and how long
+ *   there is to sue. From the Legislature.
  *
  *   WAGE ORDERS — the duties the Labor Code points at without stating. Rest
  *   periods are section 12 of an Order, not a section of the Code, and section
@@ -61,13 +62,29 @@ export const FETCHED_ON: Record<string, { on: string; from: string }> = {
   // Code Section 1475", and the readings, told fast food carries its own
   // minimum, cited a section that was not here.
   fastFood: { on: '2026-09-25', from: 'leginfo.legislature.ca.gov — Lab. Code §§ 1474–1477 (Div. 2, Part 4.5.5, Fast Food)' },
+  // The questionnaire asks about medical leave and pregnancy, misclassification,
+  // being laid off and complaining about safety; the sections those answers
+  // point to were not held. With them, the statute each CACI instruction already
+  // held names in its title and the library lacked: Lab. Code §§ 970, 1019 and
+  // 1050 (2710, 2732, 2711, each with its chapter), Gov. Code §§ 12653 and 8547.8
+  // (4600–4602) and Health & Saf. Code § 1278.5 (4606, held though revoked in
+  // 2017; the section itself stands).
+  // leginfo answers an automated request with a bot check, so these were read
+  // in a browser; each section's SHA-256 was taken there, before the text left
+  // it, and test/statutesPulled.test.ts holds those hashes. Each chapter record
+  // in statutes.json names this entry in `fetched`.
+  employeeProtections: {
+    on: '2026-10-06',
+    from: 'leginfo.legislature.ca.gov — Gov. Code §§ 8547.8, 12653, 12945–12945.8; Lab. Code §§ 226.8, 970–977, 1019–1019.4, 1050–1057, 1400–1408, 6310–6312; Health & Saf. Code § 1278.5',
+  },
 }
 
 type Keyed = { sections: Record<string, string> }
 type Statutes = Keyed & {
   chapters: Record<
     string,
-    { law: string; label: string; path: Record<string, string>; count: number; range: string[] }
+    // `fetched` names the FETCHED_ON entry for a chapter pulled on its own day.
+    { law: string; label: string; path: Record<string, string>; count: number; range: string[]; fetched?: string }
   >
 }
 
@@ -81,6 +98,7 @@ export const LAW_NAME: Record<string, string> = {
   BPC: 'Bus. & Prof. Code',
   CCP: 'Code Civ. Proc.',
   GOV: 'Gov. Code',
+  HSC: 'Health & Saf. Code',
   CCR2: 'Cal. Code Regs., tit. 2,',
   LAMC: 'L.A. Mun. Code',
   LAMW: 'L.A. Office of Wage Standards, minimum wage notice',

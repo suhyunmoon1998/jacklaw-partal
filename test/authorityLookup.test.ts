@@ -49,7 +49,7 @@ describe('reading a provision by the name a model writes', () => {
   })
 
   it('says what is not held, rather than anything about it', () => {
-    const [item] = readAuthority(['Labor Code § 226.8'])
+    const [item] = readAuthority(['Labor Code § 4600'])
     expect(item.onFile).toBe(false)
     expect(item.text).toBeUndefined()
     expect(item.note).toMatch(/NOT ON FILE/)
@@ -94,6 +94,15 @@ describe('what to read beside a provision', () => {
     expect(keys).toEqual(expect.arrayContaining(['CACI 2766A', 'brinker-provide-means-relieve']))
     const [instruction] = readAuthority(['CACI 2766A'])
     expect((instruction.related ?? []).map(r => r.key)).toEqual(['LAB 226.7', 'LAB 512'])
+  })
+
+  it('reaches the statute an instruction is built on now that it is held', () => {
+    expect((readAuthority(['CACI 2710'])[0].related ?? []).map(r => r.key)).toEqual(['LAB 970'])
+    const [safety] = readAuthority(['Lab. Code § 6310'])
+    expect(safety.onFile).toBe(true)
+    expect(safety.topics).toContain('Workplace Safety: Retaliation for Safety Complaints and Refusing Unsafe Work')
+    expect((safety.related ?? []).map(r => r.key)).toContain('CACI 4605')
+    expect(safety.fetched?.on).toBe('2026-10-06')
   })
 })
 

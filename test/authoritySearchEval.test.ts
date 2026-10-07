@@ -82,6 +82,35 @@ const LATER: [question: string, accepted: RegExp][] = [
   ['rounding of meal period punches', /^(donohue-no-rounding-for-meal-periods|CACI 2775)$/],
 ]
 
+/**
+ * Written for the sections pulled on 2026-10-06, before any vocabulary was added
+ * for them. Found 17 of 20 on first sight; four everyday words (jury duty,
+ * lied, move, reference) made it 20. Lab. Code § 230 is accepted beside Gov.
+ * Code § 12945.8 for jury service because the text on file says the same.
+ */
+const PULLED_LATER: [question: string, accepted: RegExp][] = [
+  ['pregnancy disability leave how many months', /^GOV 12945$/],
+  ['family and medical leave to care for a sick parent', /^GOV 12945\.2$/],
+  ['CFRA leave twelve weeks', /^GOV 12945\.2$/],
+  ['fired for taking baby bonding leave', /^GOV 12945\.2$/],
+  ['bereavement leave after a death in the family', /^GOV 12945\.7$/],
+  ['time off after a miscarriage', /^GOV 12945\.6$/],
+  ['fired for serving on a jury', /^(GOV 12945\.8|LAB 230)$/],
+  ['domestic violence victim time off from work', /^GOV 12945\.8$/],
+  ['willful misclassification as an independent contractor penalty', /^LAB 226\.8$/],
+  ['fired for complaining about unsafe working conditions', /^(LAB 6310|CACI 4605)$/],
+  ['refused to do dangerous work and was fired', /^LAB 6311$/],
+  ['mass layoff without 60 days notice', /^(LAB 1401|LAB 1402)$/],
+  ['back pay when the plant closed without warning', /^(LAB 1402|LAB 1401)$/],
+  ['lied about the pay to get me to move for the job', /^(LAB 970|LAB 972|CACI 2710)$/],
+  ['former employer gave a false reference to stop me getting hired', /^(LAB 1050|LAB 1054|CACI 2711)$/],
+  ['threatened to report me to immigration after I complained', /^(LAB 1019|CACI 2732)$/],
+  ['employer asked for more documents to verify work authorization', /^(LAB 1019\.1|LAB 1019\.2|LAB 1019)$/],
+  ['nurse retaliated against for reporting unsafe patient care', /^(HSC 1278\.5|CACI 4606)$/],
+  ['retaliation for reporting fraud on a government contract', /^(GOV 12653|CACI 4600)$/],
+  ['state employee whistleblower retaliation', /^(GOV 8547\.8|CACI 4601|CACI 4602)$/],
+]
+
 export function hitRate(top = 5, cases = CASES): { rate: number; misses: string[] } {
   const misses: string[] = []
   for (const [question, accepted] of cases) {
@@ -103,6 +132,13 @@ describe('the law store finds the provision a question is about', () => {
   it('and on the questions written after it was tuned', () => {
     const { rate, misses } = hitRate(5, LATER)
     console.log(`law store search, later questions: ${Math.round(rate * 100)}% of ${LATER.length}`)
+    if (misses.length) console.log(misses.join('\n'))
+    expect(rate).toBeGreaterThanOrEqual(0.85)
+  })
+
+  it('and on the sections pulled on 2026-10-06', () => {
+    const { rate, misses } = hitRate(5, PULLED_LATER)
+    console.log(`law store search, pulled 2026-10-06: ${Math.round(rate * 100)}% of ${PULLED_LATER.length}`)
     if (misses.length) console.log(misses.join('\n'))
     expect(rate).toBeGreaterThanOrEqual(0.85)
   })

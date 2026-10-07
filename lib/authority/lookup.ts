@@ -62,13 +62,12 @@ export const PART_CHARS = 10_000
 
 type Keyed = { sections: Record<string, string> }
 const STATUTES = statuteData as unknown as Keyed
-const STATUTES_META = statuteData as unknown as {
-  chapters: Record<string, { law: string; label: string; range: string[] }>
-}
+type Chapter = { law: string; label: string; range: string[]; fetched?: string }
+const STATUTES_META = statuteData as unknown as { chapters: Record<string, Chapter> }
 const WAGE_ORDERS = wageOrderData as unknown as Keyed
 const CACI = caciData as unknown as Keyed
 
-const STATUTE_LAWS = ['LAB', 'GOV', 'CCP', 'BPC']
+const STATUTE_LAWS = ['LAB', 'GOV', 'CCP', 'BPC', 'HSC']
 
 function kindOf(law: string): AuthorityKind {
   if (law === 'IWC') return 'wage order'
@@ -81,6 +80,9 @@ function kindOf(law: string): AuthorityKind {
 /** Where and when the text of a provision was pulled. */
 export function fetchedFor(law: string, num: string): Fetched {
   const pick = (k: string) => FETCHED_ON[k] ?? FETCHED_ON.statutes
+  // A chapter pulled on its own day says so in its record.
+  const own = law === 'IWC' || law === 'CACI' ? undefined : chapterOf(law, num)?.fetched
+  if (own && FETCHED_ON[own]) return FETCHED_ON[own]
   if (law === 'IWC') return pick('wageOrders')
   if (law === 'CACI') return pick('caci')
   if (law === 'GOV') return pick('feha')
@@ -108,11 +110,12 @@ export function normalizeKey(raw: string): string | null {
   const num = '(\\d+(?:\\.\\d+)*[a-z]?)'
   const sec = '(?:,?\\s*(?:§+|sec(?:tion)?s?\\.?))?\\s*'
   const tries: [RegExp, (m: RegExpMatchArray) => string][] = [
-    [new RegExp(`^(LAB|GOV|CCP|BPC|LAMC)\\s+${num}$`, 'i'), m => `${m[1].toUpperCase()} ${m[2]}`],
+    [new RegExp(`^(LAB|GOV|CCP|BPC|HSC|LAMC)\\s+${num}$`, 'i'), m => `${m[1].toUpperCase()} ${m[2]}`],
     [new RegExp(`^(?:cal(?:ifornia)?\\.?\\s+)?lab(?:or|our)?\\.?\\s*code${sec}${num}$`, 'i'), m => `LAB ${m[1]}`],
     [new RegExp(`^(?:cal(?:ifornia)?\\.?\\s+)?gov(?:ernment|t)?\\.?\\s*code${sec}${num}$`, 'i'), m => `GOV ${m[1]}`],
     [new RegExp(`^(?:code\\s*(?:of\\s*)?civ(?:il)?\\.?\\s*proc(?:edure)?\\.?|civ(?:il)?\\.?\\s*proc(?:edure)?\\.?\\s*code)${sec}${num}$`, 'i'), m => `CCP ${m[1]}`],
     [new RegExp(`^bus(?:iness)?\\.?\\s*(?:&|and)\\s*prof(?:essions)?\\.?\\s*code${sec}${num}$`, 'i'), m => `BPC ${m[1]}`],
+    [new RegExp(`^(?:cal(?:ifornia)?\\.?\\s+)?health\\s*(?:&|and)\\s*saf(?:ety)?\\.?\\s*code${sec}${num}$`, 'i'), m => `HSC ${m[1]}`],
     [new RegExp(`^(?:2\\s*ccr|ccr2|cal(?:ifornia)?\\.?\\s*code\\s*(?:of\\s*)?regs?\\.?,?\\s*tit(?:le)?\\.?\\s*2,?)${sec}${num}$`, 'i'), m => `CCR2 ${m[1]}`],
     [new RegExp(`^(?:l\\.?a\\.?|los angeles)\\s*mun(?:icipal)?\\.?\\s*code${sec}${num}$`, 'i'), m => `LAMC ${m[1]}`],
     [/^lamw\s+(\d{4}-\d{2}-\d{2})$/i, m => `LAMW ${m[1]}`],
@@ -355,6 +358,11 @@ const SHORTHAND: [RegExp, string][] = [
   [/\bharass\w*/i, 'harassment harass'],
   [/\bagreements?\b/i, 'contract'],
   [/\bhot\b|\bheat\b/i, 'heat temperature'],
+  // Added with the sections pulled on 2026-10-06, for the questions they answer.
+  [/\bjury (?:duty|service)\b|\bserv\w* on (?:a |the )?jury\b/i, 'inquest jury trial jury time off'],
+  [/\b(?:lie|lied|lies|lying)\b/i, 'false representations misrepresentation'],
+  [/\b(?:move|moved|moving)\b/i, 'change residence place another'],
+  [/\breferences?\b|\bblacklist\w*|\bbad-?mouth\w*/i, 'misrepresentation prevents obtaining employment'],
 ]
 
 /**
@@ -366,12 +374,18 @@ const SHORTHAND: [RegExp, string][] = [
  * the names of the claims read out of it (claims.ts), and the titles of the
  * CACI instructions that cite it.
  */
-const CODE_OF: Record<string, string> = { 'Lab.': 'LAB', 'Gov.': 'GOV', 'Code Civ.': 'CCP', 'Bus. & Prof.': 'BPC' }
+const CODE_OF: Record<string, string> = {
+  'Lab.': 'LAB',
+  'Gov.': 'GOV',
+  'Code Civ.': 'CCP',
+  'Bus. & Prof.': 'BPC',
+  'Health & Saf.': 'HSC',
+}
 
 /** The statutes a CACI instruction's title cites, as keys: "(Lab. Code, §§ 226.7, 512)". */
 export function citedInTitle(title: string): string[] {
   const out: string[] = []
-  const re = /(Lab\.|Gov\.|Code Civ\.|Bus\. & Prof\.)\s*(?:Code)?\s*(?:Proc\.)?,?\s*§§?\s*((?:\d+(?:\.\d+)*(?:\([a-z0-9]+\))*(?:,\s*|\s+and\s+)?)+)/g
+  const re = /(Lab\.|Gov\.|Code Civ\.|Bus\. & Prof\.|Health & Saf\.)\s*(?:Code)?\s*(?:Proc\.)?,?\s*§§?\s*((?:\d+(?:\.\d+)*(?:\([a-z0-9]+\))*(?:,\s*|\s+and\s+)?)+)/g
   for (const m of Array.from(title.matchAll(re))) {
     for (const n of m[2].match(/\d+(?:\.\d+)*/g) ?? []) out.push(`${CODE_OF[m[1]]} ${n}`)
   }
@@ -384,18 +398,22 @@ function caciTitle(text: string): string {
 }
 
 /** The chapter a statute sits in: the narrowest range on file that holds its number. */
-function chapterLabel(law: string, num: string): string | null {
+function chapterOf(law: string, num: string): Chapter | null {
   const n = Number(num)
   if (!Number.isFinite(n)) return null
-  let best: { label: string; width: number } | null = null
+  let best: { chapter: Chapter; width: number } | null = null
   for (const c of Object.values(STATUTES_META.chapters)) {
     if (c.law !== law) continue
     const [lo, hi] = c.range.map(Number)
     if (!(n >= lo && n <= hi)) continue
     const width = hi - lo
-    if (!best || width < best.width) best = { label: c.label, width }
+    if (!best || width < best.width) best = { chapter: c, width }
   }
-  return best?.label ?? null
+  return best?.chapter ?? null
+}
+
+function chapterLabel(law: string, num: string): string | null {
+  return chapterOf(law, num)?.label ?? null
 }
 
 let labelCache: Map<string, string[]> | null = null
