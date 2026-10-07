@@ -16,6 +16,7 @@
 
 import { FETCHED_ON, cite, parseKey, section } from '@/lib/authority'
 import { HOLDINGS, caseRecord, citeCase } from '@/lib/authority/cases'
+import { ALL_CLAIMS } from '@/lib/authority/claims'
 import statuteData from './statutes.json'
 import wageOrderData from './wageOrders.json'
 import caciData from './caci.json'
@@ -40,6 +41,10 @@ export interface AuthorityText {
   fetched?: Fetched
   /** Why nothing is given, when nothing is. */
   note?: string
+  /** What this repository already ties to it: the claims read out of it, its chapter, the instructions citing it. */
+  topics?: string[]
+  /** Provisions and holdings to read beside it, as keys for another read. */
+  related?: { key: string; cite: string }[]
 }
 
 export interface AuthorityHit {
@@ -57,6 +62,9 @@ export const PART_CHARS = 10_000
 
 type Keyed = { sections: Record<string, string> }
 const STATUTES = statuteData as unknown as Keyed
+const STATUTES_META = statuteData as unknown as {
+  chapters: Record<string, { law: string; label: string; range: string[] }>
+}
 const WAGE_ORDERS = wageOrderData as unknown as Keyed
 const CACI = caciData as unknown as Keyed
 
@@ -226,8 +234,43 @@ export function readAuthority(keys: string[]): AuthorityText[] {
         ? { part: { of: pieces.length, next: index + 1 < pieces.length ? `${key} part ${index + 2}` : null } }
         : {}),
       fetched: fetchedFor(law, num),
+      ...navigation(key),
     }
   })
+}
+
+/**
+ * What to read beside a provision, from what this repository already ties
+ * together by hand: the CACI instructions whose titles cite a statute, the
+ * statutes an instruction cites, and the holdings bearing on claims read out
+ * of it. Nothing here is inferred.
+ */
+function navigation(key: string): { topics?: string[]; related?: { key: string; cite: string }[] } {
+  const { law, num } = parseKey(key)
+  const related: { key: string; cite: string }[] = []
+  const push = (k: string, c: string) => {
+    if (k !== key && !related.some(r => r.key === k)) related.push({ key: k, cite: c })
+  }
+  if (law === 'CACI') {
+    const title = caciTitle(section(law, num) ?? '')
+    for (const cited of citedInTitle(title)) {
+      const p = parseKey(cited)
+      if (section(p.law, p.num)) push(cited, cite(p.law, p.num))
+    }
+  } else if (law !== 'IWC') {
+    for (const [k, text] of Object.entries(CACI.sections)) {
+      if (citedInTitle(caciTitle(text)).includes(key)) push(k, cite('CACI', parseKey(k).num))
+    }
+    const claims = ALL_CLAIMS.filter(c => [...c.sections, ...c.elements.map(e => e.from)].includes(key)).map(c => c.id)
+    for (const h of HOLDINGS) {
+      if (h.bearsOn.some(b => claims.includes(b.split(':')[0]))) push(h.id, citeCase(h.case))
+    }
+  }
+  const topics = topicLabels().get(key)
+  return {
+    ...(topics?.length ? { topics: topics.slice(0, 8) } : {}),
+    ...(related.length ? { related: related.slice(0, 10) } : {}),
+  }
 }
 
 // ── Search ───────────────────────────────────────────────────────────────
@@ -246,36 +289,49 @@ type Doc = {
 const STOP = new Set([
   'the', 'a', 'an', 'of', 'to', 'in', 'for', 'and', 'or', 'on', 'at', 'by', 'with', 'is', 'are', 'be', 'what',
   'how', 'does', 'do', 'california', 'law', 'laws', 'code', 'section', 'sections', 'rule', 'rules', 'about',
-  'under', 'any', 'that', 'this', 'which', 'there', 'when', 'who', 'an', 'as', 'if',
+  'under', 'any', 'that', 'this', 'which', 'there', 'when', 'who', 'an', 'as', 'if', 'has', 'have', 'must',
+  'can', 'my', 'our', 'his', 'her', 'their', 'from', 'after', 'while', 'employee', 'employer',
 ])
 
+/** Numbers as statutes write them: "12 hours", where a question says "twelve". */
+const NUMBER_WORDS: Record<string, string> = {
+  one: '1', two: '2', three: '3', four: '4', five: '5', six: '6', seven: '7', eight: '8', nine: '9', ten: '10',
+  eleven: '11', twelve: '12', fifteen: '15', twenty: '20', thirty: '30', forty: '40', fifty: '50', sixty: '60',
+  ninety: '90',
+}
+
 function terms(text: string): string[] {
-  return (text.toLowerCase().match(/[a-z0-9][a-z0-9.\-]*[a-z0-9]|[a-z0-9]/g) ?? []).filter(t => !STOP.has(t))
+  return (text.toLowerCase().match(/[a-z0-9][a-z0-9.\-]*[a-z0-9]|[a-z0-9]/g) ?? [])
+    .map(t => NUMBER_WORDS[t] ?? t)
+    .filter(t => !STOP.has(t))
 }
 
 /**
- * English stems, enough to match "breaks" to "break", "waived" to "waiver"
- * and "employers" to "employer" (and not to "employee").
+ * English stems, enough to match "breaks" to "break", "waived" to "waiver",
+ * "retaliation" to "retaliate" and "employers" to "employer" (and not to
+ * "employee").
  */
 function stem(t: string): string {
   if (/^\d/.test(t) || t.length < 4) return t
   let s = t
   if (s.endsWith('ies') && s.length > 4) s = `${s.slice(0, -3)}y`
   else if (s.endsWith('s') && !s.endsWith('ss')) s = s.slice(0, -1)
-  if (s.length > 5 && /(?:ing|ed)$/.test(s)) s = s.replace(/(?:ing|ed)$/, '')
+  if (s.length > 6 && s.endsWith('ion')) s = s.slice(0, -3)
+  else if (s.length > 5 && /(?:ing|ed)$/.test(s)) s = s.replace(/(?:ing|ed)$/, '')
   else if (s.length > 5 && s.endsWith('er')) s = s.slice(0, -2)
   if (s.length > 4 && s.endsWith('e')) s = s.slice(0, -1)
   return s
 }
 
 /**
- * The office's shorthand, in the words the provisions use: the Labor Code
- * never says "PAGA" or "LWDA", and section 2802 says "indemnify" and
- * "expenditures", not "reimbursement".
+ * The office's words, in the words the provisions use. The Labor Code never
+ * says "PAGA", "fired" or "paycheck"; section 2802 says "indemnify" and
+ * "expenditures", not "reimbursement"; a limitations period is "within three
+ * years … liability created by statute".
  */
 const SHORTHAND: [RegExp, string][] = [
   [/\bpaga\b/i, 'private attorneys general'],
-  [/\blwda\b/i, 'labor workforce development agency'],
+  [/\blwda\b|\bthe agency\b/i, 'labor workforce development agency'],
   [/\bfeha\b/i, 'fair employment housing'],
   [/\bdlse\b/i, 'labor commissioner standards enforcement'],
   [/\breimburs\w*|\bexpenses?\b/i, 'indemnify necessary expenditures losses'],
@@ -283,13 +339,101 @@ const SHORTHAND: [RegExp, string][] = [
   [/\bsick (?:leave|days?|time)\b/i, 'paid sick days leave'],
   [/\bfinal (?:pay|paycheck|wages?)\b|\blast paycheck\b/i, 'discharged quits wages earned unpaid'],
   [/\bmisclassif\w*/i, 'independent contractor employee'],
+  [/\bfir(?:e|ed|ing)\b|\bterminat\w*|\blet go\b|\blaid off\b/i, 'discharge discharged'],
+  [/\bquit\w*/i, 'quits'],
+  [/\bpay ?checks?\b/i, 'wages paid'],
+  [/\bboss\b/i, 'employer'],
+  [/\blunch\b/i, 'meal'],
+  [/\bbreaks?\b/i, 'period'],
+  [/\b(?:meal|rest|break|lunch)\w*\b.*\bpremium\b|\bpremium\b.*\b(?:meal|rest|break|lunch)/i, 'additional hour pay'],
+  [/\bsplit shifts?\b/i, 'split shift'],
+  [/\bcomplain\w*/i, 'complaint claim'],
+  [/\bstatutes? of limitations?\b|\blimitations period\b|\b(?:deadline|time limit) to (?:sue|file)\b/i, 'within three years liability created by statute commenced within four years'],
+  [/\btips?\b|\btip pool\w*/i, 'gratuity gratuities'],
+  [/\bdeduct\w*/i, 'deduction withhold'],
+  [/\bdouble time\b/i, 'twice regular rate'],
+  [/\bharass\w*/i, 'harassment harass'],
+  [/\bagreements?\b/i, 'contract'],
+  [/\bhot\b|\bheat\b/i, 'heat temperature'],
 ]
+
+/**
+ * Topic names for provisions that carry none. Statutes come from the
+ * Legislature without headings, so a question in the office's words ("double
+ * time", "final pay") missed the section that answers it while every CACI
+ * instruction, which has a title, came first. Each statute is labelled with
+ * what this repository already says about it, by hand: its chapter's name,
+ * the names of the claims read out of it (claims.ts), and the titles of the
+ * CACI instructions that cite it.
+ */
+const CODE_OF: Record<string, string> = { 'Lab.': 'LAB', 'Gov.': 'GOV', 'Code Civ.': 'CCP', 'Bus. & Prof.': 'BPC' }
+
+/** The statutes a CACI instruction's title cites, as keys: "(Lab. Code, §§ 226.7, 512)". */
+export function citedInTitle(title: string): string[] {
+  const out: string[] = []
+  const re = /(Lab\.|Gov\.|Code Civ\.|Bus\. & Prof\.)\s*(?:Code)?\s*(?:Proc\.)?,?\s*§§?\s*((?:\d+(?:\.\d+)*(?:\([a-z0-9]+\))*(?:,\s*|\s+and\s+)?)+)/g
+  for (const m of Array.from(title.matchAll(re))) {
+    for (const n of m[2].match(/\d+(?:\.\d+)*/g) ?? []) out.push(`${CODE_OF[m[1]]} ${n}`)
+  }
+  return Array.from(new Set(out))
+}
+
+/** A CACI instruction's title: its first lines, where the title sits, run together. */
+function caciTitle(text: string): string {
+  return text.replace(/\s+/g, ' ').trim().slice(0, 240).split(/ \[Name of /)[0].trim()
+}
+
+/** The chapter a statute sits in: the narrowest range on file that holds its number. */
+function chapterLabel(law: string, num: string): string | null {
+  const n = Number(num)
+  if (!Number.isFinite(n)) return null
+  let best: { label: string; width: number } | null = null
+  for (const c of Object.values(STATUTES_META.chapters)) {
+    if (c.law !== law) continue
+    const [lo, hi] = c.range.map(Number)
+    if (!(n >= lo && n <= hi)) continue
+    const width = hi - lo
+    if (!best || width < best.width) best = { label: c.label, width }
+  }
+  return best?.label ?? null
+}
+
+let labelCache: Map<string, string[]> | null = null
+
+/** Every statute's topic names (see above), by key. */
+export function topicLabels(): Map<string, string[]> {
+  if (labelCache) return labelCache
+  const labels = new Map<string, Set<string>>()
+  const add = (key: string, label: string) => {
+    if (!labels.has(key)) labels.set(key, new Set())
+    labels.get(key)!.add(label)
+  }
+  for (const key of Object.keys(STATUTES.sections)) {
+    const { law, num } = parseKey(key)
+    const chapter = law === 'LAMW' ? 'Los Angeles minimum wage notice' : chapterLabel(law, num)
+    if (chapter) add(key, chapter)
+  }
+  for (const claim of ALL_CLAIMS) {
+    for (const ref of [...claim.sections, ...claim.elements.map(e => e.from)]) {
+      if (!ref.includes('{order}') && STATUTES.sections[ref]) add(ref, claim.name)
+    }
+  }
+  for (const text of Object.values(CACI.sections)) {
+    const title = caciTitle(text)
+    for (const cited of citedInTitle(title)) {
+      if (STATUTES.sections[cited]) add(cited, title.replace(/^\d+[A-Z]?\.\s*/, '').replace(/\s*\(.*$/, ''))
+    }
+  }
+  labelCache = new Map(Array.from(labels.entries()).map(([k, v]) => [k, Array.from(v)]))
+  return labelCache
+}
 
 let index: { docs: Doc[]; df: Map<string, number>; avgLength: number } | null = null
 
 function buildIndex() {
   if (index) return index
   const docs: Doc[] = []
+  const labels = topicLabels()
   const add = (key: string, text: string, title: string) => {
     const { law, num } = parseKey(key)
     const counts = new Map<string, number>()
@@ -301,9 +445,9 @@ function buildIndex() {
     }
     docs.push({ key, law, num, text, title, titleTerms: new Set(terms(title).map(stem)), terms: counts, length })
   }
-  for (const [k, v] of Object.entries(STATUTES.sections)) add(k, v, '')
+  for (const [k, v] of Object.entries(STATUTES.sections)) add(k, v, (labels.get(k) ?? []).join(' · '))
   for (const [k, v] of Object.entries(WAGE_ORDERS.sections)) add(k, v, v.trim().split('\n')[0].trim())
-  for (const [k, v] of Object.entries(CACI.sections)) add(k, v, v.trim().split('\n')[0].trim())
+  for (const [k, v] of Object.entries(CACI.sections)) add(k, v, caciTitle(v))
   for (const h of HOLDINGS) add(h.id, `${h.quote}\n${h.limits}`, h.proposition)
   const df = new Map<string, number>()
   for (const d of docs) for (const t of Array.from(d.terms.keys())) df.set(t, (df.get(t) ?? 0) + 1)
@@ -361,24 +505,34 @@ export function searchAuthority(query: string, limit = 8): AuthorityHit[] {
     if (!tf) return 0
     const n = df.get(t) ?? 1
     const idf = Math.log(1 + (docs.length - n + 0.5) / (n + 0.5))
-    return (idf * (tf * (k1 + 1))) / (tf + k1 * (1 - b + (b * d.length) / avgLength)) + (d.titleTerms.has(t) ? 0.5 : 0)
+    return (idf * (tf * (k1 + 1))) / (tf + k1 * (1 - b + (b * d.length) / avgLength)) + (d.titleTerms.has(t) ? 1 : 0)
   }
+
+  // How much of the question a provision answers, weighted by how telling each
+  // word is: a provision that has the one rare word ("temperature") is not
+  // dropped for lacking the filler ("too hot"), but one with only filler
+  // ranks below one with the substance.
+  const idfOf = (t: string) => {
+    const n = df.get(t) ?? 0
+    return n ? Math.log(1 + (docs.length - n + 0.5) / (n + 0.5)) : 0
+  }
+  const totalWeight = wanted.reduce((sum, t) => sum + idfOf(t), 0) + 0.7 * extra.reduce((sum, t) => sum + idfOf(t), 0)
 
   const scored = docs
     .map(d => {
       let score = 0
-      let matched = 0
+      let covered = 0
       for (const t of wanted) {
         const w = weigh(d, t)
-        if (w) matched++
+        if (w) covered += idfOf(t)
         score += w
       }
       for (const t of extra) {
         const w = weigh(d, t)
-        if (w) matched++
+        if (w) covered += 0.7 * idfOf(t)
         score += 0.7 * w
       }
-      if (wanted.length > 1 && matched < Math.ceil(wanted.length / 2)) score = 0
+      if (totalWeight > 0) score *= 0.25 + 0.75 * (covered / totalWeight)
       if (score && phrase.length > 6 && d.text.toLowerCase().includes(phrase)) score += 3
       if (exact && d.key === exact) score += 1000
       return { d, score }
