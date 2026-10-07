@@ -1,15 +1,17 @@
 import { describe, expect, it } from 'vitest'
 import { NextRequest } from 'next/server'
-import { GET } from '@/app/api/eleanor/authority/route'
+import { POST } from '@/app/api/eleanor/authority/route'
 import { section } from '@/lib/authority'
 import { HOLDINGS } from '@/lib/authority/cases'
 import { PART_CHARS, normalizeKey, readAuthority, searchAuthority } from '@/lib/authority/lookup'
 
 const SECRET = 'y'.repeat(40)
-const ask = (query: string, auth = true) =>
-  GET(
-    new NextRequest(`https://portal.example/api/eleanor/authority?${query}`, {
-      headers: auth ? { authorization: `Bearer ${SECRET}` } : {},
+const ask = (body: unknown, auth = true) =>
+  POST(
+    new NextRequest('https://portal.example/api/eleanor/authority', {
+      method: 'POST',
+      body: JSON.stringify(body),
+      headers: { 'content-type': 'application/json', ...(auth ? { authorization: `Bearer ${SECRET}` } : {}) },
     })
   )
 
@@ -103,10 +105,10 @@ describe('searching what is on file', () => {
 })
 
 describe('the door', () => {
-  it('opens only with the service secret', async () => {
+  it('opens only with the service secret, and keeps the question out of the URL', async () => {
     process.env.ELEANOR_PORTAL_SERVICE_SECRET = SECRET
-    expect((await ask('q=overtime', false)).status).toBe(401)
-    const res = await ask('q=overtime')
+    expect((await ask({ q: 'overtime' }, false)).status).toBe(401)
+    const res = await ask({ q: 'overtime' })
     expect(res.status).toBe(200)
     expect(res.headers.get('cache-control')).toBe('no-store')
     const body = await res.json()
@@ -116,10 +118,10 @@ describe('the door', () => {
 
   it('reads keys, and refuses more than four', async () => {
     process.env.ELEANOR_PORTAL_SERVICE_SECRET = SECRET
-    const res = await ask('key=LAB%20512&key=CACI%202766A')
+    const res = await ask({ keys: ['LAB 512', 'CACI 2766A'] })
     const body = await res.json()
     expect(body.items.map((i: { key: string }) => i.key)).toEqual(['LAB 512', 'CACI 2766A'])
-    expect((await ask('key=1&key=2&key=3&key=4&key=5')).status).toBe(400)
-    expect((await ask('')).status).toBe(400)
+    expect((await ask({ keys: ['1', '2', '3', '4', '5'] })).status).toBe(400)
+    expect((await ask({})).status).toBe(400)
   })
 })
