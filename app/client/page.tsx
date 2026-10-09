@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { normalizePhone, setSession, getSession, formatPhone } from '@/lib/auth'
+import { typedPhoneDigits } from '@/lib/phoneNumber'
 import { FIRM_PHONE_LABEL, FIRM_PHONE_TEL } from '@/lib/contact'
 import { useLanguage } from '@/lib/i18n'
 import LanguagePicker from '@/components/LanguagePicker'
@@ -74,8 +75,7 @@ export default function LoginPage() {
   }, [router])
 
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const raw = e.target.value.replace(/[^\d\s\-()]/g, '')
-    const digits = raw.replace(/\D/g, '').slice(0, 10)
+    const digits = typedPhoneDigits(e.target.value)
     setPhone(formatPhone(digits))
     setError('')
     // Editing the number abandons whatever was found for the old one.
