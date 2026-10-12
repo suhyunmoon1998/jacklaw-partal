@@ -30,7 +30,7 @@ export default function SubmittedPage() {
   }, [router])
 
   return (
-    <div className="min-h-screen bg-white flex flex-col">
+    <div className="min-h-screen bg-canvas flex flex-col">
       <Header showLogout />
 
       <main className="flex-1 flex items-center justify-center px-4 py-12">
@@ -43,12 +43,12 @@ export default function SubmittedPage() {
               </svg>
             </div>
 
-            <h2 className="text-2xl font-bold text-navy mb-3">{t('submitted_heading')}</h2>
+            <h1 className="text-[24px] font-semibold tracking-tight text-gray-950 mb-3">{t('submitted_heading')}</h1>
             <p className="text-gray-600 leading-relaxed mb-2">{t('submitted_msg')}</p>
             <p className="text-gray-500 text-sm leading-relaxed mb-8">{t('submitted_sub')}</p>
 
-            <div className="bg-orange-50 border border-gold/30 rounded-xl p-4 mb-6 text-left">
-              <p className="text-navy text-sm font-semibold mb-1">{t('what_next')}</p>
+            <div className="bg-canvas border border-line rounded-xl p-4 mb-6 text-left">
+              <p className="text-gray-950 text-sm font-semibold mb-1">{t('what_next')}</p>
               <ul className="space-y-1.5">
                 {[t('next_step_1'), t('next_step_2'), t('next_step_3'), t('next_step_4')].map(step => (
                   <li key={step} className="flex items-start gap-2 text-sm text-gray-600">

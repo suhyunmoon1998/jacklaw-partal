@@ -3,7 +3,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Header from '@/components/Header'
-import MascotWatermark from '@/components/MascotWatermark'
 import SectionIcon from '@/components/SectionIcon'
 import { getSession, addSubmissionNotification } from '@/lib/auth'
 import { ModuleId, liveAnswersFor, preparedSections } from '@/lib/modules'
@@ -376,8 +375,7 @@ export default function ModuleQuestionnaire({
       : null
 
     return (
-      <div className="relative min-h-screen bg-gray-50 flex flex-col">
-        <MascotWatermark />
+      <div className="relative min-h-screen bg-canvas flex flex-col">
         <div className="relative z-40">
           <Header showBack backHref="/dashboard" showLogout subtitle={subtitle} />
         </div>
@@ -463,9 +461,7 @@ export default function ModuleQuestionnaire({
   }
 
   return (
-    <div className="relative min-h-screen bg-gray-50 flex flex-col">
-      <MascotWatermark />
-
+    <div className="relative min-h-screen bg-canvas flex flex-col">
       {/* Above the sticky progress bar below it. The header holds the language
           menu, which opens downward across that bar; while this wrapper sat
           under it, the menu's middle — Español and 中文 — was painted over and
@@ -476,11 +472,11 @@ export default function ModuleQuestionnaire({
       </div>
 
       {/* Sticky progress bar */}
-      <div className="sticky top-0 z-30 bg-white/95 backdrop-blur border-b border-gray-100 px-4 py-3 shadow-sm">
+      <div className="sticky top-0 z-30 bg-white/90 backdrop-blur border-b border-line px-4 py-3">
         <div className="max-w-2xl mx-auto">
           <div className="flex justify-between items-center gap-3 mb-2">
             <span className="inline-flex items-center gap-2 min-w-0">
-              <span className="min-w-0 text-[10px] font-bold tracking-[0.14em] uppercase text-gold truncate">
+              <span className="min-w-0 eyebrow truncate">
                 {t(CHAPTER_LABEL[meta.chapter])}
               </span>
               <span className="text-[11px] text-gray-400 shrink-0 tabular-nums">
@@ -496,13 +492,13 @@ export default function ModuleQuestionnaire({
                   {t('q_saved')}
                 </span>
               )}
-              <span className="text-sm text-black font-bold tabular-nums">{answeredPct}%</span>
+              <span className="text-sm text-gray-900 font-semibold tabular-nums">{answeredPct}%</span>
             </div>
           </div>
 
-          <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+          <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
             <div
-              className="relative h-full rounded-full overflow-hidden bg-gradient-to-r from-gold-light via-gold to-gold-dark transition-all duration-700 ease-out animate-sheen"
+              className="relative h-full rounded-full bg-gold transition-all duration-700 ease-out"
               style={{ width: `${Math.max(answeredPct, 2)}%` }}
             />
           </div>
@@ -550,15 +546,15 @@ export default function ModuleQuestionnaire({
       <main className="relative z-10 flex-1 px-4 pt-5 pb-44 max-w-2xl mx-auto w-full">
         {/* Section card — key forces re-animation on section change */}
         <div key={currentSection} className="card p-5 sm:p-6 mb-4 animate-section-in">
-          <div className="flex items-center gap-3 sm:gap-3.5 mb-5 pb-4 border-b border-gray-100">
-            <div className="w-11 h-11 sm:w-12 sm:h-12 bg-black rounded-2xl flex items-center justify-center shrink-0 shadow-lg shadow-black/15">
-              <SectionIcon paths={meta.icon} className="w-[22px] h-[22px] sm:w-6 sm:h-6 text-gold" />
+          <div className="flex items-center gap-3 sm:gap-3.5 mb-5 pb-4 border-b border-line">
+            <div className="w-11 h-11 sm:w-12 sm:h-12 bg-canvas border border-line rounded-xl flex items-center justify-center shrink-0">
+              <SectionIcon paths={meta.icon} className="w-[22px] h-[22px] sm:w-6 sm:h-6 text-gray-800" />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-[10px] font-bold tracking-[0.14em] uppercase text-gold mb-0.5">
+              <p className="eyebrow mb-0.5">
                 {t(CHAPTER_LABEL[meta.chapter])}
               </p>
-              <h2 className="text-lg sm:text-xl font-bold text-black leading-tight break-words">{section.title}</h2>
+              <h2 className="text-lg sm:text-xl font-semibold tracking-tight text-gray-950 leading-tight break-words">{section.title}</h2>
             </div>
             <ProgressRing answered={sectionAnswered} total={visibleQuestions.length} />
           </div>
@@ -570,13 +566,13 @@ export default function ModuleQuestionnaire({
               return (
                 <div
                   key={q.id}
-                  className="animate-question-in border-t border-gray-100 pt-5 first:border-t-0 first:pt-0"
+                  className="animate-question-in border-t border-line/70 pt-5 first:border-t-0 first:pt-0"
                   style={{ animationDelay: `${Math.min(i, 8) * 45}ms` }}
                 >
                   <div className="flex items-start gap-2.5 mb-2.5">
                     <span
-                      className={`mt-[3px] w-[18px] h-[18px] rounded-full border-2 flex items-center justify-center shrink-0 transition-all duration-300 ${
-                        answered ? 'bg-gold border-gold' : 'border-gray-200 bg-white'
+                      className={`mt-[3px] w-[18px] h-[18px] rounded-full border flex items-center justify-center shrink-0 transition-colors duration-300 ${
+                        answered ? 'bg-emerald-500 border-emerald-500' : 'border-gray-300 bg-white'
                       }`}
                       aria-hidden="true"
                     >
@@ -589,13 +585,13 @@ export default function ModuleQuestionnaire({
                     <div className="min-w-0 flex-1">
                       <label
                         htmlFor={isFieldControl(q.type) ? inputId : undefined}
-                        className="block text-[15px] font-semibold text-black leading-snug"
+                        className="block text-[15px] font-semibold text-gray-950 leading-snug"
                       >
                         {q.label}
                         {q.required && <span className="text-gold ml-1">*</span>}
                       </label>
                       {q.helpText && (
-                        <p className="text-xs text-gray-400 mt-1 leading-relaxed">{q.helpText}</p>
+                        <p className="text-[13px] text-gray-500 mt-1 leading-relaxed">{q.helpText}</p>
                       )}
                     </div>
                   </div>
@@ -778,11 +774,11 @@ export default function ModuleQuestionnaire({
       )}
 
       {/* Fixed bottom navigation */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 px-4 pt-2.5 pb-[calc(env(safe-area-inset-bottom,0px)_+_0.5rem)] shadow-[0_-4px_20px_rgba(0,0,0,0.06)] z-20">
+      <div className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur border-t border-line px-4 pt-2.5 pb-[calc(env(safe-area-inset-bottom,0px)_+_0.5rem)] z-20">
         <div className="max-w-2xl mx-auto space-y-2">
           {!isLastSection && SECTIONS[currentSection + 1] && (
             <p className="text-[11px] text-gray-400 text-center truncate">
-              <span className="uppercase tracking-wider font-semibold text-gray-300">{t('q_up_next')}</span>
+              <span className="uppercase tracking-wider font-semibold text-gray-400">{t('q_up_next')}</span>
               {' · '}
               {SECTIONS[currentSection + 1].title}
             </p>
@@ -791,7 +787,7 @@ export default function ModuleQuestionnaire({
             {currentSection > 0 && (
               <button
                 onClick={handlePrev}
-                className="flex-1 py-4 border-2 border-gray-200 text-gray-700 rounded-xl font-semibold text-base transition-all duration-150 hover:border-gray-300 hover:shadow-sm active:scale-[0.97] active:bg-gray-50"
+                className="btn-secondary flex-1"
               >
                 ← {t('q_back')}
               </button>
@@ -820,7 +816,7 @@ export default function ModuleQuestionnaire({
           </div>
           <button
             onClick={handleSaveExit}
-            className="w-full text-gray-400 text-sm py-1.5 transition-colors hover:text-gray-600 active:text-gray-700"
+            className="w-full text-gray-500 text-sm font-medium py-1.5 transition-colors hover:text-gray-800 active:text-gray-900"
           >
             {t('q_save_exit')}
           </button>

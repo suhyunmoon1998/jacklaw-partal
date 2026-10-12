@@ -21,12 +21,12 @@ import {
  * Install. iOS Safari has no such event — installing is a manual trip through
  * the Share sheet — so there we show the steps instead.
  *
- * A dismissal is remembered for a week so the banner isn't nagging, and any
+ * A dismissal is remembered for a month so the banner isn't nagging, and any
  * page can re-open it by dispatching `jlp:show-install`.
  */
 
 const DISMISS_KEY = 'jlp_install_dismissed_at'
-const DISMISS_DAYS = 7
+const DISMISS_DAYS = 30
 
 function dismissedRecently(): boolean {
   try {
@@ -133,8 +133,10 @@ export default function InstallPrompt() {
     else dismiss()
   }, [dismiss])
 
-  // /install is the banner's own message at full size — no need to stack them.
-  if (!visible || pathname === '/install') return null
+  // Only on the steps page. Over a questionnaire it covered the question being
+  // answered, and on the sign-in screen it asked for a commitment before the
+  // client had seen anything. /install is its own full-size version.
+  if (!visible || pathname !== '/dashboard') return null
 
   // With no prompt event to replay — iOS always, and any browser that keeps
   // installing behind its own menu — the banner explains where to find it.
@@ -146,11 +148,11 @@ export default function InstallPrompt() {
       role="dialog"
       aria-label={t('install_title')}
     >
-      <div className="mx-auto max-w-sm rounded-2xl border border-white/15 bg-black/95 backdrop-blur p-4 shadow-2xl shadow-black/50">
+      <div className="mx-auto max-w-sm rounded-2xl border border-white/10 bg-neutral-950/95 backdrop-blur p-4 shadow-lift">
         <div className="flex items-start gap-3">
-          <Image src="/icon-192.png" alt="" width={44} height={44} className="rounded-xl shrink-0" />
+          <Image src="/icon-192.png" alt="" width={40} height={40} className="rounded-xl shrink-0" />
           <div className="flex-1 min-w-0">
-            <p className="text-white font-bold text-sm">
+            <p className="text-white font-semibold text-sm">
               {ios ? t('install_ios_title') : t('install_title')}
             </p>
             <p className="text-white/60 text-xs mt-1 leading-relaxed">

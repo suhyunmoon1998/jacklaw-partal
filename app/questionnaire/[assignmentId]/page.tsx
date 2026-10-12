@@ -13,7 +13,6 @@
 import { useCallback, useEffect, useRef, useState, use } from 'react'
 import { useRouter } from 'next/navigation'
 import Header from '@/components/Header'
-import MascotWatermark from '@/components/MascotWatermark'
 import { QuestionInput } from '@/components/QuestionField'
 import { hasAnswer, isAnsweredFor, isFieldControl, isVisible, localize, localizeName } from '@/lib/questionLogic'
 import { getSession, serverSessionAgrees } from '@/lib/auth'
@@ -263,7 +262,7 @@ export default function AssignmentQuestionnairePage(
 
   if (loadError) {
     return (
-      <div className="min-h-screen bg-gray-50 flex flex-col">
+      <div className="min-h-screen bg-canvas flex flex-col">
         <Header showBack backHref="/dashboard" showLogout />
         <main className="flex-1 px-4 pt-10 max-w-md mx-auto w-full">
           <div className="card text-center">
@@ -280,7 +279,7 @@ export default function AssignmentQuestionnairePage(
 
   if (!session || !assignment) {
     return (
-      <div className="min-h-screen bg-gray-50 flex flex-col">
+      <div className="min-h-screen bg-canvas flex flex-col">
         <Header showBack backHref="/dashboard" showLogout />
         <main className="flex-1 px-4 pt-5 max-w-2xl mx-auto w-full">
           <div className="animate-shimmer h-8 w-56 rounded-xl mb-3" />
@@ -292,8 +291,7 @@ export default function AssignmentQuestionnairePage(
 
   if (justSubmitted) {
     return (
-      <div className="relative min-h-screen bg-gray-50 flex flex-col">
-        <MascotWatermark />
+      <div className="relative min-h-screen bg-canvas flex flex-col">
         <div className="relative z-20">
           <Header showBack backHref="/dashboard" showLogout />
         </div>
@@ -304,9 +302,9 @@ export default function AssignmentQuestionnairePage(
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
               </svg>
             </span>
-            <h2 className="text-xl font-bold text-black">{t('qs_thanks_title')}</h2>
+            <h2 className="text-xl font-semibold tracking-tight text-gray-950">{t('qs_thanks_title')}</h2>
             <p className="text-gray-500 text-sm mt-1">{t('qs_thanks_sub')}</p>
-            <p className="text-black font-semibold text-sm mt-4">{setTitle}</p>
+            <p className="text-gray-950 font-semibold text-sm mt-4">{setTitle}</p>
             <button onClick={() => router.push('/dashboard')} className="btn-primary mt-6">
               {t('qs_back_portal')}
             </button>
@@ -317,8 +315,7 @@ export default function AssignmentQuestionnairePage(
   }
 
   return (
-    <div className="relative min-h-screen bg-gray-50 flex flex-col">
-      <MascotWatermark />
+    <div className="relative min-h-screen bg-canvas flex flex-col">
 
       {/* Above the sticky progress bar below it. The header holds the language
           menu, which opens downward across that bar; while this wrapper sat
@@ -339,7 +336,7 @@ export default function AssignmentQuestionnairePage(
       <div className="sticky top-0 z-30 bg-white/95 backdrop-blur border-b border-gray-100 px-4 py-3 shadow-sm">
         <div className="max-w-2xl mx-auto">
           <div className="flex justify-between items-center gap-3 mb-2">
-            <span className="min-w-0 text-[10px] font-bold tracking-[0.14em] uppercase text-gold truncate">
+            <span className="min-w-0 eyebrow truncate">
               {setTitle}
             </span>
             <div className="flex items-center gap-2 shrink-0">
@@ -351,12 +348,12 @@ export default function AssignmentQuestionnairePage(
                   {t('q_saved')}
                 </span>
               )}
-              <span className="text-sm text-black font-bold tabular-nums">{pct}%</span>
+              <span className="text-sm text-gray-900 font-semibold tabular-nums">{pct}%</span>
             </div>
           </div>
-          <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+          <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
             <div
-              className="h-full rounded-full bg-gradient-to-r from-gold-light via-gold to-gold-dark transition-all duration-700 ease-out"
+              className="h-full rounded-full bg-gold transition-all duration-700 ease-out"
               style={{ width: `${Math.max(pct, 2)}%` }}
             />
           </div>
@@ -391,8 +388,8 @@ export default function AssignmentQuestionnairePage(
                 >
                   <div className="flex items-start gap-2.5 mb-2.5">
                     <span
-                      className={`mt-[3px] w-[18px] h-[18px] rounded-full border-2 flex items-center justify-center shrink-0 transition-all duration-300 ${
-                        answered ? 'bg-gold border-gold' : 'border-gray-200 bg-white'
+                      className={`mt-[3px] w-[18px] h-[18px] rounded-full border flex items-center justify-center shrink-0 transition-colors duration-300 ${
+                        answered ? 'bg-emerald-500 border-emerald-500' : 'border-gray-300 bg-white'
                       }`}
                       aria-hidden="true"
                     >
@@ -405,7 +402,7 @@ export default function AssignmentQuestionnairePage(
                     <div className="min-w-0 flex-1">
                       <label
                         htmlFor={isFieldControl(q.type) ? `input-${q.id}` : undefined}
-                        className="block text-[15px] font-semibold text-black leading-snug"
+                        className="block text-[15px] font-semibold text-gray-950 leading-snug"
                       >
                         <span className="text-gray-300 tabular-nums mr-1.5">{i + 1}.</span>
                         {q.label}

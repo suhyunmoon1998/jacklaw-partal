@@ -44,48 +44,41 @@ export default function Header({ showLogout, showBack, backHref, subtitle, befor
   // context — the last option ends up under a card and unclickable. Kept below
   // the modal layers, which stay on top of everything.
   return (
-    <header className="relative z-50 bg-black shadow-sm border-b border-white/10">
-      <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between">
-        {/* Left: Back button or spacer */}
-        <div className="w-20">
+    <header className="relative z-50 bg-black border-b border-white/10 pt-safe">
+      <div className="max-w-2xl mx-auto h-14 px-4 flex items-center justify-between gap-3">
+        {/* Left: back, then the firm's mark and what this page is */}
+        <div className="flex items-center gap-2.5 min-w-0">
           {showBack && (
             <button
               onClick={handleBack}
-              className="text-white/70 hover:text-white flex items-center gap-1 text-sm font-medium transition-colors"
-              aria-label="Go back"
+              className="-ml-1.5 p-1.5 rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-colors"
+              aria-label={t('back')}
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
-              {t('back')}
             </button>
+          )}
+          <Image
+            src="/logo.png"
+            alt="866 JACK LAW"
+            width={34}
+            height={34}
+            className="rounded-[5px] shrink-0"
+            priority
+          />
+          {subtitle && (
+            <span className="truncate text-[13px] font-medium text-white/60 tracking-wide">{subtitle}</span>
           )}
         </div>
 
-        {/* Center: Logo */}
-        <div className="text-center">
-          <div className="flex flex-col items-center">
-            <Image
-              src="/logo.png"
-              alt="866 JACK LAW"
-              width={60}
-              height={60}
-              className="rounded-sm"
-              priority
-            />
-            {subtitle && (
-              <p className="text-white/50 text-xs mt-1 tracking-wider uppercase">{subtitle}</p>
-            )}
-          </div>
-        </div>
-
-        {/* Right: Language toggle + Logout */}
-        <div className="flex items-center gap-2 justify-end shrink-0" style={{ minWidth: '5rem' }}>
+        {/* Right: language and sign out */}
+        <div className="flex items-center gap-1.5 shrink-0">
           <LanguagePicker />
           {showLogout && (
             <button
               onClick={handleLogout}
-              className="text-white/60 hover:text-white text-sm font-medium whitespace-nowrap transition-all duration-150 active:scale-[0.93]"
+              className="px-2.5 py-1.5 rounded-lg text-white/60 hover:text-white hover:bg-white/10 text-[13px] font-medium whitespace-nowrap transition-colors"
             >
               {t('logout')}
             </button>

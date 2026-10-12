@@ -143,13 +143,13 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-white flex flex-col animate-fade-in">
-      <header className="bg-black py-8 px-4 text-center border-b border-white/10">
+    <div className="min-h-screen bg-canvas flex flex-col animate-fade-in">
+      <header className="bg-black pt-10 pb-7 px-4 text-center border-b border-white/10">
         <div className="flex flex-col items-center gap-3">
-          <Image src="/logo.png" alt="866 JACK LAW" width={120} height={120} className="rounded-sm animate-slide-up" priority />
+          <Image src="/logo.png" alt="866 JACK LAW" width={104} height={104} className="rounded-sm animate-slide-up" priority />
           <div>
-            <p className="text-white/60 text-sm font-medium">Law Offices of Jack D. Josephson, APC</p>
-            <p className="text-gold/90 text-xs mt-0.5 tracking-wider uppercase">Client Portal</p>
+            <p className="text-white/70 text-sm font-medium">Law Offices of Jack D. Josephson, APC</p>
+            <p className="text-gold text-[11px] mt-1 font-semibold tracking-[0.16em] uppercase">Client Portal</p>
           </div>
           {/* Language choice, in every language, before anything has to be read */}
           <div className="mt-2">
@@ -158,11 +158,11 @@ export default function LoginPage() {
         </div>
       </header>
 
-      <main className="flex-1 flex items-start justify-center px-4 pt-8 pb-16 bg-gray-50">
+      <main className="flex-1 flex items-start justify-center px-4 pt-8 pb-16">
         <div className="w-full max-w-md">
           <div className="card animate-slide-up stagger-1">
-            <h2 className="text-xl font-semibold text-navy mb-1">{t('welcome')}</h2>
-            <p className="text-gray-500 text-sm mb-8">{t('welcome_sub')}</p>
+            <h1 className="text-[22px] font-semibold tracking-tight text-gray-950 mb-1">{t('welcome')}</h1>
+            <p className="text-gray-500 text-[15px] leading-relaxed mb-7">{t('welcome_sub')}</p>
 
             {choices.length > 0 ? (
               <div className="space-y-3">
@@ -171,11 +171,15 @@ export default function LoginPage() {
                   <button
                     key={c.id}
                     onClick={() => { void signIn(c) }}
-                    className="w-full flex items-center gap-3 text-left border border-gray-200 rounded-xl p-4 hover:border-gold hover:bg-gold/5 transition-colors"
+                    className="w-full flex items-center gap-3 text-left bg-white border border-gray-300 rounded-xl p-4 hover:border-gray-400 hover:bg-gray-50 transition-colors"
                   >
-                    <span className="text-xl">📁</span>
+                    <span className="w-9 h-9 rounded-lg bg-canvas border border-line flex items-center justify-center shrink-0">
+                      <svg className="w-[18px] h-[18px] text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" />
+                      </svg>
+                    </span>
                     <span className="flex-1 min-w-0">
-                      <span className="block font-semibold text-navy truncate">
+                      <span className="block font-semibold text-gray-950 truncate">
                         {c.case_label}
                         {/* Two cases the office has not named yet, opened the
                             same day, would read identically — and then the
@@ -183,18 +187,18 @@ export default function LoginPage() {
                             them two different things to pick between. */}
                         {ambiguous && ` (${i + 1})`}
                       </span>
-                      <span className="block text-xs text-gray-400 mt-0.5 truncate">
+                      <span className="block text-xs text-gray-500 mt-0.5 truncate">
                         {[c.case_type, openedOn(c.opened, lang)].filter(Boolean).join(' · ')}
                       </span>
                     </span>
-                    <svg className="w-4 h-4 text-gray-300 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-4 h-4 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                     </svg>
                   </button>
                 ))}
                 <button
                   onClick={() => { setChoices([]); setPhone(''); }}
-                  className="text-sm text-gray-400 hover:text-navy transition-colors pt-1"
+                  className="text-sm font-medium text-gray-500 hover:text-gray-900 transition-colors pt-1"
                 >
                   {t('use_another_number')}
                 </button>
@@ -215,7 +219,7 @@ export default function LoginPage() {
                   autoComplete="tel"
                   disabled={loading}
                 />
-                <p className="mt-2 text-xs text-gray-400">{t('phone_hint')}</p>
+                <p className="mt-2 text-[13px] text-gray-500">{t('phone_hint')}</p>
               </div>
 
               {error && (
@@ -248,13 +252,13 @@ export default function LoginPage() {
             )}
           </div>
 
-          <div className="mt-6 bg-gold/5 border border-gold/30 rounded-xl p-4">
-            <p className="text-black text-xs font-semibold text-center">{t('emergency')}</p>
-            <p className="text-gray-500 text-xs text-center mt-1">
+          <div className="mt-5 bg-white/70 border border-line rounded-2xl px-4 py-3.5">
+            <p className="text-gray-900 text-[13px] font-semibold text-center">{t('emergency')}</p>
+            <p className="text-gray-600 text-[13px] text-center mt-1 leading-relaxed">
               {t('emergency_sub')}{' '}
               <a
                 href={FIRM_PHONE_TEL}
-                className="text-gold font-bold underline underline-offset-2 whitespace-nowrap py-3.5 hover:text-gold-dark active:text-gold-dark"
+                className="text-gray-900 font-semibold underline decoration-gray-300 underline-offset-2 whitespace-nowrap py-3.5 hover:decoration-gray-900"
               >
                 {FIRM_PHONE_LABEL}
               </a>.

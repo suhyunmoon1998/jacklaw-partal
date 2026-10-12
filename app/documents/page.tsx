@@ -89,30 +89,30 @@ export default function DocumentsPage() {
   if (!session) return null
 
   return (
-    <div className="min-h-screen bg-white flex flex-col">
+    <div className="min-h-screen bg-canvas flex flex-col">
       <Header showBack backHref="/dashboard" showLogout subtitle="Documents" />
 
       <main className="flex-1 px-4 py-6 max-w-2xl mx-auto w-full">
         <div className="mb-6">
-          <h2 className="text-2xl font-bold text-navy">{t('docs_title')}</h2>
+          <h1 className="text-[24px] font-semibold tracking-tight text-gray-950">{t('docs_title')}</h1>
           <p className="text-gray-500 text-sm mt-1">{t('docs_subtitle')}</p>
         </div>
 
         {/* Privacy notice */}
-        <div className="card mb-6 bg-navy/5 border border-navy/20">
+        <div className="mb-6 bg-white/70 border border-line rounded-2xl px-4 py-3.5">
           <div className="flex gap-3">
-            <svg className="w-5 h-5 text-navy shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-5 h-5 text-gray-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
             </svg>
-            <p className="text-navy text-sm">
-              <strong>{t('docs_private')}</strong>
+            <p className="text-gray-700 text-[13px] leading-relaxed font-medium">
+              {t('docs_private')}
             </p>
           </div>
         </div>
 
         {/* Upload card */}
         <div className="card mb-6">
-          <h3 className="font-semibold text-navy mb-4">Add a Document</h3>
+          <h3 className="text-[17px] font-semibold tracking-tight text-gray-950 mb-4">Add a Document</h3>
 
           {/* Category selector */}
           <div className="mb-4">
@@ -161,7 +161,7 @@ export default function DocumentsPage() {
               <button
                 type="button"
                 onClick={() => cameraRef.current?.click()}
-                className="flex flex-col items-center justify-center gap-3 border-2 border-dashed border-gray-300 rounded-xl p-6 hover:border-navy hover:bg-navy/5 transition-colors group"
+                className="flex flex-col items-center justify-center gap-3 border-2 border-dashed border-gray-300 bg-white rounded-xl p-6 hover:border-gray-500 hover:bg-gray-50 transition-colors group"
               >
                 <div className="w-12 h-12 bg-navy/10 rounded-full flex items-center justify-center group-hover:bg-navy transition-colors">
                   <svg className="w-6 h-6 text-navy group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -179,7 +179,7 @@ export default function DocumentsPage() {
               <button
                 type="button"
                 onClick={() => fileRef.current?.click()}
-                className="flex flex-col items-center justify-center gap-3 border-2 border-dashed border-gray-300 rounded-xl p-6 hover:border-navy hover:bg-navy/5 transition-colors group"
+                className="flex flex-col items-center justify-center gap-3 border-2 border-dashed border-gray-300 bg-white rounded-xl p-6 hover:border-gray-500 hover:bg-gray-50 transition-colors group"
               >
                 <div className="w-12 h-12 bg-navy/10 rounded-full flex items-center justify-center group-hover:bg-navy transition-colors">
                   <svg className="w-6 h-6 text-navy group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -207,7 +207,7 @@ export default function DocumentsPage() {
         {/* Document list */}
         {documents.length > 0 && (
           <div className="card mb-6">
-            <h3 className="font-semibold text-navy mb-4">
+            <h3 className="text-[17px] font-semibold tracking-tight text-gray-950 mb-4">
               {t('uploaded_docs_title')} ({documents.length})
             </h3>
             <div className="space-y-4">
@@ -221,7 +221,7 @@ export default function DocumentsPage() {
                       {catDocs.map((doc, i) => {
                         const globalIndex = documents.indexOf(doc)
                         return (
-                          <div key={i} className="flex items-center gap-3 bg-gray-50 rounded-xl p-3">
+                          <div key={i} className="flex items-center gap-3 bg-canvas border border-line rounded-xl p-3">
                             <div className="w-8 h-8 bg-navy/10 rounded-lg flex items-center justify-center shrink-0">
                               <svg className="w-4 h-4 text-navy" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -253,7 +253,7 @@ export default function DocumentsPage() {
 
         {/* Document checklist */}
         <div className="card">
-          <h3 className="font-semibold text-navy mb-1">{t('helpful_docs')}</h3>
+          <h3 className="text-[17px] font-semibold tracking-tight text-gray-950 mb-1">{t('helpful_docs')}</h3>
           <p className="text-sm text-gray-500 mb-4">{t('helpful_docs_sub')}</p>
           <div className="space-y-1.5">
             {DOCUMENT_CATEGORIES.map(cat => {

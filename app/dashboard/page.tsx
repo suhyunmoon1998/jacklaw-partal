@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Header from '@/components/Header'
-import MascotWatermark from '@/components/MascotWatermark'
+import { displayName } from '@/lib/displayName'
 import { serverSessionAgrees, getSession } from '@/lib/auth'
 import { Assignment, Session } from '@/types'
 import { QUESTIONNAIRE_SECTIONS } from '@/lib/questionnaireData'
@@ -106,7 +106,7 @@ export default function DashboardPage() {
   }, [router, load])
 
   if (!session || (!steps && !loadFailed)) return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div className="min-h-screen bg-canvas flex flex-col">
       <Header showLogout />
       <main className="flex-1 px-4 pt-5 pb-8 max-w-2xl mx-auto w-full">
         <div className="mb-5">
@@ -136,9 +136,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="relative min-h-screen bg-gray-50 flex flex-col animate-fade-in">
-      <MascotWatermark />
-
+    <div className="relative min-h-screen bg-canvas flex flex-col animate-fade-in">
       <div className="relative z-20">
         <Header showLogout />
       </div>
@@ -146,20 +144,22 @@ export default function DashboardPage() {
       <main className="relative z-10 flex-1 px-4 pt-5 pb-8 pb-safe max-w-2xl mx-auto w-full">
         {/* Welcome */}
         <div className="mb-5 animate-slide-up">
-          <h2 className="text-2xl font-bold text-black">{t('hello')} {session.name} 👋</h2>
-          <p className="text-gray-500 text-sm mt-0.5">{t('welcome_portal')}</p>
+          <h1 className="text-[26px] leading-tight font-semibold tracking-tight text-gray-950">
+            {t('hello')} {displayName(session.name)}
+          </h1>
+          <p className="text-gray-500 text-[15px] mt-1">{t('welcome_portal')}</p>
         </div>
 
         {/* What this portal is for, and how to actually reach the office */}
-        <div className="mb-5 bg-gold/5 border border-gold/30 rounded-2xl p-4 flex gap-3 animate-slide-up stagger-1">
-          <svg className="w-5 h-5 text-gold shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div className="mb-6 bg-white/70 border border-line rounded-2xl px-4 py-3.5 flex gap-3 animate-slide-up stagger-1">
+          <svg className="w-5 h-5 text-gray-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
-          <p className="text-gray-600 text-sm leading-relaxed">
-            <strong className="text-black font-semibold">{t('emergency')}</strong> {t('emergency_sub')}{' '}
+          <p className="text-gray-600 text-[13px] leading-relaxed">
+            <strong className="text-gray-900 font-semibold">{t('emergency')}</strong> {t('emergency_sub')}{' '}
             <a
               href={FIRM_PHONE_TEL}
-              className="text-gold font-bold underline underline-offset-2 whitespace-nowrap py-3.5 hover:text-gold-dark active:text-gold-dark"
+              className="text-gray-900 font-semibold underline decoration-gray-300 underline-offset-2 whitespace-nowrap py-3.5 hover:decoration-gray-900"
             >
               {FIRM_PHONE_LABEL}
             </a>.
@@ -169,7 +169,7 @@ export default function DashboardPage() {
         {/* The read that failed. Said plainly, with the way back, rather than
             drawing a portal with nothing in it. */}
         {loadFailed && (
-          <div className="mb-5 bg-white border-2 border-gray-200 rounded-2xl p-5 animate-slide-up">
+          <div className="mb-5 card animate-slide-up">
             <p className="font-semibold text-black">{t('qs_save_failed')}</p>
             <p className="text-sm text-gray-500 mt-1.5">{t('qs_save_failed_sub')}</p>
             <button onClick={() => session && load(session.clientId)} className="btn-primary mt-4">
@@ -183,7 +183,7 @@ export default function DashboardPage() {
         {unseen && (
           <button
             onClick={() => goTo(unseen)}
-            className="w-full mb-5 bg-black rounded-2xl p-4 flex items-center gap-3 text-left animate-slide-up stagger-1 active:scale-[0.98] transition-transform"
+            className="w-full mb-5 bg-neutral-950 rounded-2xl p-4 flex items-center gap-3 text-left shadow-lift animate-slide-up stagger-1 active:opacity-90 transition-opacity"
           >
             <span className="w-9 h-9 rounded-full bg-gold flex items-center justify-center shrink-0">
               <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -196,7 +196,7 @@ export default function DashboardPage() {
                 {tf('step_short', { n: unseen.step })} · {t(moduleById(unseen.id)!.titleKey)}
               </span>
             </span>
-            <span className="text-gold font-bold text-sm shrink-0">{t('step_banner_open')}</span>
+            <span className="text-gold font-semibold text-sm shrink-0">{t('step_banner_open')}</span>
           </button>
         )}
 
@@ -204,18 +204,18 @@ export default function DashboardPage() {
         <div className="card mb-5 animate-slide-up stagger-2">
           <div className="flex items-start justify-between mb-4">
             <div>
-              <p className="text-xs text-gray-400 uppercase tracking-wider font-medium mb-1">{t('your_case')}</p>
-              <p className="text-black font-bold text-lg leading-tight">{session.caseType}</p>
+              <p className="eyebrow mb-1">{t('your_case')}</p>
+              <p className="text-gray-950 font-semibold text-lg leading-tight tracking-tight">{session.caseType}</p>
             </div>
             {/* Reads the steps, not Module 1 alone. The old card could say
                 "✓ Submitted · 100%" in green directly above a Step 2 the client
                 had not started. */}
-            <span className={`text-xs font-semibold px-3 py-1.5 rounded-full shrink-0 ml-3 ${
+            <span className={`chip shrink-0 ml-3 ${
               caughtUp
-                ? 'bg-green-100 text-green-700'
+                ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/15'
                 : progressPercent > 0
-                ? 'bg-amber-100 text-amber-700'
-                : 'bg-gray-100 text-gray-500'
+                ? 'bg-amber-50 text-amber-800 ring-1 ring-amber-600/15'
+                : 'bg-gray-100 text-gray-600'
             }`}>
               {caughtUp ? t('status_all_caught_up') : progressPercent > 0 ? t('status_in_progress') : t('status_not_started')}
             </span>
@@ -224,13 +224,13 @@ export default function DashboardPage() {
           <div className="mb-3">
             <div className="flex justify-between text-xs text-gray-500 mb-1.5">
               <span>{t('your_progress')}</span>
-              <span className={caughtUp ? 'text-green-600 font-semibold' : 'text-gold font-semibold'}>
+              <span className="text-gray-900 font-semibold tabular-nums">
                 {progressPercent}%
               </span>
             </div>
-            <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden">
+            <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
               <div
-                className={`h-full rounded-full transition-all duration-700 ${caughtUp ? 'bg-green-500' : 'bg-gold'}`}
+                className={`h-full rounded-full transition-all duration-700 ${caughtUp ? 'bg-emerald-500' : 'bg-gold'}`}
                 style={{ width: `${progressPercent}%` }}
               />
             </div>
@@ -240,7 +240,7 @@ export default function DashboardPage() {
             <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
-            <span className="text-sm text-gray-400">
+            <span className="text-sm text-gray-500">
               {documentCount === 0 ? t('no_docs') : `${documentCount} document${documentCount !== 1 ? 's' : ''} uploaded`}
             </span>
           </div>
@@ -252,14 +252,14 @@ export default function DashboardPage() {
         {shown.length > 0 && (
           <div className="mb-5">
             <div className="px-1 mb-1">
-              <h3 className="font-bold text-black">{t('steps_title')}</h3>
-              <p className="text-xs text-gray-500 mt-0.5">{t('steps_sub')}</p>
+              <h2 className="text-[17px] font-semibold tracking-tight text-gray-950">{t('steps_title')}</h2>
+              <p className="text-[13px] text-gray-500 mt-0.5">{t('steps_sub')}</p>
             </div>
 
             {caughtUp && (
-              <div className="mt-3 bg-green-50 border border-green-200 rounded-2xl p-4 animate-slide-up">
-                <p className="font-semibold text-green-800 text-sm">{t('step_all_done')}</p>
-                <p className="text-sm text-green-700/80 mt-1 leading-relaxed">{t('step_all_done_sub')}</p>
+              <div className="mt-3 bg-emerald-50 border border-emerald-200/70 rounded-2xl p-4 animate-slide-up">
+                <p className="font-semibold text-emerald-800 text-sm">{t('step_all_done')}</p>
+                <p className="text-sm text-emerald-700/80 mt-1 leading-relaxed">{t('step_all_done_sub')}</p>
               </div>
             )}
 
@@ -273,22 +273,22 @@ export default function DashboardPage() {
                     <button
                       key={view.id}
                       onClick={() => goTo(view)}
-                      className="w-full bg-white border-2 border-gold rounded-2xl p-5 text-left flex items-start gap-4 transition-all duration-200 shadow-sm hover:shadow-md active:scale-[0.98] group animate-slide-up stagger-3"
+                      className="w-full bg-white border border-gold/50 ring-4 ring-gold/[0.07] rounded-2xl p-5 text-left flex items-start gap-4 shadow-card transition-colors duration-150 hover:border-gold group animate-slide-up stagger-3"
                     >
-                      <span className="w-10 h-10 rounded-full bg-gold text-white font-bold flex items-center justify-center shrink-0 tabular-nums">
+                      <span className="w-9 h-9 rounded-full bg-gold/10 text-gold-dark font-semibold flex items-center justify-center shrink-0 tabular-nums">
                         {view.step}
                       </span>
                       <span className="flex-1 min-w-0">
                         <span className="flex items-center gap-2 flex-wrap">
-                          <span className="font-semibold text-black">{title}</span>
+                          <span className="font-semibold text-gray-950 tracking-tight">{title}</span>
                           {view.isNew && (
-                            <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-gold text-white uppercase tracking-wide">
+                            <span className="chip bg-gold/10 text-gold-dark uppercase tracking-wide text-[10px] font-semibold">
                               {t('step_new')}
                             </span>
                           )}
                         </span>
-                        <span className="block text-sm text-gray-500 mt-0.5">{t(mod.subKey)}</span>
-                        <span className="block text-xs text-gray-400 mt-1.5">
+                        <span className="block text-sm text-gray-600 mt-0.5">{t(mod.subKey)}</span>
+                        <span className="block text-xs text-gray-500 mt-1.5">
                           {view.finishedNotSubmitted
                             ? t('step_submit_now')
                             : tf('step_time', {
@@ -303,11 +303,11 @@ export default function DashboardPage() {
                             <span className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
                               <span className="block h-full rounded-full bg-gold transition-all duration-500" style={{ width: `${view.percent}%` }} />
                             </span>
-                            <span className="text-xs text-gray-400 tabular-nums">{view.percent}%</span>
+                            <span className="text-xs text-gray-500 tabular-nums">{view.percent}%</span>
                           </span>
                         )}
 
-                        <span className="inline-flex items-center gap-1 text-sm font-bold text-gold mt-3">
+                        <span className="inline-flex items-center gap-1.5 mt-4 bg-gold group-hover:bg-gold-dark text-white text-sm font-semibold px-4 py-2.5 rounded-xl shadow-sm shadow-gold/20 transition-colors">
                           {view.percent > 0 ? t('step_continue') : t('step_start')}
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -332,17 +332,17 @@ export default function DashboardPage() {
 
                 const row = (
                   <>
-                    <span className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-sm font-bold tabular-nums ${
-                      done ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'
+                    <span className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-sm font-semibold tabular-nums ${
+                      done ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/15' : 'bg-gray-100 text-gray-400'
                     }`}>
                       {done ? '✓' : view.step}
                     </span>
                     <span className="flex-1 min-w-0">
-                      <span className={`block font-medium truncate ${done ? 'text-black' : 'text-gray-500'}`}>{title}</span>
-                      <span className="block text-xs text-gray-400 mt-0.5 truncate">{detail}</span>
+                      <span className={`block font-medium truncate ${done ? 'text-gray-950' : 'text-gray-500'}`}>{title}</span>
+                      <span className="block text-xs text-gray-500 mt-0.5 truncate">{detail}</span>
                     </span>
                     {done && (
-                      <span className="text-xs font-semibold text-gold shrink-0">{t('step_view')}</span>
+                      <span className="text-xs font-semibold text-gray-600 shrink-0">{t('step_view')}</span>
                     )}
                   </>
                 )
@@ -351,14 +351,14 @@ export default function DashboardPage() {
                   <button
                     key={view.id}
                     onClick={() => goTo(view)}
-                    className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-left flex items-center gap-3 hover:border-gold/50 active:scale-[0.99] transition-all"
+                    className="w-full bg-white border border-line rounded-xl px-4 py-3 text-left flex items-center gap-3 hover:border-gray-300 transition-colors"
                   >
                     {row}
                   </button>
                 ) : (
                   <div
                     key={view.id}
-                    className="w-full bg-white/60 border border-gray-200 rounded-xl px-4 py-3 flex items-center gap-3"
+                    className="w-full bg-white/60 border border-line rounded-xl px-4 py-3 flex items-center gap-3"
                   >
                     {row}
                   </div>
@@ -371,22 +371,22 @@ export default function DashboardPage() {
         {/* Documents */}
         <button
           onClick={() => router.push('/documents')}
-          className="w-full mb-5 bg-white border-2 border-transparent hover:border-gold rounded-2xl p-5 text-left flex items-center gap-4 transition-all duration-200 shadow-sm hover:shadow-md active:scale-[0.98] group animate-slide-up stagger-4"
+          className="w-full mb-5 card-hover !p-4 text-left flex items-center gap-4 group animate-slide-up stagger-4"
         >
-          <div className="w-12 h-12 bg-gold/10 rounded-xl flex items-center justify-center shrink-0 group-hover:bg-gold group-active:bg-gold transition-colors">
-            <svg className="w-6 h-6 text-gold group-hover:text-white group-active:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="w-11 h-11 bg-canvas border border-line rounded-xl flex items-center justify-center shrink-0">
+            <svg className="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
             </svg>
           </div>
           <div className="flex-1 min-w-0">
-            <p className="font-semibold text-black">{t('upload_documents')}</p>
+            <p className="font-semibold text-gray-950">{t('upload_documents')}</p>
             <p className="text-sm text-gray-500 mt-0.5">
               {documentCount > 0
                 ? `${documentCount} file${documentCount !== 1 ? 's' : ''} uploaded`
                 : 'Paystubs, texts, emails, and more'}
             </p>
           </div>
-          <svg className="w-5 h-5 text-gray-300 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-5 h-5 text-gray-400 group-hover:text-gray-600 shrink-0 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
           </svg>
         </button>
@@ -395,7 +395,7 @@ export default function DashboardPage() {
         {assignments.length > 0 && (
           <div className="mb-5 animate-slide-up stagger-4">
             <div className="flex items-baseline justify-between gap-3 mb-2 px-1">
-              <h3 className="font-bold text-black">{t('qs_your_questionnaires')}</h3>
+              <h2 className="text-[17px] font-semibold tracking-tight text-gray-950">{t('qs_your_questionnaires')}</h2>
               <span className="text-xs text-gray-400">{assignments.length}</span>
             </div>
             <p className="text-xs text-gray-500 mb-3 px-1">{t('qs_your_questionnaires_sub')}</p>
@@ -412,19 +412,23 @@ export default function DashboardPage() {
                   <button
                     key={a.id}
                     onClick={() => router.push(`/questionnaire/${a.id}`)}
-                    className="w-full bg-white border-2 border-transparent hover:border-gold rounded-2xl p-5 text-left transition-all duration-200 shadow-sm hover:shadow-md active:scale-[0.98] group"
+                    className="w-full card-hover !p-5 text-left group"
                   >
                     <div className="flex items-start justify-between gap-3 mb-2">
                       <div className="min-w-0">
-                        <p className="font-semibold text-black truncate">
+                        <p className="font-semibold text-gray-950 truncate">
                           {localizeName(a.questionSetName, a.questionSetNameTranslations, lang)}
                         </p>
                         <p className="text-sm text-gray-500 mt-0.5">
                           {a.questionCount} {a.questionCount === 1 ? t('qs_question') : t('qs_questions')}
                         </p>
                       </div>
-                      <span className={`text-xs font-semibold px-2.5 py-1 rounded-full shrink-0 ${
-                        done ? 'bg-green-100 text-green-700' : started ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-500'
+                      <span className={`chip shrink-0 ${
+                        done
+                          ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/15'
+                          : started
+                          ? 'bg-amber-50 text-amber-800 ring-1 ring-amber-600/15'
+                          : 'bg-gray-100 text-gray-600'
                       }`}>
                         {label}
                       </span>
@@ -439,7 +443,7 @@ export default function DashboardPage() {
                       </div>
                     )}
 
-                    <span className="inline-flex items-center gap-1 text-sm font-semibold text-gold">
+                    <span className="inline-flex items-center gap-1 text-sm font-semibold text-gray-900">
                       {action}
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -453,7 +457,7 @@ export default function DashboardPage() {
         )}
 
         {/* Contact Office */}
-        <div className="bg-black rounded-2xl p-5 mb-6 animate-slide-up stagger-5">
+        <div className="bg-neutral-950 rounded-2xl p-5 mb-6 animate-slide-up stagger-5">
           <div className="flex items-center gap-3 mb-2">
             <svg className="w-5 h-5 text-gold shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
@@ -463,7 +467,7 @@ export default function DashboardPage() {
           <p className="text-white/60 text-sm mb-4 leading-relaxed">{t('contact_msg')}</p>
           <a
             href={FIRM_PHONE_TEL}
-            className="flex items-center justify-center gap-2 w-full bg-gold text-white font-bold py-4 rounded-xl hover:bg-gold-dark active:bg-gold-dark transition-colors text-base"
+            className="flex items-center justify-center gap-2 w-full bg-white text-gray-950 font-semibold py-3.5 rounded-xl hover:bg-gray-100 active:bg-gray-200 transition-colors text-[15px]"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
@@ -472,8 +476,7 @@ export default function DashboardPage() {
           </a>
         </div>
 
-        {/* White halo keeps this legible where it overlaps the watermark */}
-        <p className="text-center text-xs text-gray-500 pb-2 [text-shadow:0_1px_8px_#fff,0_0_3px_#fff]">
+        <p className="text-center text-xs text-gray-400 pb-2 leading-relaxed">
           Law Offices of Jack D. Josephson, APC<br />
           California Employment Law · Attorney-Client Confidential
         </p>

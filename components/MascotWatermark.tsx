@@ -24,6 +24,10 @@ export default function MascotWatermark({
   tone?: 'light' | 'dark'
 }) {
   const isDark = tone === 'dark'
+  // On the light pages it sat behind questions and forms, and a gorilla
+  // under a question about someone's pay read as noise. It stays where it is
+  // the page: the dark landing screen.
+  if (!isDark) return null
 
   return (
     <div
