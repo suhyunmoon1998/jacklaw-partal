@@ -31,6 +31,30 @@ export function instanceOf(answerId: string): string | null {
 
 export const baseId = (answerId: string) => answerId.split(INSTANCE_SEPARATOR)[0]
 
+/** A question as the localized sections carry it: `optionLabels` beside `options`. */
+type Shown = Question & { optionLabels?: string[] }
+
+/**
+ * What each stored choice reads as on screen.
+ *
+ * A borrowed choice is stored as its source question's value — English, so the
+ * office reads one answer whatever the client's language — and has to be shown
+ * as that question's label for it. Without this a Spanish client's borrowed
+ * choices, and the titles of the sections repeated for them, came up in English.
+ */
+function choiceLabels(sections: QuestionnaireSection[]): (value: string) => string {
+  const labels = new Map<string, string>()
+  for (const section of sections) {
+    for (const q of section.questions as Shown[]) {
+      q.options?.forEach((value, i) => {
+        const label = q.optionLabels?.[i]
+        if (label && !labels.has(value)) labels.set(value, label)
+      })
+    }
+  }
+  return value => labels.get(value) ?? value
+}
+
 /** The values a worker chose across several questions, in the order asked. */
 function chosenAcross(
   questionIds: string[],
@@ -83,6 +107,8 @@ export function expandSections(
     }
   }
 
+  const labelOf = choiceLabels(sections)
+
   return sections.flatMap(section => {
     if (!section.repeatFor) return [section]
 
@@ -92,7 +118,7 @@ export function expandSections(
     return instances.map(instance => ({
       ...section,
       id: instanceId(section.id, instance),
-      title: section.repeatFor!.titleTemplate.replace('{instance}', instance),
+      title: section.repeatFor!.titleTemplate.replace('{instance}', labelOf(instance)),
       repeatFor: undefined,
       questions: section.questions.map<Question>(q => ({
         ...q,
@@ -122,12 +148,14 @@ export function resolveOptions(
     }
   }
 
+  const labelOf = choiceLabels(sections)
+
   return sections.map(section => ({
     ...section,
     questions: section.questions.map(q => {
       if (!q.optionsFrom) return q
       const options = chosenAcross(q.optionsFrom, answers, exclusiveByQuestion)
-      return { ...q, options }
+      return { ...q, options, optionLabels: options.map(labelOf) }
     }),
   }))
 }

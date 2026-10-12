@@ -597,7 +597,9 @@ describe('the four languages stay in step', () => {
     const ko = prepareSections(module2Sections('ko'), liveAnswersFor('ko', answers))
     const branch = ko.find(s => baseId(s.id) === 'm2_pattern')
     expect(branch?.title).toContain('임금')
-    expect(branch?.title).toContain(OPENED)
+    // The pattern as the client read it when choosing it, not the English it is filed under.
+    expect(branch?.title).toContain('문이나 정문을 열었다')
+    expect(branch?.title).not.toContain(OPENED)
   })
 })
 
