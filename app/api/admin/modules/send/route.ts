@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
   ])
 
   return NextResponse.json({
-    link: moduleLink(req.nextUrl.origin, moduleId, blockedBy !== null),
+    link: moduleLink(req.nextUrl.origin, moduleId, blockedBy !== null, lang),
     email,
     lang,
     phone: sms.phone,

@@ -1,4 +1,5 @@
 import { getSupabase } from '@/lib/supabase'
+import { withLang } from '@/lib/langLink'
 import { Lang, isLang } from '@/lib/langs'
 import { ModuleDefinition, ModuleId, moduleById, moduleQuestionCount, stepName } from '@/lib/modules'
 import { lookupClientEmail, lookupClientLanguage, sendAssignmentEmail } from '@/lib/sendAssignmentEmail'
@@ -26,8 +27,8 @@ export const asModule = (value: unknown): ModuleId | null =>
  * that will land locked links to the dashboard instead, where the step they can
  * actually do is the live card and the new one is visibly waiting behind it.
  */
-export const moduleLink = (origin: string, moduleId: ModuleId, blocked: boolean) =>
-  blocked ? `${origin}/dashboard` : `${origin}${moduleById(moduleId)?.href ?? '/dashboard'}`
+export const moduleLink = (origin: string, moduleId: ModuleId, blocked: boolean, lang?: Lang) =>
+  withLang(blocked ? `${origin}/dashboard` : `${origin}${moduleById(moduleId)?.href ?? '/dashboard'}`, lang)
 
 /** The step this module would sit behind for this client, if any. */
 export async function blockedByStep(clientId: string, moduleId: ModuleId): Promise<number | null> {
@@ -133,7 +134,7 @@ export async function planModuleSend(input: ModuleSendInput): Promise<{ ok: true
       lang,
       target,
       blockedBy,
-      link: moduleLink(input.linkOrigin, moduleId, blockedBy !== null),
+      link: moduleLink(input.linkOrigin, moduleId, blockedBy !== null, lang),
       textOrigin: input.textOrigin,
     },
   }

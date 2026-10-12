@@ -1,4 +1,5 @@
 import { SupabaseClient } from '@supabase/supabase-js'
+import { withLang } from '@/lib/langLink'
 import { getSupabase } from '@/lib/supabase'
 import { numberOptedOut } from '@/lib/numberOptOut'
 import { ModuleId } from '@/lib/modules'
@@ -49,7 +50,7 @@ export const reminderRef = (d: DueReminder) => ({
 export function reminderPreview(d: DueReminder, origin: string) {
   // Sign-in is by phone, so the link is the front door rather than a per-client
   // URL — nothing in a text should be a key to somebody's case file.
-  const link = `${origin}/client`
+  const link = withLang(`${origin}/client`, d.lang)
   // A round of extra questions is not "your questionnaire is still waiting" —
   // that person finished it. The copy says what is actually being asked.
   const subject = assignmentOf(d.chasing) ? ('follow-up' as const) : ('questionnaire' as const)

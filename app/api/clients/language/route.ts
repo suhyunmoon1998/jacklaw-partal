@@ -4,6 +4,28 @@ import { isLang } from '@/lib/langs'
 import { denyClient } from '@/lib/clientAuth'
 
 /**
+ * GET /api/clients/language?clientId=…
+ *
+ * The language the office has on file for this client, for a phone that has
+ * never been given one. Same guard as the write below.
+ */
+export async function GET(req: NextRequest) {
+  const clientId = req.nextUrl.searchParams.get('clientId')?.trim() ?? ''
+  if (!clientId) return NextResponse.json({ error: 'clientId is required.' }, { status: 400 })
+
+  const denied = await denyClient(req, clientId)
+  if (denied) return denied
+
+  const { data, error } = await getSupabase()
+    .from('clients')
+    .select('portal_lang')
+    .eq('id', clientId)
+    .maybeSingle()
+  if (error) return NextResponse.json({ error: 'Could not read the language.' }, { status: 500 })
+  return NextResponse.json({ lang: isLang(data?.portal_lang) ? data.portal_lang : null })
+}
+
+/**
  * POST /api/clients/language  { clientId, lang }
  *
  * Records the language a client is reading the portal in, so the office can

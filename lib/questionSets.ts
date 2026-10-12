@@ -13,8 +13,9 @@
  * read-only entry via DEFAULT_SET_ID.
  */
 
+import { withLang } from '@/lib/langLink'
 import { getSupabase } from '@/lib/supabase'
-import { TRANSLATED_LANGS, TranslatedLang } from '@/lib/langs'
+import { Lang, TRANSLATED_LANGS, TranslatedLang } from '@/lib/langs'
 import { QUESTIONNAIRE_SECTIONS } from '@/lib/questionnaireData'
 import { answerFitsType, isVisible } from '@/lib/questionLogic'
 import {
@@ -540,6 +541,6 @@ export const STATUS_TIMESTAMP: Record<AssignmentStatus, string | null> = {
 }
 
 /** The client-facing link for one assignment. Keyed by assignment, not by set. */
-export function assignmentLink(origin: string, assignmentId: string): string {
-  return `${origin}/questionnaire/${assignmentId}`
+export function assignmentLink(origin: string, assignmentId: string, lang?: Lang): string {
+  return withLang(`${origin}/questionnaire/${assignmentId}`, lang)
 }

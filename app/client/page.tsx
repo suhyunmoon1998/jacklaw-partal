@@ -5,6 +5,7 @@ import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { normalizePhone, setSession, getSession, formatPhone } from '@/lib/auth'
 import { typedPhoneDigits } from '@/lib/phoneNumber'
+import { isLang } from '@/lib/langs'
 import { FIRM_PHONE_LABEL, FIRM_PHONE_TEL } from '@/lib/contact'
 import { useLanguage } from '@/lib/i18n'
 import LanguagePicker from '@/components/LanguagePicker'
@@ -54,6 +55,7 @@ interface FoundCase {
   case_type: string
   case_label: string
   opened: string
+  portal_lang?: string | null
 }
 
 export default function LoginPage() {
@@ -67,7 +69,7 @@ export default function LoginPage() {
    */
   const [choices, setChoices] = useState<FoundCase[]>([])
   const router = useRouter()
-  const { t, lang } = useLanguage()
+  const { t, lang, adopt } = useLanguage()
 
   useEffect(() => {
     const session = getSession()
@@ -115,6 +117,9 @@ export default function LoginPage() {
       name: client.name,
       caseType: client.case_type ?? '',
     })
+    // A phone that has never been given a language opens in English; the
+    // office's record of this client's language is the better guess.
+    if (isLang(client.portal_lang)) adopt(client.portal_lang)
     router.replace(nextPath())
   }
 

@@ -25,7 +25,7 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
   ])
 
   return NextResponse.json({
-    link: assignmentLink(req.nextUrl.origin, params.id),
+    link: assignmentLink(req.nextUrl.origin, params.id, lang),
     email,
     lang,
     // So the dialog can offer the number as a field the office edits, and can
@@ -83,7 +83,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
       ? body.email.trim()
       : await lookupClientEmail(assignment.clientId)
   const lang: Lang = isLang(body?.lang) ? body.lang : await lookupClientLanguage(assignment.clientId)
-  const link = assignmentLink(req.nextUrl.origin, params.id)
+  const link = assignmentLink(req.nextUrl.origin, params.id, lang)
 
   const typedPhone = typeof body?.phone === 'string' ? body.phone : undefined
   const target =

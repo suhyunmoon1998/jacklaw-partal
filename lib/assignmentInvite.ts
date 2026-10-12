@@ -12,6 +12,7 @@
  * holding it is the wrong thing to put in a message.
  */
 
+import { withLang } from '@/lib/langLink'
 import { NextRequest } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
 import { numberOptedOut } from '@/lib/numberOptOut'
@@ -38,7 +39,7 @@ function firstName(full: string): string {
 
 export function invitationSms(lang: Lang, name: string, at: string): string {
   const write = INVITE[lang] ?? INVITE.en
-  return write(firstName(name), `${at.replace(/\/$/, '')}/client`)
+  return write(firstName(name), withLang(`${at.replace(/\/$/, '')}/client`, lang))
 }
 
 /**
@@ -154,5 +155,5 @@ export function stepInviteSms(
   const write = STEP_INVITE[lang] ?? STEP_INVITE.en
   // The high end of the range. A client told fifteen minutes who spends
   // twenty-five feels misled; one told twenty-five who spends fifteen does not.
-  return write(firstName(name), step.name, String(step.minutes[1]), `${at.replace(/\/$/, '')}/client`)
+  return write(firstName(name), step.name, String(step.minutes[1]), withLang(`${at.replace(/\/$/, '')}/client`, lang))
 }

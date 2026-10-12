@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
 
   const { data, error } = await getSupabase()
     .from('clients')
-    .select('id, name, phone, case_type, case_name, onboarding_status, case_folder_id, created_at')
+    .select('id, name, phone, case_type, case_name, onboarding_status, case_folder_id, created_at, portal_lang')
     .in('phone', phoneVariants(phoneKey(digits)))
     .order('created_at', { ascending: true })
 
@@ -63,6 +63,9 @@ export async function POST(req: NextRequest) {
         c.case_type ||
         '',
       onboarding_status: c.onboarding_status,
+      // The language the office writes to them in, for a phone that has never
+      // been given one. The sign-in page takes it only if nothing was chosen.
+      portal_lang: c.portal_lang ?? null,
       // Two cases with no folder and no note would otherwise read identically
       // on the picker, and the client could not tell which was which. The date
       // the office opened the case always differs.
