@@ -12,6 +12,7 @@
 
 import { getSupabase } from '@/lib/supabase'
 import { getAssignmentDetail } from '@/lib/questionSets'
+import { FEE_WAIVER_SET_ID } from '@/lib/feeWaiver'
 import { AssignmentFound, READ_STATUSES } from '@/lib/sourceSearch'
 import { SetRows } from '@/lib/factAdditions'
 import { AnswerValue } from '@/types'
@@ -49,6 +50,10 @@ export async function loadAssignedSets(clientId: string): Promise<{
   const sets: SetRows[] = []
   const found: AssignmentFound[] = []
   for (const a of assigned.data ?? []) {
+    // The fee waiver questions are the household's money for a court form, not
+    // facts about the claims; read into the case they would be noise, and
+    // finishing them would buy a whole new reading (lib/feeWaiver.ts).
+    if (String(a.question_set_id) === FEE_WAIVER_SET_ID) continue
     const name = names.get(String(a.question_set_id)) || 'Unnamed question set'
     const status = String(a.status ?? '')
     if (!(READ_STATUSES as readonly string[]).includes(status)) {

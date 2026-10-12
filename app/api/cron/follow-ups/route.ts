@@ -21,6 +21,7 @@ import { StoredAnalysis } from '@/lib/caseAnalysisShape'
 import { owedDamages, readDamagesWhileTimeAllows } from '@/lib/damagesAuto'
 import { addArrivedAnswers } from '@/lib/factAdditionsRun'
 import { keepSearch } from '@/lib/sourceSearchStore'
+import { FEE_WAIVER_SET_ID } from '@/lib/feeWaiver'
 
 /**
  * Reading a client's answers and writing their next questions, unprompted.
@@ -158,6 +159,8 @@ async function waitingFor(): Promise<Waiting[]> {
           .from('client_question_set_assignments')
           .select('completed_at')
           .eq('client_id', id)
+          // Fee waiver answers are not read into the facts, so finishing them owes nothing.
+          .neq('question_set_id', FEE_WAIVER_SET_ID)
           .not('completed_at', 'is', null)
           .order('completed_at', { ascending: false })
           .limit(1),

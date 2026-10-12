@@ -61,6 +61,7 @@ import { canonicalAnswers } from '@/lib/answerCompat'
 import { AnswerValue, QuestionnaireState, UploadedDocument } from '@/types'
 import CaseFoldersPanel from '@/components/admin/CaseFoldersPanel'
 import QuestionSetsPanel from '@/components/admin/QuestionSetsPanel'
+import FeeWaiverPanel from '@/components/admin/FeeWaiverPanel'
 import ClientAssignments from '@/components/admin/ClientAssignments'
 import { ModuleId } from '@/lib/modules'
 import { ModuleProgress, ModuleSend } from '@/lib/moduleSteps'
@@ -1140,7 +1141,7 @@ export default function AdminPage() {
    * a case and working inside it is the way in — the people not yet filed are
    * under Unassigned.
    */
-  const [activeTab, setActiveTab] = useState<'cases' | 'intake' | 'question-sets'>('cases')
+  const [activeTab, setActiveTab] = useState<'cases' | 'intake' | 'question-sets' | 'fee-waiver'>('cases')
   const [intakeSubmissions, setIntakeSubmissions] = useState<IntakeSubmission[]>([])
   const [viewingGFROGDraft, setViewingGFROGDraft] = useState<GeneratedGFROGDraft | null>(null)
   const [selectedSubmission, setSelectedSubmission] = useState<IntakeSubmission | null>(null)
@@ -1637,6 +1638,16 @@ export default function AdminPage() {
             >
               Question Sets
             </button>
+            <button
+              onClick={() => setActiveTab('fee-waiver')}
+              className={`pb-3 font-semibold transition-colors ${
+                activeTab === 'fee-waiver'
+                  ? 'border-b-2 border-gold text-black'
+                  : 'text-gray-500 hover:text-black'
+              }`}
+            >
+              Fee Waiver
+            </button>
           </div>
         </div>
 
@@ -1645,6 +1656,7 @@ export default function AdminPage() {
           <h1 className="text-2xl font-bold text-black">
             {activeTab === 'cases' ? 'Cases'
               : activeTab === 'intake' ? 'Intake Submissions'
+              : activeTab === 'fee-waiver' ? 'Fee Waiver'
               : 'Question Sets'}
           </h1>
           <p className="text-gray-500 text-sm mt-1">
@@ -1652,6 +1664,8 @@ export default function AdminPage() {
               ? `${allClients.length} clients across your cases — open a case to work in it`
               : activeTab === 'intake'
               ? `${intakeSubmissions.length} total submissions · ${intakeSubmissions.filter(s => !s.reviewed).length} unreviewed`
+              : activeTab === 'fee-waiver'
+              ? 'Court fee waiver questions (FW-001), sent in each client\'s language'
               : 'Reusable questionnaires you can send to individual clients'}
           </p>
         </div>
@@ -1692,6 +1706,8 @@ export default function AdminPage() {
 
 
         {activeTab === 'question-sets' && <QuestionSetsPanel />}
+
+        {activeTab === 'fee-waiver' && <FeeWaiverPanel />}
 
         {/* Intake Submissions View */}
         {activeTab === 'intake' && (
