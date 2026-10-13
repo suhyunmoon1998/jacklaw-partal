@@ -74,7 +74,7 @@ export const FEE_WAIVER_QUESTIONS: Question[] = [
       helpText: '请把和您住在一起的每个人的收入加在一起。',
     },
     ko: {
-      label: '함께 사는 가족 모두가 세금 떼기 전에 한 달에 버는 돈은 모두 합쳐 얼마인가요?',
+      label: '함께 사는 가족 모두의 한 달 수입을 합치면 세전으로 얼마인가요?',
       helpText: '함께 사는 모든 사람의 수입을 합쳐 주세요.',
     },
   },
