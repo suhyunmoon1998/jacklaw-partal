@@ -3,7 +3,19 @@ import { legacyAnswerGroups, liveQuestionIds } from '@/lib/questionnaireLegacy'
 import { canonicalAnswers } from '@/lib/answerCompat'
 import { answersForReading } from '@/lib/modules'
 import { toEnglishForOffice } from '@/lib/officeTranslation'
+import { FeeWaiverOnFile, feeWaiverResultText } from '@/lib/feeWaiver'
 import { AnswerValue, Question, QuestionnaireSection } from '@/types'
+
+/**
+ * What the PDF is handed, beyond the answers themselves. `feeWaiver` is the
+ * court fee waiver result, or why it could not be read; left out when the
+ * questions were never sent.
+ */
+interface PdfOptions {
+  sections?: QuestionnaireSection[]
+  title?: string
+  feeWaiver?: FeeWaiverOnFile | { error: string }
+}
 
 const GOLD = '#E07820'
 const NAVY = '#111111'
@@ -89,7 +101,7 @@ export async function generateAnswersPdfForOffice(
   caseType: string,
   phone: string,
   rawAnswers: Record<string, AnswerValue>,
-  options: { sections?: QuestionnaireSection[]; title?: string } = {}
+  options: PdfOptions = {}
 ): Promise<Buffer> {
   const { sections, filed } = answersToPrint(rawAnswers, options.sections)
   const labelFor = (id: string) => {
@@ -113,7 +125,7 @@ export async function generateAnswersPdfForOffice(
   }
   // Laid out under the sections the client's own answers open, whatever the
   // English does to them.
-  return drawAnswersPdf(clientName, caseType, phone, { ...answersToPrint(translated, options.sections), sections }, options.title)
+  return drawAnswersPdf(clientName, caseType, phone, { ...answersToPrint(translated, options.sections), sections }, options.title, options.feeWaiver)
 }
 
 export function generateAnswersPdf(
@@ -121,22 +133,28 @@ export function generateAnswersPdf(
   caseType: string,
   phone: string,
   rawAnswers: Record<string, AnswerValue>,
-  options: { sections?: QuestionnaireSection[]; title?: string } = {}
+  options: PdfOptions = {}
 ): Promise<Buffer> {
   // An answer chosen in Spanish before Module 1 prints as the choice it was,
   // rather than as a word the reader of this file will not recognise.
   // What the client stands behind, and what they took back — kept apart. Both
   // modules, with this client's repeating branches expanded, so a wage-and-hour
   // answer prints under its own heading rather than as an unrecognised leftover.
-  return drawAnswersPdf(clientName, caseType, phone, answersToPrint(rawAnswers, options.sections), options.title)
+  return drawAnswersPdf(clientName, caseType, phone, answersToPrint(rawAnswers, options.sections), options.title, options.feeWaiver)
 }
+
+const BENEFITS: Record<string, string> = { yes: 'Yes', no: 'No', not_sure: 'Not sure' }
+
+const longDate = (iso: string) =>
+  new Date(iso).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
 
 function drawAnswersPdf(
   clientName: string,
   caseType: string,
   phone: string,
   printed: ReturnType<typeof answersToPrint>,
-  heading?: string
+  heading?: string,
+  feeWaiver?: PdfOptions['feeWaiver']
 ): Promise<Buffer> {
   const { sections, filed: answers, retracted } = printed
   const title = heading ?? 'CLIENT INTAKE QUESTIONNAIRE'
@@ -252,6 +270,44 @@ function drawAnswersPdf(
 
     if (!anySections) {
       doc.fillColor(GRAY).font('Helvetica').fontSize(11).text('No answers submitted yet.')
+    }
+
+    // The court fee waiver questions. Sent and read from their own tab and kept
+    // out of the case facts, but the printed file is where the office looks.
+    if (feeWaiver) {
+      ensureSpace(80)
+      doc.moveDown(0.5)
+      doc.fillColor(GOLD).font('Helvetica-Bold').fontSize(11)
+        .text('COURT FEE WAIVER (FW-001)', { characterSpacing: 0.5 })
+
+      if ('error' in feeWaiver) {
+        doc.fillColor(GRAY).font('Helvetica').fontSize(9)
+          .text(`${feeWaiver.error} Open the Fee Waiver tab to see them.`)
+      } else {
+        const { answers: fw, completedAt, sentAt } = feeWaiver
+        const when = completedAt
+          ? `Answered ${longDate(completedAt)}.`
+          : `Sent${sentAt ? ` ${longDate(sentAt)}` : ''}, not finished yet.`
+        doc.fillColor(GRAY).font('Helvetica').fontSize(9)
+          .text(`${when} Asked apart from the intake and kept out of the case facts.`)
+        doc.moveDown(0.4)
+
+        const rows: [string, string | null][] = [
+          ['Government benefits', fw.benefits ? BENEFITS[fw.benefits] : null],
+          ['Household income a month, before taxes', fw.income !== null ? `$${fw.income.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : null],
+          ['People in the home', fw.householdAnswer],
+          ['Result', feeWaiverResultText(feeWaiver.verdict)],
+        ]
+        for (const [label, value] of rows) {
+          if (value === null) continue
+          ensureSpace(30)
+          const shown = RENDERABLE.test(value) ? value : UNRENDERABLE_NOTE
+          if (shown === UNRENDERABLE_NOTE) untranslated = true
+          doc.fillColor(GRAY).font('Helvetica-Bold').fontSize(9).text(label)
+          doc.fillColor('#000000').font(label === 'Result' ? 'Helvetica-Bold' : 'Helvetica').fontSize(10.5).text(shown)
+          doc.moveDown(0.5)
+        }
+      }
     }
 
     if (untranslated) {

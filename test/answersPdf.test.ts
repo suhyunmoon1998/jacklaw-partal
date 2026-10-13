@@ -47,3 +47,24 @@ describe('printing an assigned question set', () => {
     expect(full.length).toBeGreaterThan(empty.length)
   })
 })
+
+describe('the fee waiver result on the intake PDF', () => {
+  const feeWaiver = {
+    sentAt: '2026-10-01T17:00:00Z',
+    completedAt: '2026-10-03T17:00:00Z',
+    answers: { benefits: 'no' as const, income: 3100, household: 3, householdAnswer: '3' },
+    verdict: { kind: 'under' as const, limit: 4553.33, size: 3 },
+  }
+
+  it('is drawn when the questions were sent, and left off when they were not', async () => {
+    const without = await generateAnswersPdf('Mei Lin', 'Wage & Hour', '', {})
+    const withIt = await generateAnswersPdf('Mei Lin', 'Wage & Hour', '', {}, { feeWaiver })
+    expect(withIt.length).toBeGreaterThan(without.length)
+  })
+
+  it('says so when the answers could not be read, rather than leaving the section out', async () => {
+    const without = await generateAnswersPdf('Mei Lin', 'Wage & Hour', '', {})
+    const failed = await generateAnswersPdf('Mei Lin', 'Wage & Hour', '', {}, { feeWaiver: { error: 'Could not read the fee waiver answers: timeout' } })
+    expect(failed.length).toBeGreaterThan(without.length)
+  })
+})

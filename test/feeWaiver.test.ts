@@ -4,6 +4,7 @@ import {
   FW001_INCOME_TABLE,
   FEE_WAIVER_SET_NAMES,
   IncomeTable,
+  feeWaiverResultText,
   feeWaiverVerdict,
   incomeLimit,
   readFeeWaiverAnswers,
@@ -144,5 +145,17 @@ describe('the FW-001 table in force (Rev. March 1, 2026)', () => {
     expect(verdict('5499.99', '4')).toEqual({ kind: 'under', limit: 5500, size: 4 })
     expect(verdict('5500', '4')).toEqual({ kind: 'over', limit: 5500, size: 4 })
     expect(verdict('2659', '1')).toMatchObject({ kind: 'under' })
+  })
+})
+
+describe('the result as printed', () => {
+  it('says what each verdict means, with the figure it was measured against', () => {
+    expect(feeWaiverResultText({ kind: 'benefits' })).toMatch(/^Qualifies: .*item 5a/)
+    expect(feeWaiverResultText({ kind: 'under', limit: 5500, size: 4 })).toBe(
+      'Qualifies: under $5,500.00 a month for a household of 4 (FW-001 item 5b).'
+    )
+    expect(feeWaiverResultText({ kind: 'over', limit: 2660, size: 1 })).toMatch(/^At or over \$2,660\.00 .* item 5c\.$/)
+    expect(feeWaiverResultText({ kind: 'check' })).toMatch(/more than 10/)
+    expect(feeWaiverResultText({ kind: 'waiting' })).toMatch(/^No result yet/)
   })
 })

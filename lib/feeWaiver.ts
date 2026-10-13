@@ -241,3 +241,64 @@ export async function ensureFeeWaiverSet(): Promise<void> {
   if (countError) throw new Error(`Could not read the fee waiver questions: ${countError.message}`)
   if (!count) await replaceQuestions(FEE_WAIVER_SET_ID, normalizeQuestions(FEE_WAIVER_QUESTIONS))
 }
+
+const dollars = (n: number) => `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+
+/**
+ * The verdict in words, for paper. The Fee Waiver tab says the same in its
+ * pills and their hover text.
+ */
+export function feeWaiverResultText(v: FeeWaiverVerdict): string {
+  switch (v.kind) {
+    case 'benefits':
+      return 'Qualifies: gets government benefits (FW-001 item 5a). Confirm the benefit is one the form lists.'
+    case 'under':
+      return `Qualifies: under ${dollars(v.limit)} a month for a household of ${v.size} (FW-001 item 5b).`
+    case 'over':
+      return `At or over ${dollars(v.limit)} a month for a household of ${v.size}. The court can still grant it under item 5c.`
+    case 'no-table':
+      return 'No result: the FW-001 income table has not been entered.'
+    case 'check':
+      return 'Check by hand: more than 10 people at home, so the figure depends on how many.'
+    default:
+      return 'No result yet: not every question has been answered.'
+  }
+}
+
+/** A client's fee waiver questions as they stand, for the intake PDF. */
+export interface FeeWaiverOnFile {
+  sentAt: string | null
+  completedAt: string | null
+  answers: FeeWaiverAnswers
+  verdict: FeeWaiverVerdict
+}
+
+/**
+ * One client's fee waiver answers and what they come to, or null when the
+ * questions were never sent — a draft the office opened and cancelled is not
+ * a send. The newest assignment is the one that counts, as on the tab.
+ */
+export async function clientFeeWaiver(clientId: string): Promise<FeeWaiverOnFile | null> {
+  const db = getSupabase()
+  const { data, error } = await db
+    .from('client_question_set_assignments')
+    .select('id, status, sent_at, completed_at')
+    .eq('client_id', clientId)
+    .eq('question_set_id', FEE_WAIVER_SET_ID)
+    .order('assigned_at', { ascending: false })
+    .limit(1)
+  if (error) throw new Error(`Could not read the fee waiver questions: ${error.message}`)
+  const a = data?.[0]
+  if (!a || a.status === 'draft' || a.status === 'assigned') return null
+
+  const { data: rows, error: answersError } = await db
+    .from('question_set_responses')
+    .select('question_key, answer')
+    .eq('assignment_id', a.id)
+  if (answersError) throw new Error(`Could not read the fee waiver answers: ${answersError.message}`)
+
+  const raw: Record<string, AnswerValue> = {}
+  for (const r of rows ?? []) raw[String(r.question_key)] = r.answer as AnswerValue
+  const answers = readFeeWaiverAnswers(raw)
+  return { sentAt: a.sent_at ?? null, completedAt: a.completed_at ?? null, answers, verdict: feeWaiverVerdict(answers) }
+}

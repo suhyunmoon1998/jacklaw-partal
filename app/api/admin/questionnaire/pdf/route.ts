@@ -5,6 +5,7 @@ import { formatPhone } from '@/lib/auth'
 import { translateAnswersCached } from '@/lib/translationCache'
 import { answersLanguage } from '@/lib/machineTranslate'
 import { isAdmin } from '@/lib/adminAuth'
+import { clientFeeWaiver } from '@/lib/feeWaiver'
 
 /**
  * Putting a client's own words into English takes longer than drawing a PDF.
@@ -32,13 +33,19 @@ export async function GET(req: NextRequest) {
   // the translator only calls out for text it detects as another language —
   // and, for a client who reads the portal in Spanish, for what they typed.
   const raw = qState?.answers ?? {}
-  const answers = await translateAnswersCached(raw, answersLanguage(raw, client.portal_lang))
+  // The fee waiver result goes on the same sheet. A failed read is printed as
+  // one, not left out: a missing section would read as never sent.
+  const [answers, feeWaiver] = await Promise.all([
+    translateAnswersCached(raw, answersLanguage(raw, client.portal_lang)),
+    clientFeeWaiver(clientId).catch((err: Error) => ({ error: err.message })),
+  ])
 
   const pdf = await generateAnswersPdfForOffice(
     client.name,
     client.case_type,
     formatPhone(client.phone ?? ''),
-    answers
+    answers,
+    { feeWaiver: feeWaiver ?? undefined }
   )
 
   const safeName = client.name.replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '')
