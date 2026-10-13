@@ -10,7 +10,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { LANG_ENGLISH_NAME, isLang, toLang } from '@/lib/langs'
-import type { FeeWaiverAnswers, FeeWaiverVerdict } from '@/lib/feeWaiver'
+import type { FeeWaiverAnswers, FeeWaiverVerdict, IncomeTable } from '@/lib/feeWaiver'
 import SendAssignmentDialog from './SendAssignmentDialog'
 
 interface Row {
@@ -25,7 +25,7 @@ interface Row {
 
 type Filter = 'all' | 'not-sent' | 'waiting' | 'answered'
 
-const money = (n: number) => `$${n.toLocaleString('en-US', { maximumFractionDigits: 2 })}`
+const money = (n: number) => `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 const day = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '')
 
 /** Sent and not yet finished counts as waiting; a draft was never sent. */
@@ -66,7 +66,7 @@ function Verdict({ v }: { v: FeeWaiverVerdict }) {
 
 export default function FeeWaiverPanel() {
   const [rows, setRows] = useState<Row[]>([])
-  const [table, setTable] = useState<{ effective: string } | null>(null)
+  const [table, setTable] = useState<IncomeTable | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
@@ -166,6 +166,42 @@ export default function FeeWaiverPanel() {
           The FW-001 income table has not been entered yet. Clients on benefits show as qualifying; income answers
           are shown as given, without a verdict, until it is.
         </div>
+      )}
+
+      {table && (
+        <details className="mb-3 bg-white rounded-2xl border border-gray-100 shadow-sm">
+          <summary className="px-6 py-3 cursor-pointer text-sm font-semibold text-gray-900 select-none">
+            Who qualifies <span className="font-normal text-gray-400">· {table.effective}</span>
+          </summary>
+          <div className="px-6 pb-5 text-sm text-gray-700 space-y-3">
+            <p>
+              <span className="font-semibold">5a.</span> On any of: Food Stamps (CalFresh), SSI, SSP, Medi-Cal, County
+              Relief / General Assistance, IHSS, CalWORKs or Tribal TANF, CAPI, WIC, Unemployment — whatever the income.
+            </p>
+            <div>
+              <p>
+                <span className="font-semibold">5b.</span> Otherwise, gross monthly household income (before taxes)
+                <em> less than</em>:
+              </p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {table.monthly.map((limit, i) => (
+                  <div key={i} className="border border-gray-200 rounded-lg px-3 py-1.5 text-center">
+                    <p className="text-[11px] text-gray-400">{i + 1} {i === 0 ? 'person' : 'people'}</p>
+                    <p className="font-semibold text-gray-900">{money(limit)}</p>
+                  </div>
+                ))}
+                <div className="border border-dashed border-gray-200 rounded-lg px-3 py-1.5 text-center">
+                  <p className="text-[11px] text-gray-400">each extra</p>
+                  <p className="font-semibold text-gray-900">+{money(table.eachAdditional)}</p>
+                </div>
+              </div>
+            </div>
+            <p className="text-xs text-gray-400">
+              5c. Over the figure, the court can still waive fees for a household that cannot pay its basic needs — that
+              takes page 2 of the form. Shown to the office only; clients are never told the result.
+            </p>
+          </div>
+        </details>
       )}
 
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">

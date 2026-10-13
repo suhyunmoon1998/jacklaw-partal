@@ -111,9 +111,8 @@ export const FEE_WAIVER_QUESTIONS: Question[] = [
  * `monthly[0]` is one person, `monthly[1]` two, and so on; past the end of the
  * list, `eachAdditional` is added per person, as the form says.
  *
- * Null until the office enters the table from the form they file with. Until
- * then an income answer is shown as it is, with no verdict — a guessed figure
- * would tell the office a client qualifies who does not.
+ * Null leaves every income answer shown as it is, with no verdict — a guessed
+ * figure would tell the office a client qualifies who does not.
  */
 export interface IncomeTable {
   /** The form revision the figures are from, shown beside every verdict. */
@@ -122,7 +121,21 @@ export interface IncomeTable {
   eachAdditional: number
 }
 
-export const FW001_INCOME_TABLE: IncomeTable | null = null
+/**
+ * Copied from FW-001 Rev. March 1, 2026, page 1, item 5b — the form as the
+ * superior courts publish it. From that revision the figures are 200% of the
+ * 2026 HHS poverty guidelines, a twelfth of the year: one person $15,960 × 2
+ * / 12 = $2,660.00, and each extra person $5,680 × 2 / 12 = $946.67, which is
+ * how they were checked. The form prints six sizes and "if more than 6 people
+ * at home, add $946.67 for each extra person".
+ *
+ * When the Judicial Council revises the form, replace all of it here.
+ */
+export const FW001_INCOME_TABLE: IncomeTable | null = {
+  effective: 'FW-001 Rev. March 1, 2026',
+  monthly: [2660.0, 3606.67, 4553.33, 5500.0, 6446.67, 7393.33],
+  eachAdditional: 946.67,
+}
 
 /** What the three answers come to. */
 export type FeeWaiverVerdict =
@@ -169,7 +182,9 @@ export function readFeeWaiverAnswers(answers: Record<string, AnswerValue>): FeeW
 export function incomeLimit(table: IncomeTable, size: number): number {
   const listed = table.monthly.length
   if (size <= listed) return table.monthly[size - 1]
-  return table.monthly[listed - 1] + (size - listed) * table.eachAdditional
+  // To the cent, as the form prints them: 7,393.33 + 946.67 is 8,340.00, not
+  // 8,340.000000000001.
+  return Math.round((table.monthly[listed - 1] + (size - listed) * table.eachAdditional) * 100) / 100
 }
 
 /**

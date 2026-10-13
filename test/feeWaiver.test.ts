@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   FEE_WAIVER_QUESTIONS,
+  FW001_INCOME_TABLE,
   FEE_WAIVER_SET_NAMES,
   IncomeTable,
   feeWaiverVerdict,
@@ -114,5 +115,34 @@ describe('what the fee waiver texts say', () => {
     expect(fw.feeWaiver).toBe(true)
     expect(reminderPreview(fw, 'https://x.test').body).toMatch(/cuotas/)
     expect(reminderPreview(other, 'https://x.test').body).toMatch(/leímos sus respuestas/)
+  })
+})
+
+describe('the FW-001 table in force (Rev. March 1, 2026)', () => {
+  const table = FW001_INCOME_TABLE!
+  const verdict = (income: string, size: string) =>
+    feeWaiverVerdict(readFeeWaiverAnswers({ fw_benefits: 'no', fw_household_income: income, fw_household_size: size }))
+
+  it('is the form\'s six figures and its per-person addition', () => {
+    expect(table.monthly).toEqual([2660, 3606.67, 4553.33, 5500, 6446.67, 7393.33])
+    expect(table.eachAdditional).toBe(946.67)
+  })
+
+  it('is 200% of the 2026 poverty guidelines, a month at a time', () => {
+    // HHS 2026, 48 states: $15,960 for one, $5,680 for each person after.
+    for (let size = 1; size <= 6; size++) {
+      expect(table.monthly[size - 1]).toBeCloseTo(((15960 + (size - 1) * 5680) * 2) / 12, 2)
+    }
+  })
+
+  it('counts past six to the cent', () => {
+    expect(incomeLimit(table, 7)).toBe(8340)
+    expect(incomeLimit(table, 8)).toBe(9286.67)
+  })
+
+  it('qualifies under the figure and not at it', () => {
+    expect(verdict('5499.99', '4')).toEqual({ kind: 'under', limit: 5500, size: 4 })
+    expect(verdict('5500', '4')).toEqual({ kind: 'over', limit: 5500, size: 4 })
+    expect(verdict('2659', '1')).toMatchObject({ kind: 'under' })
   })
 })

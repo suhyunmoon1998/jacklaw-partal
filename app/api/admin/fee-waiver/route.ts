@@ -79,7 +79,10 @@ export async function GET(req: NextRequest) {
     }
   })
 
-  return NextResponse.json({ rows, table: FW001_INCOME_TABLE ? { effective: FW001_INCOME_TABLE.effective } : null })
+  // The table goes to the office's screen with the rows, so the figure each
+  // verdict was measured against can be read beside it. Admin only, like the
+  // verdicts: a client is asked the questions and never shown the outcome.
+  return NextResponse.json({ rows, table: FW001_INCOME_TABLE })
 }
 
 /**
