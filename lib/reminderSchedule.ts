@@ -58,6 +58,8 @@ export interface SentStep {
   /** When the office sent it. The day counting starts here. */
   sentAt: string
   submitted: boolean
+  /** The court fee waiver questions, which are chased in words of their own. */
+  feeWaiver?: boolean
 }
 
 export interface ReminderTarget {
@@ -78,6 +80,8 @@ export interface DueReminder {
   channel: 'sms' | 'call'
   /** Days between the send and the day being planned. */
   daysWaiting: number
+  /** The court fee waiver questions, which are chased in words of their own. */
+  feeWaiver?: boolean
 }
 
 /** Why a step that is otherwise due is not being acted on. */
@@ -248,6 +252,7 @@ export function planReminders(input: {
       kind,
       channel: channelOf(kind),
       daysWaiting,
+      ...(step.feeWaiver ? { feeWaiver: true } : {}),
     })
   }
 

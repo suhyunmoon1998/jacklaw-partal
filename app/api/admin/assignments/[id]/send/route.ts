@@ -8,6 +8,7 @@ import { chooseSmsTarget, invitationSms, lookupClientSms, origin } from '@/lib/a
 import { Lang, isLang } from '@/lib/langs'
 import { localizeName } from '@/lib/questionLogic'
 import { lookupClientEmail, lookupClientLanguage, sendAssignmentEmail } from '@/lib/sendAssignmentEmail'
+import { FEE_WAIVER_SET_ID } from '@/lib/feeWaiver'
 import { AssignmentStatus } from '@/types'
 
 // GET /api/admin/assignments/[id]/send — the link plus the email we would use
@@ -131,7 +132,10 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
   const sms = !phone
     ? null
     : isConfigured()
-      ? await sendSms(phone, invitationSms(lang, name, origin(req)))
+      ? await sendSms(
+          phone,
+          invitationSms(lang, name, origin(req), assignment.questionSetId === FEE_WAIVER_SET_ID ? 'fee-waiver' : 'questions')
+        )
       : { ok: false as const, error: 'Texting is not switched on for this portal yet.' }
   let emailed = false
   let emailError = ''

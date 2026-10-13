@@ -16,6 +16,7 @@ import {
 import { CALL_VOICE, IMAGE_FOR, reminderBody } from '@/lib/reminderMessages'
 import { placeCall, sendSms, xmlEscape } from '@/lib/twilio'
 import { usablePhone } from '@/lib/assignmentInvite'
+import { FEE_WAIVER_SET_ID } from '@/lib/feeWaiver'
 
 /**
  * Sending one reminder — the daily chase's, and the one Eleanor sends now
@@ -53,7 +54,11 @@ export function reminderPreview(d: DueReminder, origin: string) {
   const link = withLang(`${origin}/client`, d.lang)
   // A round of extra questions is not "your questionnaire is still waiting" —
   // that person finished it. The copy says what is actually being asked.
-  const subject = assignmentOf(d.chasing) ? ('follow-up' as const) : ('questionnaire' as const)
+  const subject = !assignmentOf(d.chasing)
+    ? ('questionnaire' as const)
+    : d.feeWaiver
+      ? ('fee-waiver' as const)
+      : ('follow-up' as const)
   const image = subject === 'questionnaire' ? IMAGE_FOR[d.kind] : undefined
   return {
     ...reminderRef(d),
@@ -154,10 +159,11 @@ export async function planManualReminder(
 
   let sentAt: string | null = null
   let submitted = false
+  let feeWaiver = false
   if (round) {
     const { data, error } = await db
       .from('client_question_set_assignments')
-      .select('id, client_id, status, sent_at, completed_at')
+      .select('id, client_id, status, sent_at, completed_at, question_set_id')
       .eq('id', round)
       .maybeSingle()
     if (error) return refuse('Unreadable')
@@ -166,6 +172,7 @@ export async function planManualReminder(
     }
     sentAt = data.sent_at
     submitted = Boolean(data.completed_at)
+    feeWaiver = data.question_set_id === FEE_WAIVER_SET_ID
   } else {
     const moduleId = chasing as ModuleId
     const [sendRes, stateRes] = await Promise.all([
@@ -210,6 +217,7 @@ export async function planManualReminder(
       kind: next.kind,
       channel: channelOf(next.kind),
       daysWaiting: daysBetween(sentAt ?? now, now),
+      ...(feeWaiver ? { feeWaiver: true } : {}),
     },
   }
 }

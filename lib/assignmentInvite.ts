@@ -31,14 +31,30 @@ const INVITE: Record<Lang, (name: string, link: string) => string> = {
     `${FIRM}: ${n}님, 사건 관련해 여쭐 내용이 준비되어 있습니다: ${l}\n수신을 원하지 않으시면 STOP 이라고 답장해 주세요.`,
 }
 
+/**
+ * The same first text for the court fee waiver questions (lib/feeWaiver.ts),
+ * which say what they are for: "questions about your case" would not tell a
+ * client why the office now wants to know what their household earns.
+ */
+const FEE_WAIVER_INVITE: Record<Lang, (name: string, link: string) => string> = {
+  en: (n, l) =>
+    `${FIRM}: Hi ${n}, so we can ask the court to waive your fees, we need a few quick answers. About 1 minute: ${l}\nReply STOP to stop these texts.`,
+  es: (n, l) =>
+    `${FIRM}: Hola ${n}, para pedirle a la corte que no le cobre las cuotas, necesitamos unas respuestas rápidas. Toma 1 minuto: ${l}\nResponda STOP para no recibir más mensajes.`,
+  zh: (n, l) => `${FIRM}：您好 ${n}，为了向法院申请免缴法庭费用，需要您回答几个简单的问题，大约1分钟：${l}\n回复 STOP 可停止接收短信。`,
+  ko: (n, l) =>
+    `${FIRM}: ${n}님, 법원 수수료 면제 신청에 필요한 짧은 질문이 있습니다. 1분이면 됩니다: ${l}\n수신을 원하지 않으시면 STOP 이라고 답장해 주세요.`,
+}
+
 /** The part of a name a text should use. Full legal names read as a summons. */
 function firstName(full: string): string {
   const first = String(full ?? '').trim().split(/\s+/)[0] ?? ''
   return first || 'there'
 }
 
-export function invitationSms(lang: Lang, name: string, at: string): string {
-  const write = INVITE[lang] ?? INVITE.en
+export function invitationSms(lang: Lang, name: string, at: string, about: 'questions' | 'fee-waiver' = 'questions'): string {
+  const book = about === 'fee-waiver' ? FEE_WAIVER_INVITE : INVITE
+  const write = book[lang] ?? book.en
   return write(firstName(name), withLang(`${at.replace(/\/$/, '')}/client`, lang))
 }
 

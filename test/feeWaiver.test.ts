@@ -9,7 +9,11 @@ import {
 } from '@/lib/feeWaiver'
 import { normalizeQuestions } from '@/lib/questionSets'
 import { isVisible, localize } from '@/lib/questionLogic'
-import { TRANSLATED_LANGS } from '@/lib/langs'
+import { LANGUAGES, TRANSLATED_LANGS } from '@/lib/langs'
+import { invitationSms } from '@/lib/assignmentInvite'
+import { reminderBody } from '@/lib/reminderMessages'
+import { reminderPreview } from '@/lib/reminderSend'
+import { planReminders } from '@/lib/reminderSchedule'
 
 describe('the fee waiver questions', () => {
   const saved = normalizeQuestions(FEE_WAIVER_QUESTIONS)
@@ -67,5 +71,48 @@ describe('what the answers come to', () => {
 
   it('leaves a household too large to count to a person', () => {
     expect(verdict({ fw_benefits: 'no', fw_household_income: '100', fw_household_size: 'More than 10' })).toEqual({ kind: 'check' })
+  })
+})
+
+
+describe('what the fee waiver texts say', () => {
+  /** A word in each language that tells the client what the questions are for. */
+  const SAYS: Record<string, RegExp> = { en: /waive/, es: /cuotas/, zh: /免缴/, ko: /수수료 면제/ }
+
+  it('says what the questions are for, in every language, on the first text and every reminder', () => {
+    for (const { code } of LANGUAGES) {
+      const first = invitationSms(code, 'Maria Lopez', 'https://x.test', 'fee-waiver')
+      expect(first, code).toMatch(SAYS[code])
+      expect(first, code).toContain(`https://x.test/client?lang=${code}`)
+      expect(first, code).toMatch(/STOP/)
+      for (const kind of ['day2', 'day5'] as const) {
+        const body = reminderBody(kind, code, { name: 'Maria Lopez', link: 'https://x.test/client', subject: 'fee-waiver' })
+        expect(body, `${code}/${kind}`).toMatch(SAYS[code])
+        expect(body, `${code}/${kind}`).toContain('866 JACK LAW')
+        expect(body, `${code}/${kind}`).toContain('https://x.test/client')
+        expect(body, `${code}/${kind}`).toMatch(/STOP/)
+        expect(body).not.toMatch(/\{name\}|\{link\}/)
+      }
+      const call = reminderBody('call', code, { name: 'Maria Lopez', link: 'https://x.test/client', subject: 'fee-waiver' })
+      expect(call, `${code}/call`).toMatch(SAYS[code])
+      expect(call, `${code}/call`).not.toContain('https://')
+    }
+  })
+
+  it('leaves the ordinary first text as it was', () => {
+    expect(invitationSms('es', 'Maria Lopez', 'https://x.test')).toContain('tenemos unas preguntas sobre su caso')
+  })
+
+  it('chases a fee waiver assignment in its own words, and any other set as a follow-up', () => {
+    const now = new Date('2026-10-15T17:00:00Z')
+    const targets = new Map([['c1', { clientId: 'c1', name: 'Maria Lopez', phone: '2135550147', lang: 'es' as const, optedOut: false }]])
+    const step = (id: string, feeWaiver: boolean) => ({
+      clientId: 'c1', chasing: `assignment:${id}` as const, sentAt: '2026-10-12T17:00:00Z', submitted: false, feeWaiver,
+    })
+    const [fw] = planReminders({ steps: [step('a1', true)], targets, alreadySent: new Map(), now }).due
+    const [other] = planReminders({ steps: [step('a2', false)], targets, alreadySent: new Map(), now }).due
+    expect(fw.feeWaiver).toBe(true)
+    expect(reminderPreview(fw, 'https://x.test').body).toMatch(/cuotas/)
+    expect(reminderPreview(other, 'https://x.test').body).toMatch(/leímos sus respuestas/)
   })
 })

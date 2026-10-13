@@ -32,7 +32,7 @@ type Copy = { day2: string; day5: string; call: string }
  * both wrong and discouraging: they finished it. They are being asked for a
  * little more, and the message says so.
  */
-export type ReminderSubject = 'questionnaire' | 'follow-up'
+export type ReminderSubject = 'questionnaire' | 'follow-up' | 'fee-waiver'
 
 /**
  * `{name}` is the client's first name and `{link}` the portal.
@@ -166,6 +166,73 @@ const FOLLOW_UP: Record<Lang, Copy> = {
 }
 
 /**
+ * The same three rungs, for the court fee waiver questions (lib/feeWaiver.ts).
+ *
+ * Neither "your questionnaire" nor "we read your answers" is true of them:
+ * they are a minute's questions about the household, asked so the office can
+ * ask the court to waive its fees. Saying what they are for is what gets a
+ * client to answer questions about money from a number they barely know.
+ */
+const FEE_WAIVER: Record<Lang, Copy> = {
+  en: {
+    day2:
+      `${FIRM}: Hi {name}, we still need a few quick answers to ask the court to waive your fees. ` +
+      `About 1 minute: {link}\nReply STOP to stop these texts.`,
+    day5:
+      `${FIRM}: {name}, this is our last text about the court fee waiver questions. ` +
+      `Please answer them or call us at (866) 522-5529: {link}\nReply STOP to stop these texts.`,
+    call:
+      `Hello, this is a message from 866 JACK LAW. ` +
+      `To ask the court to waive your fees, we need a few quick answers from you. ` +
+      `We sent you a link by text message. ` +
+      `If you need help, please call our office at 8 6 6, 5 2 2, 5 5 2 9. ` +
+      `Thank you.`,
+  },
+  es: {
+    day2:
+      `${FIRM}: Hola {name}, todavía necesitamos unas respuestas rápidas para pedirle a la corte que no le cobre las cuotas. ` +
+      `Toma 1 minuto: {link}\nResponda STOP para no recibir más mensajes.`,
+    day5:
+      `${FIRM}: {name}, este es nuestro último mensaje sobre las preguntas para la exención de cuotas de la corte. ` +
+      `Por favor respóndalas o llámenos al (866) 522-5529: {link}\nResponda STOP para no recibir más mensajes.`,
+    call:
+      `Hola, este es un mensaje de 866 JACK LAW. ` +
+      `Para pedirle a la corte que no le cobre las cuotas, necesitamos unas respuestas rápidas de usted. ` +
+      `Le enviamos un enlace por mensaje de texto. ` +
+      `Si necesita ayuda, llame a nuestra oficina al 8 6 6, 5 2 2, 5 5 2 9. ` +
+      `Gracias.`,
+  },
+  zh: {
+    day2:
+      `${FIRM}：您好 {name}，申请免缴法庭费用还需要您回答几个简单的问题，` +
+      `大约1分钟：{link}\n回复 STOP 可停止接收短信。`,
+    day5:
+      `${FIRM}：{name}，这是关于免缴法庭费用问题的最后一条短信。` +
+      `请回答，或致电 (866) 522-5529：{link}\n回复 STOP 可停止接收短信。`,
+    call:
+      `您好，这是 866 JACK LAW 律师事务所的留言。` +
+      `为了向法院申请免缴法庭费用，我们需要您回答几个简单的问题。` +
+      `我们已经通过短信发送了链接。` +
+      `如需帮助，请致电本所 8 6 6, 5 2 2, 5 5 2 9。` +
+      `谢谢。`,
+  },
+  ko: {
+    day2:
+      `${FIRM}: {name}님, 법원 수수료 면제 신청에 필요한 답변을 아직 기다리고 있습니다. ` +
+      `1분이면 됩니다: {link}\n수신을 원하지 않으시면 STOP 이라고 답장해 주세요.`,
+    day5:
+      `${FIRM}: {name}님, 법원 수수료 면제 질문 관련 마지막 문자입니다. ` +
+      `답변해 주시거나 (866) 522-5529 로 전화 주세요: {link}\n수신 거부는 STOP 이라고 답장해 주세요.`,
+    call:
+      `안녕하세요, 866 잭 로 법률사무소에서 드리는 안내입니다. ` +
+      `법원 수수료 면제를 신청하려면 짧은 질문 몇 가지에 답해 주셔야 합니다. ` +
+      `문자로 링크를 보내 드렸습니다. ` +
+      `도움이 필요하시면 사무실 8 6 6, 5 2 2, 5 5 2 9 번으로 전화 주세요. ` +
+      `감사합니다.`,
+  },
+}
+
+/**
  * The picture that rides along with a reminder, by rung.
  *
  * Only the first one. A friendly mascot beside "your questionnaire is still
@@ -205,7 +272,7 @@ export function reminderBody(
   lang: Lang,
   opts: { name: string; link: string; subject?: ReminderSubject }
 ): string {
-  const book = opts.subject === 'follow-up' ? FOLLOW_UP : COPY
+  const book = opts.subject === 'follow-up' ? FOLLOW_UP : opts.subject === 'fee-waiver' ? FEE_WAIVER : COPY
   const copy = book[lang] ?? book.en
   return copy[kind]
     .replace('{name}', firstName(opts.name))

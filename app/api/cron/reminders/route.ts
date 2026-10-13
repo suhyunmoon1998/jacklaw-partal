@@ -16,6 +16,7 @@ import {
 } from '@/lib/reminderSchedule'
 import { isConfigured } from '@/lib/twilio'
 import { deliverReminder, publicOrigin, reminderPreview, reminderRef } from '@/lib/reminderSend'
+import { FEE_WAIVER_SET_ID } from '@/lib/feeWaiver'
 
 /**
  * The daily chase.
@@ -85,7 +86,7 @@ export async function GET(req: NextRequest) {
     // has read is not chased, because it was never sent.
     db
       .from('client_question_set_assignments')
-      .select('id, client_id, status, sent_at, completed_at')
+      .select('id, client_id, status, sent_at, completed_at, question_set_id')
       .in('status', ['sent', 'in_progress']),
   ])
 
@@ -150,6 +151,7 @@ export async function GET(req: NextRequest) {
         chasing: `assignment:${r.id}` as Chasing,
         sentAt: r.sent_at as string,
         submitted: Boolean(r.completed_at),
+        feeWaiver: r.question_set_id === FEE_WAIVER_SET_ID,
       })),
   ]
 
