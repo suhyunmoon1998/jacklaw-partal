@@ -121,12 +121,12 @@ export const QUESTIONNAIRE_SECTIONS: QuestionnaireSection[] = [
         options: ['English', 'Spanish', 'Chinese', 'Korean', 'Other'],
       },
       // Not in the packet. Asked of everyone so the office can count which
-      // marketing channels bring in cases; an unanswered one counts as nothing.
+      // marketing channels bring in cases. Optional, the office's choice
+      // (2026-10-15): a client who skips it is not held up.
       {
         id: 'heard_about_us',
         label: 'How did you hear about us?',
         type: 'select',
-        required: true,
         options: [
           'Google Search',
           'Google Maps',
@@ -137,7 +137,8 @@ export const QUESTIONNAIRE_SECTIONS: QuestionnaireSection[] = [
           'Other',
         ],
       },
-      // Optional: a question revealed by a gate is never required (see the test).
+      // Optional too, and would have to be: a question a gate reveals is never
+      // required (see the test).
       {
         id: 'referred_by',
         label: 'Who referred you to us?',

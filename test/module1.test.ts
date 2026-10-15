@@ -45,7 +45,6 @@ const CURRENT_EMPLOYEE: Answers = {
   dob: '1990-04-02',
   address: '1200 W 7th St',
   city_state_zip: 'Los Angeles, CA 90017',
-  heard_about_us: 'Google Search',
   still_employed: 'yes',
   job_title: 'Line cook',
   job_duties: 'Prep, grill, close the kitchen.',
@@ -383,7 +382,7 @@ describe('a file answered under the old questionnaire', () => {
     for (const section of QUESTIONNAIRE_SECTIONS) {
       const missing = missingRequired(section, LEGACY_DRAFT).map(q => q.id)
       // Only the always-asked questions this draft genuinely never answered.
-      expect(missing.every(id => ['dob', 'address', 'city_state_zip', 'heard_about_us', 'employer_name', 'job_duties'].includes(id))).toBe(true)
+      expect(missing.every(id => ['dob', 'address', 'city_state_zip', 'employer_name', 'job_duties'].includes(id))).toBe(true)
     }
   })
 })
@@ -583,9 +582,9 @@ describe('coming back to a questionnaire that changed underneath you', () => {
 describe('how the client heard about the office', () => {
   const contact = QUESTIONNAIRE_SECTIONS.find(s => s.id === 'contact')!
 
-  it('is asked of everyone, and cannot be skipped', () => {
-    const { heard_about_us: _, ...skipped } = CURRENT_EMPLOYEE
-    expect(missingRequired(contact, skipped).map(q => q.id)).toEqual(['heard_about_us'])
+  it('is asked of everyone, and can be skipped', () => {
+    expect(shows('heard_about_us', {})).toBe(true)
+    expect(byId('heard_about_us').required).toBeFalsy()
     expect(missingRequired(contact, CURRENT_EMPLOYEE)).toEqual([])
   })
 
