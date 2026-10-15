@@ -25,6 +25,8 @@ export const QUESTIONNAIRE_SECTIONS_ES: QuestionnaireSection[] = [
       { id: "contact_phones", label: "¿A qué número de teléfono podemos llamarle? ¿Tiene otro número de teléfono?", type: "text", helpText: "Escriba primero el mejor número para localizarle. Si tiene un segundo número, agréguelo después.", placeholder: "(310) 555-0000, and (310) 555-0001" },
       { id: "email", label: "¿Cuál es su correo electrónico?", type: "text", placeholder: "usted@ejemplo.com" },
       { id: "preferred_language", label: "¿En qué idioma prefiere que le hablemos y le escribamos?", type: "select", options: ["Inglés", "Español", "Chino", "Coreano", "Otro"] },
+      { id: "heard_about_us", label: "¿Cómo se enteró de nosotros?", type: "select", options: ["Búsqueda en Google", "Google Maps", "Facebook / Instagram / TikTok", "Recomendación de un amigo o familiar", "Otro abogado", "Un anuncio", "Otro"] },
+      { id: "referred_by", label: "¿Quién le recomendó nuestra oficina?", type: "text", helpText: "\"No me acuerdo\" es una respuesta válida." },
     ],
   },
   {

@@ -25,6 +25,8 @@ export const QUESTIONNAIRE_SECTIONS_KO: QuestionnaireSection[] = [
       { id: "contact_phones", label: "연락드릴 전화번호는 무엇입니까? 다른 전화번호도 있으십니까?", type: "text", helpText: "가장 연락이 잘 되는 번호를 먼저 적어 주십시오. 다른 번호가 있으면 그 뒤에 적어 주십시오.", placeholder: "(310) 555-0000, and (310) 555-0001" },
       { id: "email", label: "이메일 주소가 무엇입니까?", type: "text", placeholder: "you@example.com" },
       { id: "preferred_language", label: "저희가 고객님과 소통할 때 어떤 언어를 사용하기를 원하십니까?", type: "select", options: ["영어", "스페인어", "중국어", "한국어", "기타"] },
+      { id: "heard_about_us", label: "저희 사무실을 어떻게 알게 되셨습니까?", type: "select", options: ["구글 검색", "구글 지도", "Facebook / Instagram / TikTok", "친구 또는 가족의 소개", "다른 변호사의 소개", "광고", "기타"] },
+      { id: "referred_by", label: "누구의 소개로 오셨습니까?", type: "text", helpText: "\"기억나지 않습니다\"라고 답하셔도 괜찮습니다." },
     ],
   },
   {

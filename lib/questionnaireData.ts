@@ -1,7 +1,8 @@
 import { QuestionnaireSection } from '@/types'
 
 /**
- * Module 1 of the employment-law intake questionnaire — 77 questions.
+ * Module 1 of the employment-law intake questionnaire — the packet's 77
+ * questions, and two the office added (MODULE_1_OFFICE_ADDITIONS).
  *
  * Scope is deliberately narrow: who the client is, who the employer was, when
  * they worked there, what the job was, how they were paid, the usual schedule,
@@ -118,6 +119,31 @@ export const QUESTIONNAIRE_SECTIONS: QuestionnaireSection[] = [
         label: 'What language would you like us to use with you?',
         type: 'select',
         options: ['English', 'Spanish', 'Chinese', 'Korean', 'Other'],
+      },
+      // Not in the packet. Asked of everyone so the office can count which
+      // marketing channels bring in cases; an unanswered one counts as nothing.
+      {
+        id: 'heard_about_us',
+        label: 'How did you hear about us?',
+        type: 'select',
+        required: true,
+        options: [
+          'Google Search',
+          'Google Maps',
+          'Facebook / Instagram / TikTok',
+          'Friend or family referral',
+          'Another attorney',
+          'Advertisement',
+          'Other',
+        ],
+      },
+      // Optional: a question revealed by a gate is never required (see the test).
+      {
+        id: 'referred_by',
+        label: 'Who referred you to us?',
+        type: 'text',
+        helpText: '"I do not remember" is a fine answer.',
+        showIf: { questionId: 'heard_about_us', value: 'Friend or family referral', orValues: ['Another attorney'] },
       },
     ],
   },
@@ -744,8 +770,9 @@ export const QUESTIONNAIRE_SECTIONS: QuestionnaireSection[] = [
  * This is the "documented stable equivalent" the packet allows in place of
  * Q001–Q077, and the crosswalk its acceptance checks ask for. It is exported so
  * a test can assert that every packet number has exactly one live question and
- * that the questionnaire is exactly 77 questions long — the file above cannot
- * drift from the packet without that test failing.
+ * that, apart from MODULE_1_OFFICE_ADDITIONS, the questionnaire is exactly the
+ * packet's 77 — the file above cannot drift from the packet without that test
+ * failing.
  */
 export const MODULE_1_CROSSWALK: Record<string, string> = {
   Q001: 'full_name',
@@ -826,3 +853,10 @@ export const MODULE_1_CROSSWALK: Record<string, string> = {
   Q076: 'wrongful_not_sure_details',
   Q077: 'written_warnings',
 }
+
+/**
+ * Questions the office added to Module 1 that the packet does not number.
+ * They sit among the packet's questions, and the crosswalk test leaves them out
+ * so it still holds the rest to the packet exactly.
+ */
+export const MODULE_1_OFFICE_ADDITIONS = ['heard_about_us', 'referred_by']

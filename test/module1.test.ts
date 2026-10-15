@@ -8,7 +8,7 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { MODULE_1_CROSSWALK, QUESTIONNAIRE_SECTIONS } from '@/lib/questionnaireData'
+import { MODULE_1_CROSSWALK, MODULE_1_OFFICE_ADDITIONS, QUESTIONNAIRE_SECTIONS } from '@/lib/questionnaireData'
 import { questionnaireSections } from '@/lib/questionnaireSections'
 import {
   effectiveAnswers,
@@ -45,6 +45,7 @@ const CURRENT_EMPLOYEE: Answers = {
   dob: '1990-04-02',
   address: '1200 W 7th St',
   city_state_zip: 'Los Angeles, CA 90017',
+  heard_about_us: 'Google Search',
   still_employed: 'yes',
   job_title: 'Line cook',
   job_duties: 'Prep, grill, close the kitchen.',
@@ -54,8 +55,9 @@ const CURRENT_EMPLOYEE: Answers = {
 const FORMER_EMPLOYEE: Answers = { ...CURRENT_EMPLOYEE, still_employed: 'no' }
 
 describe('the packet', () => {
-  it('asks exactly 77 questions in ten sections', () => {
-    expect(ALL_QUESTIONS).toHaveLength(77)
+  it("asks the packet's 77 questions, and the office's two, in ten sections", () => {
+    expect(MODULE_1_OFFICE_ADDITIONS).toHaveLength(2)
+    expect(ALL_QUESTIONS).toHaveLength(77 + MODULE_1_OFFICE_ADDITIONS.length)
     expect(QUESTIONNAIRE_SECTIONS).toHaveLength(10)
   })
 
@@ -66,8 +68,10 @@ describe('the packet', () => {
 
     const ids = Object.values(MODULE_1_CROSSWALK)
     expect(new Set(ids).size).toBe(77)
-    expect(new Set(ALL_QUESTIONS.map(q => q.id)).size).toBe(77)
-    expect(ids).toEqual(ALL_QUESTIONS.map(q => q.id))
+    expect(new Set(ALL_QUESTIONS.map(q => q.id)).size).toBe(ALL_QUESTIONS.length)
+    // The office's additions are the only questions the packet does not number.
+    for (const id of MODULE_1_OFFICE_ADDITIONS) expect(ids).not.toContain(id)
+    expect(ids).toEqual(ALL_QUESTIONS.map(q => q.id).filter(id => !MODULE_1_OFFICE_ADDITIONS.includes(id)))
   })
 
   it('keeps the section order the packet gives', () => {
@@ -379,7 +383,7 @@ describe('a file answered under the old questionnaire', () => {
     for (const section of QUESTIONNAIRE_SECTIONS) {
       const missing = missingRequired(section, LEGACY_DRAFT).map(q => q.id)
       // Only the always-asked questions this draft genuinely never answered.
-      expect(missing.every(id => ['dob', 'address', 'city_state_zip', 'employer_name', 'job_duties'].includes(id))).toBe(true)
+      expect(missing.every(id => ['dob', 'address', 'city_state_zip', 'heard_about_us', 'employer_name', 'job_duties'].includes(id))).toBe(true)
     }
   })
 })
@@ -391,7 +395,7 @@ describe('the four languages stay in step', () => {
       expect(sections.map(s => s.id)).toEqual(QUESTIONNAIRE_SECTIONS.map(s => s.id))
 
       const localized = sections.flatMap(s => s.questions)
-      expect(localized).toHaveLength(77)
+      expect(localized).toHaveLength(ALL_QUESTIONS.length)
 
       localized.forEach((q, i) => {
         const english = ALL_QUESTIONS[i]
@@ -414,7 +418,7 @@ describe('the four languages stay in step', () => {
     const korean = questionnaireSections('ko').flatMap(s => s.questions)
     const english = ALL_QUESTIONS
     const translated = korean.filter((q, i) => q.label !== english[i].label)
-    expect(translated.length).toBe(77)
+    expect(translated.length).toBe(ALL_QUESTIONS.length)
   })
 })
 
@@ -573,5 +577,30 @@ describe('coming back to a questionnaire that changed underneath you', () => {
     const visible = QUESTIONNAIRE_SECTIONS.filter(s => isVisible(s, live))
     expect(visible).toHaveLength(8)
     expect(resumeSectionIndex(QUESTIONNAIRE_SECTIONS, live)).toBe(7)
+  })
+})
+
+describe('how the client heard about the office', () => {
+  const contact = QUESTIONNAIRE_SECTIONS.find(s => s.id === 'contact')!
+
+  it('is asked of everyone, and cannot be skipped', () => {
+    const { heard_about_us: _, ...skipped } = CURRENT_EMPLOYEE
+    expect(missingRequired(contact, skipped).map(q => q.id)).toEqual(['heard_about_us'])
+    expect(missingRequired(contact, CURRENT_EMPLOYEE)).toEqual([])
+  })
+
+  it('asks who referred them only after a referral', () => {
+    expect(shows('referred_by', { heard_about_us: 'Friend or family referral' })).toBe(true)
+    expect(shows('referred_by', { heard_about_us: 'Another attorney' })).toBe(true)
+    for (const other of ['Google Search', 'Google Maps', 'Facebook / Instagram / TikTok', 'Advertisement', 'Other']) {
+      expect(shows('referred_by', { heard_about_us: other }), other).toBe(false)
+    }
+  })
+
+  it('files the channel in English whichever language it was picked in', () => {
+    for (const { code } of LANGUAGES) {
+      const q = questionnaireSections(code).flatMap(s => s.questions).find(x => x.id === 'heard_about_us')!
+      expect(q.options).toEqual(byId('heard_about_us').options)
+    }
   })
 })

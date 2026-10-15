@@ -25,6 +25,8 @@ export const QUESTIONNAIRE_SECTIONS_ZH: QuestionnaireSection[] = [
       { id: "contact_phones", label: "我们可以打哪个电话号码联系您？您还有另一个电话号码吗？", type: "text", helpText: "请把最方便联系到您的号码写在前面。如果还有第二个号码，请写在后面。", placeholder: "(310) 555-0000，另一个是 (310) 555-0001" },
       { id: "email", label: "您的电子邮箱地址是？", type: "text", placeholder: "you@example.com" },
       { id: "preferred_language", label: "您希望我们用哪种语言与您沟通？", type: "select", options: ["英语", "西班牙语", "中文", "韩语", "其他"] },
+      { id: "heard_about_us", label: "您是通过什么途径知道我们的？", type: "select", options: ["Google 搜索", "Google 地图", "Facebook / Instagram / TikTok", "朋友或家人介绍", "其他律师介绍", "广告", "其他"] },
+      { id: "referred_by", label: "是谁介绍您来找我们的？", type: "text", helpText: "如果记不清，填写“我不记得”即可。" },
     ],
   },
   {
