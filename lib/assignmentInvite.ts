@@ -173,3 +173,28 @@ export function stepInviteSms(
   // twenty-five feels misled; one told twenty-five who spends fifteen does not.
   return write(firstName(name), step.name, String(step.minutes[1]), withLang(`${at.replace(/\/$/, '')}/client`, lang))
 }
+
+/** The line every text to a client ends with, in their language. */
+const STOP_LINE: Record<Lang, string> = {
+  en: 'Reply STOP to stop these texts.',
+  es: 'Responda STOP para no recibir más mensajes.',
+  zh: '回复 STOP 可停止接收短信。',
+  ko: '수신을 원하지 않으시면 STOP 이라고 답장해 주세요.',
+}
+
+/** The longest note a send will carry. Twilio joins a long text up to 1,600 characters. */
+export const OFFICE_NOTE_MAX = 1000
+
+/**
+ * A step sent in the office's own words instead of the standard text.
+ *
+ * Some clients are owed more than the standard line — one who has already told
+ * the office everything by phone, and is about to be asked it again. The note
+ * goes out as written; only the firm's name in front, and the portal's front
+ * door and the STOP line after it, are added, so the client can still tell who
+ * it is from, get in, and opt out.
+ */
+export function officeNoteSms(lang: Lang, note: string, at: string): string {
+  const link = withLang(`${at.replace(/\/$/, '')}/client`, lang)
+  return `${FIRM}: ${note.trim()}\n\n${link}\n${STOP_LINE[lang] ?? STOP_LINE.en}`
+}

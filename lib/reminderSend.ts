@@ -10,6 +10,7 @@ import {
   ReminderKind,
   assignmentOf,
   channelOf,
+  chasedFrom,
   daysBetween,
   resolveLang,
 } from '@/lib/reminderSchedule'
@@ -176,12 +177,14 @@ export async function planManualReminder(
   } else {
     const moduleId = chasing as ModuleId
     const [sendRes, stateRes] = await Promise.all([
-      db.from('client_module_sends').select('sent_at').eq('client_id', clientId).eq('module_id', moduleId).maybeSingle(),
+      db.from('client_module_sends').select('sent_at, created_by').eq('client_id', clientId).eq('module_id', moduleId).maybeSingle(),
       db.from('questionnaire_states').select('submitted, m2_submitted').eq('client_id', clientId).maybeSingle(),
     ])
     if (sendRes.error || stateRes.error) return refuse('Unreadable')
-    if (!sendRes.data?.sent_at) return refuse('NotSent')
-    sentAt = sendRes.data.sent_at
+    // Opened as the client was added is not sent: see chasedFrom.
+    const since = sendRes.data ? chasedFrom(sendRes.data) : null
+    if (!since) return refuse('NotSent')
+    sentAt = since
     submitted = moduleId === 'module2' ? Boolean(stateRes.data?.m2_submitted) : Boolean(stateRes.data?.submitted)
   }
   if (submitted) return refuse('AlreadySubmitted')

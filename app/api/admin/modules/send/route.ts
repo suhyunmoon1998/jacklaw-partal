@@ -42,7 +42,7 @@ export async function GET(req: NextRequest) {
 }
 
 /**
- * POST /api/admin/modules/send  { clientId, moduleId, email?, phone?, lang?, sms? }
+ * POST /api/admin/modules/send  { clientId, moduleId, email?, phone?, lang?, sms?, note? }
  *
  * Records that the module was handed to this client and emails them the link.
  * The record is what the client's own portal reads to decide whether to offer
@@ -69,6 +69,8 @@ export async function POST(req: NextRequest) {
     phone: typeof body?.phone === 'string' ? body.phone : undefined,
     sms: body?.sms === false ? false : undefined,
     lang: body?.lang,
+    // The office's own words in place of the standard text, if they wrote any.
+    note: typeof body?.note === 'string' ? body.note : undefined,
     linkOrigin: req.nextUrl.origin,
     textOrigin: origin(req),
   })

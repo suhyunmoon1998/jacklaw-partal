@@ -5,7 +5,7 @@ import { ModuleDefinition, ModuleId, moduleById, moduleQuestionCount, stepName }
 import { lookupClientEmail, lookupClientLanguage, sendAssignmentEmail } from '@/lib/sendAssignmentEmail'
 import { readSteps } from '@/lib/clientSteps'
 import { isConfigured, sendSms } from '@/lib/twilio'
-import { SmsTarget, chooseSmsTarget, lookupClientSms, stepInviteSms } from '@/lib/assignmentInvite'
+import { OFFICE_NOTE_MAX, SmsTarget, chooseSmsTarget, lookupClientSms, officeNoteSms, stepInviteSms } from '@/lib/assignmentInvite'
 
 /**
  * Handing a client one of the numbered modules — the admin panel's Send
@@ -55,6 +55,8 @@ export type ModuleSendInput = {
   linkOrigin: string
   /** The public address the text links to. */
   textOrigin: string
+  /** The office's own words, sent in place of the standard text. Blank: the standard text. */
+  note?: string
 }
 
 export type ModuleSendPlan = {
@@ -68,6 +70,8 @@ export type ModuleSendPlan = {
   blockedBy: number | null
   link: string
   textOrigin: string
+  /** Trimmed; empty when the standard text goes. */
+  note: string
 }
 
 export type Outcome = { status: number; body: Record<string, unknown> }
@@ -122,6 +126,16 @@ export async function planModuleSend(input: ModuleSendInput): Promise<{ ok: true
       },
     }
   }
+  const note = typeof input.note === 'string' ? input.note.trim() : ''
+  if (note.length > OFFICE_NOTE_MAX) {
+    return {
+      ok: false,
+      outcome: {
+        status: 400,
+        body: { error: `The message is ${note.length} characters. Keep it under ${OFFICE_NOTE_MAX} so it arrives as one text.` },
+      },
+    }
+  }
   const blockedBy = await blockedByStep(clientId, moduleId)
   return {
     ok: true,
@@ -136,6 +150,7 @@ export async function planModuleSend(input: ModuleSendInput): Promise<{ ok: true
       blockedBy,
       link: moduleLink(input.linkOrigin, moduleId, blockedBy !== null, lang),
       textOrigin: input.textOrigin,
+      note,
     },
   }
 }
@@ -181,7 +196,9 @@ export async function performModuleSend(plan: ModuleSendPlan, createdBy: 'admin'
     : isConfigured()
       ? await sendSms(
           phone,
-          stepInviteSms(lang, plan.clientName, { name: stepName(definition, lang), minutes: definition.minutes }, plan.textOrigin)
+          plan.note
+            ? officeNoteSms(lang, plan.note, plan.textOrigin)
+            : stepInviteSms(lang, plan.clientName, { name: stepName(definition, lang), minutes: definition.minutes }, plan.textOrigin)
         )
       : { ok: false as const, error: 'Texting is not switched on for this portal yet.' }
 
@@ -219,6 +236,7 @@ export async function performModuleSend(plan: ModuleSendPlan, createdBy: 'admin'
       questionCount: moduleQuestionCount(moduleId),
       link,
       lang,
+      note: plan.note || undefined,
     })
   } catch (err) {
     console.error('module send email failed:', err)

@@ -22,6 +22,9 @@ import { useState } from 'react'
 import { Lang, LANGUAGES, LANG_ENGLISH_NAME, toLang } from '@/lib/langs'
 import ModalPortal from '@/components/ModalPortal'
 
+/** As lib/assignmentInvite.ts allows; repeated here so this client file does not import a server one. */
+const NOTE_MAX = 1000
+
 const adminHeaders = { 'Content-Type': 'application/json' }
 
 /** Ten digits is what the routes will accept, so the button agrees with them. */
@@ -86,6 +89,8 @@ export default function SendAssignmentDialog({
   const [email, setEmail] = useState(initialEmail)
   const [phone, setPhone] = useState(formatPhone(initialPhone))
   const [lang, setLang] = useState<Lang>(initialLang)
+  /** A module only: the office's own words in place of the standard text. */
+  const [note, setNote] = useState('')
   /**
    * Why a send failed, shown inside this dialog.
    *
@@ -115,7 +120,7 @@ export default function SendAssignmentDialog({
         // an empty box as "do not use this channel" and only an absent key as
         // "fall back to the file". Clearing one is how the office sends by the
         // other alone.
-        body: JSON.stringify({ ...(sendTo ?? {}), email, phone: canText ? phone : '', lang }),
+        body: JSON.stringify({ ...(sendTo ?? {}), email, phone: canText ? phone : '', lang, ...(sendTo ? { note } : {}) }),
       }
     ).catch(() => null)
 
@@ -255,6 +260,27 @@ export default function SendAssignmentDialog({
             Taken from the language on their intake. The questions themselves appear in whichever
             language the client picks in the portal.
           </p>
+
+          {sendTo && (
+            <>
+              <label className="block text-xs font-semibold text-gray-500 mt-3 mb-1.5">
+                Message <span className="font-normal text-gray-400">· optional</span>
+              </label>
+              <textarea
+                value={note}
+                onChange={e => setNote(e.target.value)}
+                maxLength={NOTE_MAX}
+                rows={5}
+                placeholder="Leave blank for the standard text."
+                className="input-field text-sm resize-y"
+              />
+              <p className="text-[11px] text-gray-400 mt-1">
+                Sent as you write it, in place of the standard text, and not translated. The text adds
+                “866 JACK LAW:” in front and the portal link and STOP line after; an email puts it above
+                the button.
+              </p>
+            </>
+          )}
 
           <button
             onClick={copyLink}

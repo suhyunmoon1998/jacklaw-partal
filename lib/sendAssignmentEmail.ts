@@ -62,6 +62,8 @@ export async function sendAssignmentEmail(opts: {
   questionCount: number
   link: string
   lang?: Lang
+  /** The office's own words, in place of the standard greeting. */
+  note?: string
 }): Promise<void> {
   const apiKey = process.env.RESEND_API_KEY
   const fromEmail = process.env.FIRM_FROM_EMAIL ?? 'onboarding@resend.dev'
@@ -79,7 +81,8 @@ export async function sendAssignmentEmail(opts: {
       opts.setName,
       opts.questionCount,
       opts.link,
-      opts.lang ?? 'en'
+      opts.lang ?? 'en',
+      opts.note
     ),
   })
 

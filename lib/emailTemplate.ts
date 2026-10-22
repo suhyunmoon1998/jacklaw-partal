@@ -231,14 +231,25 @@ const ASSIGNMENT_EMAIL_COPY = {
   },
 } as const
 
+/** Text the office typed, made safe to put inside an email. */
+function escapeHtml(text: string): string {
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+}
+
 export function generateAssignmentEmailHtml(
   clientName: string,
   setName: string,
   questionCount: number,
   link: string,
-  lang: Lang = 'en'
+  lang: Lang = 'en',
+  /** The office's own words. They replace the greeting and the opening line, as written. */
+  note?: string
 ): string {
   const c = ASSIGNMENT_EMAIL_COPY[lang]
+  const opening = note?.trim()
+    ? `<p style="margin:0 0 16px 0;color:#374151;font-size:14px;line-height:1.7;">${escapeHtml(note.trim()).replace(/\n/g, '<br/>')}</p>`
+    : `<h2 style="margin:0 0 12px 0;color:#111827;font-size:22px;font-weight:800;">${c.greeting(clientName)}</h2>
+    <p style="margin:0 0 16px 0;color:#374151;font-size:14px;line-height:1.7;">${c.intro}</p>`
   return `
 <!DOCTYPE html>
 <html lang="${lang}">
@@ -257,8 +268,7 @@ export function generateAssignmentEmailHtml(
 
   <!-- Body -->
   <div style="max-width:560px;margin:0 auto;padding:36px 24px;">
-    <h2 style="margin:0 0 12px 0;color:#111827;font-size:22px;font-weight:800;">${c.greeting(clientName)}</h2>
-    <p style="margin:0 0 16px 0;color:#374151;font-size:14px;line-height:1.7;">${c.intro}</p>
+    ${opening}
 
     <div style="background:#ffffff;border:1px solid #e5e7eb;border-radius:12px;padding:20px 24px;margin-bottom:24px;">
       <p style="margin:0 0 4px 0;color:#111827;font-size:17px;font-weight:800;">${setName}</p>

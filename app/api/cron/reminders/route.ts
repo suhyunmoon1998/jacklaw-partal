@@ -10,6 +10,7 @@ import {
   ReminderKind,
   ReminderTarget,
   SentStep,
+  chasedFrom,
   isSendingTime,
   planReminders,
   resolveLang,
@@ -77,7 +78,7 @@ export async function GET(req: NextRequest) {
 
   const db = getSupabase()
   const [sendsRes, statesRes, clientsRes, loggedRes, roundsRes] = await Promise.all([
-    db.from('client_module_sends').select('client_id, module_id, sent_at'),
+    db.from('client_module_sends').select('client_id, module_id, sent_at, created_by'),
     db.from('questionnaire_states').select('client_id, submitted, m2_submitted'),
     db.from('clients').select('id, name, phone, portal_lang, sms_opt_out'),
     db.from('client_reminders').select('client_id, module_id, assignment_id, kind'),
@@ -132,15 +133,21 @@ export async function GET(req: NextRequest) {
   )
 
   const steps: SentStep[] = [
-    ...(sends ?? []).map(s => ({
-      clientId: s.client_id,
-      chasing: s.module_id as ModuleId as Chasing,
-      sentAt: s.sent_at,
-      submitted:
-        s.module_id === 'module2'
-          ? Boolean(submitted.get(s.client_id)?.module2)
-          : Boolean(submitted.get(s.client_id)?.module1),
-    })),
+    // Only a step somebody sent: one merely opened as the client was added
+    // was never announced to them, so there is nothing to remind them of.
+    ...(sends ?? []).flatMap(s => {
+      const sentAt = chasedFrom(s)
+      if (!sentAt) return []
+      return [{
+        clientId: s.client_id,
+        chasing: s.module_id as ModuleId as Chasing,
+        sentAt,
+        submitted:
+          s.module_id === 'module2'
+            ? Boolean(submitted.get(s.client_id)?.module2)
+            : Boolean(submitted.get(s.client_id)?.module1),
+      }]
+    }),
     // A round is finished when the assignment is, which the client's own
     // answers set — so a client part way through is still chased, and one who
     // has answered the last question is not.

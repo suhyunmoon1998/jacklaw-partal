@@ -52,6 +52,20 @@ export const LADDER: { kind: ReminderKind; afterDays: number; channel: 'sms' | '
   { kind: 'call', afterDays: 10, channel: 'call' },
 ]
 
+/**
+ * When a numbered module was sent, for chasing — or null if it never was.
+ *
+ * Adding a client opens Step 1 to them (`created_by` 'on-create') and texts
+ * nobody. Counted from that row, the ladder chased an invitation the client
+ * never got: a client added on 2026-10-13 and never sent anything was texted
+ * on day 2 and day 5 and replied STOP. The office's own Send rewrites the row
+ * with its own time, and the ladder counts from there.
+ */
+export function chasedFrom(row: { sent_at: string | null; created_by?: string | null }): string | null {
+  if (!row.sent_at || row.created_by === 'on-create') return null
+  return row.sent_at
+}
+
 export interface SentStep {
   clientId: string
   chasing: Chasing
