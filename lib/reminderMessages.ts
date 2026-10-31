@@ -235,22 +235,21 @@ const FEE_WAIVER: Record<Lang, Copy> = {
 /**
  * The picture that rides along with a reminder, by rung.
  *
- * Only the first one. A friendly mascot beside "your questionnaire is still
- * waiting" reads as the firm being human about it; the same picture beside
- * "this is our last text" undercuts the one message that needs to land as
- * serious. It also doubles the cost of every message it is attached to, since
- * a picture makes it an MMS.
+ * Only the first one, and only the firm's logo. It was Honey, the office dog,
+ * until 2026-10-29, when the office asked for the logo alone. A picture beside
+ * "this is our last text" would undercut the one message that needs to land
+ * as serious, and it doubles the cost of every message it is attached to,
+ * since a picture makes it an MMS.
  *
  * A path, not a URL: the caller joins it to whatever origin it is running on,
  * so this cannot end up pointing at localhost in production.
  */
 export const IMAGE_FOR: Partial<Record<ReminderKind, string>> = {
   // Only on the first ask. A follow-up round goes to somebody who has already
-  // spent an evening on this office's questions; the dog was for warming up a
-  // cold first contact, and it doubles the cost of the message it rides on.
-  // JPEG, cropped and compressed to ~360KB: carriers resize or reject what is
-  // too big, and the original was five times that with black bars down the side.
-  day2: '/mascot-dog.jpg',
+  // spent an evening on this office's questions, and the picture doubles the
+  // cost of the message it rides on. public/logo.png as a 600px JPEG (~70KB):
+  // carriers resize or reject what is too big, and they do not take SVG.
+  day2: '/logo-mms.jpg',
 }
 
 /** Twilio's voice for each language, so the call is not read in an accent. */

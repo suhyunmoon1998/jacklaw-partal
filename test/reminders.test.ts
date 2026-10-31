@@ -10,6 +10,8 @@
  * number, or asked us to stop". Those are the tests.
  */
 
+import { existsSync, statSync } from 'node:fs'
+import { join } from 'node:path'
 import { invitationSms } from '@/lib/assignmentInvite'
 import { describe, expect, it } from 'vitest'
 import {
@@ -260,7 +262,7 @@ describe('what it says', () => {
   })
 
   /**
-   * The mascot rides on the first nudge only. Beside "this is our last text"
+   * The logo rides on the first nudge only. Beside "this is our last text"
    * it would undercut the one message that has to land as serious — and it
    * turns every message it touches into a costlier MMS.
    */
@@ -268,6 +270,16 @@ describe('what it says', () => {
     expect(IMAGE_FOR.day2).toBeTruthy()
     expect(IMAGE_FOR.day5).toBeUndefined()
     expect(IMAGE_FOR.call).toBeUndefined()
+  })
+
+  it('sends the firm\'s logo, as a file a carrier will take', () => {
+    // The office asked on 2026-10-29 for the logo alone, not Honey the dog.
+    expect(IMAGE_FOR.day2).toBe('/logo-mms.jpg')
+    for (const path of Object.values(IMAGE_FOR)) {
+      const file = join(process.cwd(), 'public', path!)
+      expect(existsSync(file), path).toBe(true)
+      expect(statSync(file).size, path).toBeLessThan(500_000)
+    }
   })
 
   it('keeps the picture as a path, so it cannot point at localhost in production', () => {
