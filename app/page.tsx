@@ -48,7 +48,10 @@ export default function PortalHome() {
 
           {/* Intake Form */}
           <button
-            onClick={() => router.push('/intake')}
+            // The client portal's front door, where someone new can start by
+            // themselves (app/client). /intake kept its answers in the browser
+            // and never reached the office.
+            onClick={() => router.push('/client')}
             className="w-full mb-4 group relative bg-white/5 hover:bg-white/10 active:bg-white/15 border border-white/10 hover:border-gold/50 rounded-2xl p-6 text-left transition-all"
           >
             <div className="flex items-center gap-4">

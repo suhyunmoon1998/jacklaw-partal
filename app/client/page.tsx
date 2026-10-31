@@ -68,6 +68,14 @@ export default function LoginPage() {
    * one set of questionnaire answers and the two jobs are not the same facts.
    */
   const [choices, setChoices] = useState<FoundCase[]>([])
+  /**
+   * A number with no case on it: someone new, starting by themselves. They give
+   * their name, a code is texted to the number, and the code starts their file
+   * (app/api/clients/signup). Null while signing in as before.
+   */
+  const [signup, setSignup] = useState<null | 'name' | 'code'>(null)
+  const [name, setName] = useState('')
+  const [code, setCode] = useState('')
   const router = useRouter()
   const { t, lang, adopt } = useLanguage()
 
@@ -82,6 +90,28 @@ export default function LoginPage() {
     setError('')
     // Editing the number abandons whatever was found for the old one.
     setChoices([])
+  }
+
+  /** Back to the number box, with nothing found or started. */
+  const startOver = () => {
+    setChoices([])
+    setSignup(null)
+    setCode('')
+    setError('')
+    setPhone('')
+  }
+
+  /** What a refused sign-up step means, in the client's language. */
+  const signupError = (reason?: string) => {
+    switch (reason) {
+      case 'wrong-code': return t('signup_wrong_code')
+      case 'expired': return t('signup_expired')
+      case 'too-many': return t('signup_too_many')
+      case 'opted-out': return t('signup_opted_out')
+      case 'bad-name': return t('signup_bad_name')
+      case 'bad-number': return t('signup_bad_number')
+      default: return t('signup_failed')
+    }
   }
 
   /** True when the list cannot be told apart by what is shown on it. */
@@ -125,6 +155,10 @@ export default function LoginPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    await findAndSignIn()
+  }
+
+  const findAndSignIn = async () => {
     setError('')
     setLoading(true)
 
@@ -142,10 +176,75 @@ export default function LoginPage() {
     // they came here for.
     if (found.length === 1) { await signIn(found[0]); return }
     else if (found.length > 1) setChoices(found)
-    else setError(t('not_found'))
+    // Nobody on this number: a new client, who can start here themselves — once
+    // the number is a whole one a code can be texted to.
+    else if (normalized.length < 10) setError(t('signup_bad_number'))
+    else setSignup('name')
 
     setLoading(false)
   }
+
+  /** Texts the code. A number the office added in the meantime signs in instead. */
+  const sendCode = async (e?: React.FormEvent) => {
+    e?.preventDefault()
+    if (!name.trim()) { setError(t('signup_bad_name')); return }
+    setError('')
+    setLoading(true)
+    const res = await fetch('/api/clients/signup/code', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone: normalizePhone(phone), lang }),
+    }).catch(() => null)
+    const body = res ? await res.json().catch(() => ({})) : {}
+    setLoading(false)
+    if (res?.ok) { setCode(''); setSignup('code'); return }
+    if (body.reason === 'on-file') { setSignup(null); await findAndSignIn(); return }
+    setError(signupError(body.reason))
+  }
+
+  /** Checks the code and starts their file; the server signs this browser in to it. */
+  const startFile = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError('')
+    setLoading(true)
+    const res = await fetch('/api/clients/signup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone: normalizePhone(phone), code, name, lang }),
+    }).catch(() => null)
+    const body = res ? await res.json().catch(() => ({})) : {}
+    if (!res?.ok || !body.client) {
+      setLoading(false)
+      if (body.reason === 'on-file') { setSignup(null); await findAndSignIn(); return }
+      setError(signupError(body.reason))
+      return
+    }
+    setSession({
+      clientId: body.client.id,
+      phone: normalizePhone(phone),
+      name: body.client.name,
+      caseType: body.client.case_type ?? '',
+    })
+    router.replace(nextPath())
+  }
+
+  const errorBox = error && (
+    <div className="bg-red-50 border border-red-200 rounded-xl p-4">
+      <div className="flex gap-3">
+        <svg className="w-5 h-5 text-red-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M12 3a9 9 0 100 18A9 9 0 0012 3z" />
+        </svg>
+        <p className="text-red-700 text-sm leading-snug">{error}</p>
+      </div>
+    </div>
+  )
+
+  const spinner = (
+    <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+    </svg>
+  )
 
   return (
     <div className="min-h-screen bg-canvas flex flex-col animate-fade-in">
@@ -166,8 +265,12 @@ export default function LoginPage() {
       <main className="flex-1 flex items-start justify-center px-4 pt-8 pb-16">
         <div className="w-full max-w-md">
           <div className="card animate-slide-up stagger-1">
-            <h1 className="text-[22px] font-semibold tracking-tight text-gray-950 mb-1">{t('welcome')}</h1>
-            <p className="text-gray-500 text-[15px] leading-relaxed mb-7">{t('welcome_sub')}</p>
+            <h1 className="text-[22px] font-semibold tracking-tight text-gray-950 mb-1">
+              {signup ? t('signup_title') : t('welcome')}
+            </h1>
+            <p className="text-gray-500 text-[15px] leading-relaxed mb-7">
+              {signup ? t('signup_sub') : t('welcome_sub')}
+            </p>
 
             {choices.length > 0 ? (
               <div className="space-y-3">
@@ -202,12 +305,84 @@ export default function LoginPage() {
                   </button>
                 ))}
                 <button
-                  onClick={() => { setChoices([]); setPhone(''); }}
+                  onClick={startOver}
                   className="text-sm font-medium text-gray-500 hover:text-gray-900 transition-colors pt-1"
                 >
                   {t('use_another_number')}
                 </button>
               </div>
+            ) : signup ? (
+              <form onSubmit={signup === 'name' ? sendCode : startFile} className="space-y-5" noValidate>
+                <p className="text-sm text-gray-600">
+                  {t('phone_label')}: <span className="font-semibold text-gray-950">{phone}</span>
+                </p>
+
+                {signup === 'name' ? (
+                  <div>
+                    <label htmlFor="name" className="label">{t('signup_name_label')}</label>
+                    <input
+                      id="name"
+                      value={name}
+                      onChange={e => { setName(e.target.value); setError('') }}
+                      className="input-field text-lg"
+                      autoFocus
+                      autoComplete="name"
+                      maxLength={100}
+                      disabled={loading}
+                    />
+                  </div>
+                ) : (
+                  <div>
+                    <p className="text-sm text-gray-600 mb-3">
+                      {t('signup_code_sent')} <span className="font-semibold text-gray-950 whitespace-nowrap">{phone}</span>
+                    </p>
+                    <label htmlFor="code" className="label">{t('signup_code_label')}</label>
+                    <input
+                      id="code"
+                      value={code}
+                      onChange={e => { setCode(e.target.value.replace(/\D/g, '').slice(0, 6)); setError('') }}
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      placeholder="000000"
+                      className="input-field text-lg tracking-[0.3em]"
+                      autoFocus
+                      disabled={loading}
+                    />
+                  </div>
+                )}
+
+                {errorBox}
+
+                <button
+                  type="submit"
+                  disabled={loading || (signup === 'name' ? name.trim().length < 2 : code.length !== 6)}
+                  className="btn-primary"
+                >
+                  {loading ? (
+                    <span className="flex items-center justify-center gap-2">{spinner}{t('checking')}</span>
+                  ) : signup === 'name' ? t('signup_send_code') : t('signup_start')}
+                </button>
+
+                <div className="flex flex-wrap justify-between gap-2">
+                  <button
+                    type="button"
+                    onClick={startOver}
+                    className="text-sm font-medium text-gray-500 hover:text-gray-900 transition-colors"
+                  >
+                    {t('use_another_number')}
+                  </button>
+                  {signup === 'code' && (
+                    <button
+                      type="button"
+                      onClick={() => { void sendCode() }}
+                      disabled={loading}
+                      className="text-sm font-medium text-gray-500 hover:text-gray-900 transition-colors"
+                    >
+                      {t('signup_resend')}
+                    </button>
+                  )}
+                </div>
+              </form>
             ) : (
             <form onSubmit={handleSubmit} className="space-y-5" noValidate>
               <div>
@@ -227,16 +402,7 @@ export default function LoginPage() {
                 <p className="mt-2 text-[13px] text-gray-500">{t('phone_hint')}</p>
               </div>
 
-              {error && (
-                <div className="bg-red-50 border border-red-200 rounded-xl p-4">
-                  <div className="flex gap-3">
-                    <svg className="w-5 h-5 text-red-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M12 3a9 9 0 100 18A9 9 0 0012 3z" />
-                    </svg>
-                    <p className="text-red-700 text-sm leading-snug">{error}</p>
-                  </div>
-                </div>
-              )}
+              {errorBox}
 
               <button
                 type="submit"
@@ -244,13 +410,7 @@ export default function LoginPage() {
                 className="btn-primary"
               >
                 {loading ? (
-                  <span className="flex items-center justify-center gap-2">
-                    <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                    </svg>
-                    {t('checking')}
-                  </span>
+                  <span className="flex items-center justify-center gap-2">{spinner}{t('checking')}</span>
                 ) : t('continue_btn')}
               </button>
             </form>

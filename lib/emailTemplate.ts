@@ -232,7 +232,7 @@ const ASSIGNMENT_EMAIL_COPY = {
 } as const
 
 /** Text the office typed, made safe to put inside an email. */
-function escapeHtml(text: string): string {
+export function escapeHtml(text: string): string {
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 }
 

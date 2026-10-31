@@ -25,7 +25,11 @@ describe('a client number', () => {
       expect(src).toContain('.in(\'phone\', phoneVariants(phoneKey(digits)))')
       expect(src).not.toMatch(/verifiedPhone|signInCode|clients\/code/)
     }
-    // No code step on the page, and no code routes.
-    expect(read('app/client/page.tsx')).not.toMatch(/clients\/code|code_sent|verify_btn/)
+    // No code step for a number on file, and no sign-in code routes. The only
+    // code on the page is the sign-up's, for a number with no case on it
+    // (app/api/clients/signup, 2026-10-30).
+    const page = read('app/client/page.tsx')
+    expect(page).not.toMatch(/clients\/code|verify_btn|t\('code_sent'\)/)
+    expect(page).toContain('if (found.length === 1) { await signIn(found[0]); return }')
   })
 })
