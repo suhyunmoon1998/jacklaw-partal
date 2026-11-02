@@ -62,6 +62,7 @@ import { AnswerValue, QuestionnaireState, UploadedDocument } from '@/types'
 import CaseFoldersPanel from '@/components/admin/CaseFoldersPanel'
 import QuestionSetsPanel from '@/components/admin/QuestionSetsPanel'
 import FeeWaiverPanel from '@/components/admin/FeeWaiverPanel'
+import ConsultationsPanel from '@/components/admin/ConsultationsPanel'
 import ClientAssignments from '@/components/admin/ClientAssignments'
 import { ModuleId } from '@/lib/modules'
 import { ModuleProgress, ModuleSend } from '@/lib/moduleSteps'
@@ -1141,7 +1142,7 @@ export default function AdminPage() {
    * a case and working inside it is the way in — the people not yet filed are
    * under Unassigned.
    */
-  const [activeTab, setActiveTab] = useState<'cases' | 'intake' | 'question-sets' | 'fee-waiver'>('cases')
+  const [activeTab, setActiveTab] = useState<'cases' | 'intake' | 'question-sets' | 'fee-waiver' | 'consultations'>('cases')
   const [intakeSubmissions, setIntakeSubmissions] = useState<IntakeSubmission[]>([])
   const [viewingGFROGDraft, setViewingGFROGDraft] = useState<GeneratedGFROGDraft | null>(null)
   const [selectedSubmission, setSelectedSubmission] = useState<IntakeSubmission | null>(null)
@@ -1231,6 +1232,8 @@ export default function AdminPage() {
       if (next) { window.location.assign(next); return }
       if (!ok) clearAdminSession()
       setAuthenticated(ok)
+      // The booking emails link to ?tab=consultations.
+      if (new URLSearchParams(window.location.search).get('tab') === 'consultations') setActiveTab('consultations')
       if (ok) {
         setUnreadCount(getUnreadNotificationCount())
         fetchClients()
@@ -1648,6 +1651,16 @@ export default function AdminPage() {
             >
               Fee Waiver
             </button>
+            <button
+              onClick={() => setActiveTab('consultations')}
+              className={`pb-3 font-semibold transition-colors ${
+                activeTab === 'consultations'
+                  ? 'border-b-2 border-gold text-black'
+                  : 'text-gray-500 hover:text-black'
+              }`}
+            >
+              Consultations
+            </button>
           </div>
         </div>
 
@@ -1657,6 +1670,7 @@ export default function AdminPage() {
             {activeTab === 'cases' ? 'Cases'
               : activeTab === 'intake' ? 'Intake Submissions'
               : activeTab === 'fee-waiver' ? 'Fee Waiver'
+              : activeTab === 'consultations' ? 'Consultations'
               : 'Question Sets'}
           </h1>
           <p className="text-gray-500 text-sm mt-1">
@@ -1666,6 +1680,8 @@ export default function AdminPage() {
               ? `${intakeSubmissions.length} total submissions · ${intakeSubmissions.filter(s => !s.reviewed).length} unreviewed`
               : activeTab === 'fee-waiver'
               ? 'Court fee waiver questions (FW-001), sent in each client\'s language'
+              : activeTab === 'consultations'
+              ? 'Free consultations booked on /book, each checked for conflicts before anyone meets'
               : 'Reusable questionnaires you can send to individual clients'}
           </p>
         </div>
@@ -1708,6 +1724,8 @@ export default function AdminPage() {
         {activeTab === 'question-sets' && <QuestionSetsPanel />}
 
         {activeTab === 'fee-waiver' && <FeeWaiverPanel />}
+
+        {activeTab === 'consultations' && <ConsultationsPanel />}
 
         {/* Intake Submissions View */}
         {activeTab === 'intake' && (

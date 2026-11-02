@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse, after } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
 import { sendIntakeNotificationEmails } from '@/lib/sendIntakeEmail'
+import { origin } from '@/lib/assignmentInvite'
 import { submissionLanguage } from '@/lib/machineTranslate'
 import { denyClient } from '@/lib/clientAuth'
 import { claimModule2Submission, readDamagesWhileTimeAllows } from '@/lib/damagesAuto'
@@ -151,7 +152,7 @@ export async function POST(req: NextRequest) {
       // the portal in English and answered in Spanish, so neither alone is
       // enough.
       const lang = [client.portal_lang, submissionLanguage(answers)].find(l => l && l !== 'en') ?? 'en'
-      await sendIntakeNotificationEmails(client.name, client.case_type, answers, moduleId, lang)
+      await sendIntakeNotificationEmails(client.name, client.case_type, answers, moduleId, lang, origin(req))
     }
 
     // Module 2 is where the pay, the hours and the breaks are answered, so the

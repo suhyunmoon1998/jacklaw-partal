@@ -91,6 +91,27 @@ export default function PortalHome() {
             </div>
           </button>
 
+          {/* Free consultation */}
+          <button
+            onClick={() => router.push('/book')}
+            className="w-full mb-4 group relative bg-white/5 hover:bg-white/10 active:bg-white/15 border border-white/10 hover:border-gold/50 rounded-2xl p-6 text-left transition-all"
+          >
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-gold/15 group-hover:bg-gold rounded-xl flex items-center justify-center shrink-0 transition-colors">
+                <svg className="w-6 h-6 text-gold group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+              </div>
+              <div className="flex-1">
+                <p className="text-white font-bold text-base">{t('home_book_title')}</p>
+                <p className="text-white/60 text-sm mt-0.5">{t('home_book_sub')}</p>
+              </div>
+              <svg className="w-5 h-5 text-white/20 group-hover:text-gold transition-colors shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </div>
+          </button>
+
           {/* Admin Portal */}
           <button
             onClick={() => router.push('/admin')}

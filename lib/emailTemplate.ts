@@ -126,7 +126,7 @@ export function generateIntakeEmailHtml(
 </html>`.trim()
 }
 
-export function generateClientThankYouEmailHtml(clientName: string, calendlyUrl: string): string {
+export function generateClientThankYouEmailHtml(clientName: string, bookingUrl: string): string {
   return `
 <!DOCTYPE html>
 <html lang="en">
@@ -155,7 +155,7 @@ export function generateClientThankYouEmailHtml(clientName: string, calendlyUrl:
     </p>
 
     <div style="text-align:center;margin-bottom:28px;">
-      <a href="${calendlyUrl}" style="display:inline-block;background:#E07820;color:#ffffff;font-size:15px;font-weight:700;text-decoration:none;padding:14px 32px;border-radius:99px;">
+      <a href="${bookingUrl}" style="display:inline-block;background:#E07820;color:#ffffff;font-size:15px;font-weight:700;text-decoration:none;padding:14px 32px;border-radius:99px;">
         Schedule Your Consultation
       </a>
     </div>
