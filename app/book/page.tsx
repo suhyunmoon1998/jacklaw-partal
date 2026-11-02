@@ -2,7 +2,8 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import BookingShell, { ErrorNote, Spinner, bookingFormat } from '@/components/BookingShell'
+import BookingShell, { ErrorNote, Spinner, bookingFormat, useVisitorZone } from '@/components/BookingShell'
+import SlotPicker, { SlotDay } from '@/components/SlotPicker'
 import { formatPhone } from '@/lib/auth'
 import { typedPhoneDigits } from '@/lib/phoneNumber'
 import { useLanguage } from '@/lib/i18n'
@@ -18,18 +19,14 @@ import type { BookingField } from '@/lib/consultations/request'
  * times.
  *
  * Linked from the intake thank-you email and the portal's front page, in
- * place of the Calendly link the office used before.
+ * place of the Calendly link the office used before. Times are Pacific; a
+ * visitor elsewhere sees their own clock beside them (components/SlotPicker).
  */
-
-interface Day {
-  date: string
-  slots: string[]
-}
 
 interface Slots {
   open: boolean
   durationMinutes: number
-  days: Day[]
+  days: SlotDay[]
 }
 
 type Phase = 'loading' | 'failed' | 'ready' | 'done'
@@ -46,6 +43,7 @@ const FIELD_ERROR: Record<BookingField, 'book_err_start' | 'book_err_name' | 'bo
 export default function BookPage() {
   const { t, tf, lang } = useLanguage()
   const f = useMemo(() => bookingFormat(lang), [lang])
+  const visitorZone = useVisitorZone()
 
   const [phase, setPhase] = useState<Phase>('loading')
   const [slots, setSlots] = useState<Slots | null>(null)
@@ -84,15 +82,7 @@ export default function BookPage() {
     load()
   }, [load])
 
-  const today = slots?.days.find(d => d.date === day)
   const anyOpen = Boolean(slots?.days.some(d => d.slots.length))
-
-  // The calendar starts on the weekday of the first date, so its columns line up.
-  const leading = slots?.days.length ? new Date(`${slots.days[0].date}T12:00:00Z`).getUTCDay() : 0
-  const weekdayHeads = useMemo(() => {
-    // 2026-11-01 is a Sunday; the seven days after it name the columns.
-    return Array.from({ length: 7 }, (_, i) => f.weekdayShort(`2026-11-0${i + 1}`))
-  }, [f])
 
   async function submit(e: FormEvent) {
     e.preventDefault()
@@ -147,6 +137,9 @@ export default function BookPage() {
           <h1 className="text-[22px] font-semibold tracking-tight text-gray-950 mb-1">{t('book_done_title')}</h1>
           <p className="text-gray-950 font-semibold text-[17px] mt-3">{f.when(booked.start)}</p>
           <p className="text-gray-500 text-sm mt-1">{t('book_times_in')}</p>
+          {visitorZone && (
+            <p className="text-gray-500 text-sm">{tf('book_your_time', { when: f.localWhen(booked.start, visitorZone) })}</p>
+          )}
           <p className="text-gray-600 text-[15px] mt-4">{tf('book_done_sub', { email })}</p>
 
           {booked.meetUrl && (
@@ -202,80 +195,26 @@ export default function BookPage() {
               {error && <div className="mb-4"><ErrorNote>{error}</ErrorNote></div>}
 
               {!start ? (
-                <>
-                  <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 mb-3">
-                    <h2 className="text-sm font-semibold text-gray-950">{t('book_pick_day')}</h2>
-                    <p className="text-xs text-gray-500">{t('book_times_in')}</p>
-                  </div>
-                  <p className="text-xs font-medium text-gray-500 mb-2">
-                    {f.month(slots.days[0].date)}
-                    {f.month(slots.days[slots.days.length - 1].date) !== f.month(slots.days[0].date) &&
-                      ` – ${f.month(slots.days[slots.days.length - 1].date)}`}
-                  </p>
-                  <div className="grid grid-cols-7 gap-1.5 text-center" role="grid">
-                    {weekdayHeads.map(w => (
-                      <div key={w} className="text-[11px] font-medium text-gray-400 pb-1">{w}</div>
-                    ))}
-                    {Array.from({ length: leading }, (_, i) => <div key={`pad-${i}`} />)}
-                    {slots.days.map(d => {
-                      const open = d.slots.length > 0
-                      const selected = d.date === day
-                      return (
-                        <button
-                          key={d.date}
-                          type="button"
-                          disabled={!open}
-                          onClick={() => setDay(d.date)}
-                          aria-pressed={selected}
-                          aria-label={f.dayLong(d.date)}
-                          className={`h-11 rounded-xl text-[15px] font-semibold transition-colors ${
-                            selected
-                              ? 'bg-gold text-white shadow-sm'
-                              : open
-                              ? 'bg-white border border-gray-300 text-gray-950 hover:border-gold'
-                              : 'text-gray-300 cursor-not-allowed'
-                          }`}
-                        >
-                          {f.dayNumber(d.date)}
-                        </button>
-                      )
-                    })}
-                  </div>
-
-                  {day && (
-                    <div className="mt-6">
-                      <h2 className="text-sm font-semibold text-gray-950 mb-3">
-                        {t('book_pick_time')} · <span className="font-normal text-gray-600">{f.dayLong(day)}</span>
-                      </h2>
-                      {today?.slots.length ? (
-                        <div className="grid grid-cols-3 gap-2">
-                          {today.slots.map(s => (
-                            <button
-                              key={s}
-                              type="button"
-                              onClick={() => {
-                                setStart(s)
-                                setError('')
-                                setBadField(null)
-                              }}
-                              className="py-2.5 rounded-xl border border-gray-300 bg-white text-[15px] font-semibold text-gray-950 hover:border-gold hover:text-gold-dark transition-colors"
-                            >
-                              {f.time(s)}
-                            </button>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="text-sm text-gray-500">{t('book_no_times_day')}</p>
-                      )}
-                    </div>
-                  )}
-                </>
+                <SlotPicker
+                  days={slots.days}
+                  day={day}
+                  onDay={setDay}
+                  visitorZone={visitorZone}
+                  onPick={s => {
+                    setStart(s)
+                    setError('')
+                    setBadField(null)
+                  }}
+                />
               ) : (
                 <form onSubmit={submit} className="space-y-5" noValidate>
                   <div className="flex items-center justify-between gap-3 bg-canvas border border-line rounded-xl px-4 py-3">
                     <div className="min-w-0">
                       <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">{t('book_selected')}</p>
                       <p className="text-[15px] font-semibold text-gray-950">{f.when(start)}</p>
+                      {visitorZone && (
+                        <p className="text-xs text-gray-500">{tf('book_your_time', { when: f.localWhen(start, visitorZone) })}</p>
+                      )}
                     </div>
                     <button type="button" onClick={() => setStart(null)} className="text-sm font-semibold text-gold-dark hover:text-gold shrink-0">
                       {t('book_change')}

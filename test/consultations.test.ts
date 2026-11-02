@@ -18,7 +18,13 @@ import { parseDayLine, parseWeeklyHours, readWeeklyHours } from '@/lib/consultat
 import { DEFAULT_RULES, HostAvailability, freeHostsAt, openSlots } from '@/lib/consultations/slots'
 import { findConflicts, nameTokens, needsReview, sameName, splitNames, PartyOnFile } from '@/lib/consultations/conflicts'
 import { readBookingRequest } from '@/lib/consultations/request'
-import { consultationIcs, clientEmailHtml, clientEmailSubject, formatWhen, BookingForEmail } from '@/lib/consultations/emails'
+import { consultationIcs, clientEmailHtml, clientEmailSubject, formatWhen, officeRescheduledHtml, BookingForEmail } from '@/lib/consultations/emails'
+import { officeRecipients } from '@/lib/consultations/notify'
+import { bookingFormat } from '@/components/BookingShell'
+import { DICTIONARIES, en } from '@/lib/translations'
+import { LANGUAGES, TRANSLATED_LANGS } from '@/lib/langs'
+import { clientThankYouSubject, generateClientThankYouEmailHtml } from '@/lib/emailTemplate'
+import type { ClientEmailKind } from '@/lib/consultations/emails'
 import { manageToken, validManageToken } from '@/lib/consultations/manageLink'
 
 const LA = 'America/Los_Angeles'
@@ -243,6 +249,7 @@ const BOOKING: BookingForEmail = {
   meetUrl: 'https://meet.google.com/abc-defg-hij',
   manageUrl: 'https://portal.example/book/manage?b=x&t=y&lang=ko',
   hostName: 'Jack',
+  hostEmail: 'jack@jacklaw.com',
   adverseParty: 'Acme',
   otherParties: '',
   summary: '',
@@ -286,5 +293,108 @@ describe('the manage link', () => {
     expect(validManageToken('b2', token, 'secret')).toBe(false)
     expect(validManageToken('b1', token, 'rotated')).toBe(false)
     expect(validManageToken('b1', undefined, 'secret')).toBe(false)
+  })
+})
+
+describe('moving a booking', () => {
+  it('tells the client the new time, in their language, with the video link and a calendar update', () => {
+    expect(clientEmailSubject('rescheduled', BOOKING)).toContain('상담 시간이 변경되었습니다')
+    const html = clientEmailHtml('rescheduled', BOOKING, '')
+    expect(html).toContain(BOOKING.meetUrl)
+    expect(html).toContain('첨부 파일')
+  })
+
+  it('keeps one calendar entry per booking: same UID, a later SEQUENCE', () => {
+    const first = consultationIcs(BOOKING, AT('2026-11-01T00:00:00Z'))
+    const moved = consultationIcs({ ...BOOKING, start: AT('2026-11-03T17:00:00Z') }, AT('2026-11-02T00:00:00Z'))
+    const uid = (ics: string) => ics.match(/UID:(.+)/)![1]
+    const seq = (ics: string) => Number(ics.match(/SEQUENCE:(\d+)/)![1])
+    expect(uid(moved)).toBe(uid(first))
+    expect(seq(moved)).toBeGreaterThan(seq(first))
+  })
+
+  it('shows the office the new time and the old one struck through', () => {
+    const html = officeRescheduledHtml({ ...BOOKING, lang: 'en' }, AT('2026-11-02T17:00:00Z'), 'Anna', '')
+    expect(html).toContain('Monday, November 2, 2026 at 9:00 AM')
+    expect(html).toContain('with Anna')
+    expect(html).toContain('line-through')
+  })
+})
+
+describe('who the office emails go to', () => {
+  it('reaches the firm and the host once each', () => {
+    expect(officeRecipients('Intake@JackLaw.com', 'jack@jacklaw.com', 'intake@jacklaw.com', null)).toEqual([
+      'intake@jacklaw.com',
+      'jack@jacklaw.com',
+    ])
+    expect(officeRecipients(undefined, 'jack@jacklaw.com')).toEqual(['jack@jacklaw.com'])
+    expect(officeRecipients(undefined, null, '')).toEqual([])
+  })
+})
+
+describe('the visitor’s own clock beside Pacific', () => {
+  const f = bookingFormat('en')
+  const nine = '2026-11-02T17:00:00.000Z'
+
+  it('gives their time, and whether it falls on another day there', () => {
+    expect(f.localTime(nine, 'America/New_York')).toBe('12:00 PM')
+    expect(f.localDayShift(nine, 'America/New_York')).toBe(0)
+    // 9am Monday in Los Angeles is 2am Tuesday in Seoul.
+    expect(f.localTime(nine, 'Asia/Seoul')).toBe('2:00 AM')
+    expect(f.localDayShift(nine, 'Asia/Seoul')).toBe(1)
+    // 11pm Monday in Los Angeles is 9pm Monday in Honolulu, though already Tuesday in UTC.
+    expect(f.localDayShift('2026-11-03T07:00:00.000Z', 'Pacific/Honolulu')).toBe(0)
+  })
+
+  it('names the zone and the day in full where it is shown', () => {
+    expect(f.localWhen(nine, 'Asia/Seoul')).toMatch(/Tue, Nov 3, 2:00 AM GMT\+9/)
+  })
+})
+
+describe('every booking screen and email in English, Spanish, Chinese and Korean', () => {
+  const bookingKeys = (Object.keys(en) as (keyof typeof en)[]).filter(k => /^(book_|manage_|home_book_)/.test(k))
+
+  it('has every booking string translated, not left in English', () => {
+    expect(bookingKeys.length).toBeGreaterThan(60)
+    for (const lang of TRANSLATED_LANGS) {
+      for (const key of bookingKeys) {
+        const text = DICTIONARIES[lang][key]
+        expect(text, `${lang}.${key} is empty`).toBeTruthy()
+        expect(text, `${lang}.${key} is still English`).not.toBe(en[key])
+        // A {placeholder} in English must survive translation, or the page prints it raw.
+        for (const hole of en[key].match(/\{\w+\}/g) ?? []) expect(text, `${lang}.${key} lost ${hole}`).toContain(hole)
+      }
+    }
+  })
+
+  const KINDS: ClientEmailKind[] = ['booked', 'rescheduled', 'reminder', 'cancelled-by-client', 'cancelled-by-office']
+  const englishHeading = (kind: ClientEmailKind) => clientEmailSubject(kind, { ...BOOKING, lang: 'en' }).split(' — ')[0]
+
+  it('writes every client email in the client’s own language', () => {
+    for (const { code } of LANGUAGES) {
+      for (const kind of KINDS) {
+        const b = { ...BOOKING, lang: code }
+        const html = clientEmailHtml(kind, b, 'https://portal.example/book')
+        expect(html).toContain(`<html lang="${code}">`)
+        if (code !== 'en') {
+          expect(html, `${code} ${kind} carries the English heading`).not.toContain(englishHeading(kind))
+          expect(clientEmailSubject(kind, b)).not.toContain(englishHeading(kind))
+        }
+      }
+      expect(consultationIcs({ ...BOOKING, lang: code })).toMatch(/SUMMARY:.+866 JACK LAW/)
+    }
+  })
+
+  it('sends the intake thank-you, with its booking link, in the client’s language', () => {
+    for (const { code } of LANGUAGES) {
+      const html = generateClientThankYouEmailHtml('<Ana>', `https://portal.example/book?lang=${code}`, code)
+      expect(html).toContain(`<html lang="${code}">`)
+      expect(html).toContain(`/book?lang=${code}`)
+      expect(html).not.toContain('<Ana>')
+      if (code !== 'en') {
+        expect(html).not.toContain('Schedule Your Consultation')
+        expect(clientThankYouSubject(code)).not.toBe(clientThankYouSubject('en'))
+      }
+    }
   })
 })

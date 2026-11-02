@@ -1,17 +1,22 @@
 import {
   BookingForEmail,
   ClientEmailKind,
+  WITH_CALENDAR_FILE,
   clientEmailHtml,
   clientEmailSubject,
   consultationIcs,
   officeBookedHtml,
   officeCancelledHtml,
+  officeRescheduledHtml,
 } from './emails'
 import { needsReview } from './conflicts'
 
 /**
  * Sends what emails.ts renders. Never throws: a booking that is on the
  * calendar stays booked when an email fails, and the failure is logged.
+ *
+ * The office's emails go to FIRM_EMAIL and to the host the consultation was
+ * given to — the calendar event alone is easy to miss among a day's meetings.
  */
 
 async function resend() {
@@ -35,7 +40,7 @@ export async function emailClient(kind: ClientEmailKind, b: BookingForEmail, boo
       to: [b.email],
       subject: clientEmailSubject(kind, b),
       html: clientEmailHtml(kind, b, bookUrl),
-      ...(kind === 'booked'
+      ...(WITH_CALENDAR_FILE.includes(kind)
         ? { attachments: [{ filename: 'consultation.ics', content: Buffer.from(consultationIcs(b)), contentType: 'text/calendar' }] }
         : {}),
     })
@@ -50,21 +55,26 @@ export async function emailClient(kind: ClientEmailKind, b: BookingForEmail, boo
   }
 }
 
-async function emailOffice(subject: string, html: string): Promise<void> {
-  const firmEmail = process.env.FIRM_EMAIL
+/** FIRM_EMAIL and the host, once each. */
+export function officeRecipients(firmEmail: string | undefined, ...hosts: (string | null | undefined)[]): string[] {
+  const all = [firmEmail, ...hosts].map(a => a?.trim().toLowerCase()).filter((a): a is string => Boolean(a && a.includes('@')))
+  return Array.from(new Set(all))
+}
+
+async function emailOffice(subject: string, html: string, ...hosts: (string | null | undefined)[]): Promise<void> {
+  const to = officeRecipients(process.env.FIRM_EMAIL, ...hosts)
   const client = await resend()
-  if (!client || !firmEmail) return
+  if (!client || !to.length) return
   try {
-    const { error } = await client.emails.send({ from: from(), to: [firmEmail], subject, html })
+    const { error } = await client.emails.send({ from: from(), to, subject, html })
     if (error) console.error('consultation email (office):', error)
   } catch (err) {
     console.error('consultation email (office):', err instanceof Error ? err.message : err)
   }
 }
 
-export async function emailOfficeBooked(b: BookingForEmail, adminUrl: string): Promise<void> {
-  const flag = needsReview(b.conflicts) ? '⚠ Conflict review: ' : b.conflicts === null ? '⚠ Not conflict-checked: ' : ''
-  const when = b.start.toLocaleString('en-US', {
+const shortWhen = (d: Date) =>
+  d.toLocaleString('en-US', {
     timeZone: 'America/Los_Angeles',
     weekday: 'short',
     month: 'short',
@@ -72,9 +82,26 @@ export async function emailOfficeBooked(b: BookingForEmail, adminUrl: string): P
     hour: 'numeric',
     minute: '2-digit',
   })
-  await emailOffice(`${flag}Consultation booked: ${b.name} — ${when}`, officeBookedHtml(b, adminUrl))
+
+export async function emailOfficeBooked(b: BookingForEmail, adminUrl: string): Promise<void> {
+  const flag = needsReview(b.conflicts) ? '⚠ Conflict review: ' : b.conflicts === null ? '⚠ Not conflict-checked: ' : ''
+  await emailOffice(`${flag}Consultation booked: ${b.name} — ${shortWhen(b.start)}`, officeBookedHtml(b, adminUrl), b.hostEmail)
+}
+
+export async function emailOfficeRescheduled(
+  b: BookingForEmail,
+  previous: { start: Date; hostName: string; hostEmail: string | null },
+  adminUrl: string
+): Promise<void> {
+  await emailOffice(
+    `Consultation rescheduled: ${b.name} — now ${shortWhen(b.start)}`,
+    officeRescheduledHtml(b, previous.start, previous.hostName, adminUrl),
+    b.hostEmail,
+    // A host who lost the consultation to another is told too.
+    previous.hostEmail
+  )
 }
 
 export async function emailOfficeCancelled(b: BookingForEmail, by: 'client' | 'office', adminUrl: string): Promise<void> {
-  await emailOffice(`Consultation cancelled: ${b.name}`, officeCancelledHtml(b, by, adminUrl))
+  await emailOffice(`Consultation cancelled: ${b.name}`, officeCancelledHtml(b, by, adminUrl), b.hostEmail)
 }

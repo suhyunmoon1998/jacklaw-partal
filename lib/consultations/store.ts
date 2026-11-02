@@ -1,18 +1,18 @@
 import { getSupabase } from '@/lib/supabase'
 import { Lang, toLang } from '@/lib/langs'
 import { BUFFER_MINUTES, DURATION_MINUTES, MAX_UPCOMING_PER_PERSON, OFFICE_TIME_ZONE } from './config'
-import { hostAvailability } from './availability'
+import { HostRow, hostAvailability } from './availability'
 import { ConflictHit } from './conflicts'
 import { runConflictCheck } from './conflictsRun'
 import { BookingForEmail, calendarDescription, eventTitle } from './emails'
 import { CalendarError, createConsultationEvent, deleteConsultationEvent } from './google'
 import { manageUrl } from './manageLink'
-import { emailClient, emailOfficeBooked, emailOfficeCancelled } from './notify'
+import { emailClient, emailOfficeBooked, emailOfficeCancelled, emailOfficeRescheduled } from './notify'
 import { freeHostsAt } from './slots'
 
 /**
- * Booking and cancelling, in the order that keeps the calendar and the
- * database agreeing.
+ * Booking, moving and cancelling, in the order that keeps the calendar and
+ * the database agreeing.
  *
  *   1. the time is checked against every host's calendar again, now
  *   2. a row is held for the first free host (hold_consultation, one lock per host)
@@ -21,7 +21,9 @@ import { freeHostsAt } from './slots'
  *   5. the conflict check runs, and the emails go out
  *
  * A booking that reaches the client's inbox is therefore always on a
- * calendar, and a calendar that refused leaves nothing behind.
+ * calendar, and a calendar that refused leaves nothing behind. Moving a
+ * booking takes the new time the same way before it lets go of the old one,
+ * so a client who reschedules is never left with neither.
  */
 
 export interface BookingRequest {
@@ -34,6 +36,8 @@ export interface BookingRequest {
   otherParties: string
   summary: string
 }
+
+type Person = Omit<BookingRequest, 'start'>
 
 export type BookingResult =
   | { ok: true; id: string; start: Date; end: Date; meetUrl: string | null; manageUrl: string }
@@ -78,6 +82,7 @@ export function forEmail(row: ConsultationRow, origin: string): BookingForEmail 
     meetUrl: row.meet_url,
     manageUrl: manageUrl(origin, row.id, lang),
     hostName: row.consultation_hosts?.name ?? 'the host',
+    hostEmail: row.consultation_hosts?.email ?? null,
     adverseParty: row.adverse_party,
     otherParties: row.other_parties,
     summary: row.summary,
@@ -109,29 +114,29 @@ async function upcomingFor(email: string, phone: string): Promise<number> {
   return data?.length ?? 0
 }
 
-export async function book(req: BookingRequest, origin: string, now = new Date()): Promise<BookingResult> {
-  if (!process.env.SESSION_SECRET) return { ok: false, reason: 'not-configured' }
+type Held =
+  | { ok: true; id: string; host: HostRow; end: Date; eventId: string; meetUrl: string | null }
+  | { ok: false; reason: 'taken' | 'unavailable' }
 
-  if ((await upcomingFor(req.email, req.phone)) >= MAX_UPCOMING_PER_PERSON) return { ok: false, reason: 'limit' }
-
-  const { hosts, rows } = await hostAvailability(now)
-  const candidates = freeHostsAt(req.start, hosts, now)
-  if (!candidates.length) return { ok: false, reason: 'taken' }
-
-  const end = new Date(req.start.getTime() + DURATION_MINUTES * 60_000)
+/**
+ * Steps 2 and 3: a held row for the first of `candidates` still free, and the
+ * event on that host's calendar. On any failure nothing is left behind.
+ */
+async function holdWithEvent(person: Person, start: Date, candidates: string[], rows: HostRow[], origin: string): Promise<Held> {
   const db = getSupabase()
+  const end = new Date(start.getTime() + DURATION_MINUTES * 60_000)
   const { data: held, error: holdError } = await db.rpc('hold_consultation', {
     p_host_ids: candidates,
-    p_starts_at: req.start.toISOString(),
+    p_starts_at: start.toISOString(),
     p_ends_at: end.toISOString(),
     p_buffer_minutes: BUFFER_MINUTES,
-    p_name: req.name,
-    p_email: req.email,
-    p_phone: req.phone,
-    p_lang: req.lang,
-    p_adverse_party: req.adverseParty,
-    p_other_parties: req.otherParties,
-    p_summary: req.summary,
+    p_name: person.name,
+    p_email: person.email,
+    p_phone: person.phone,
+    p_lang: person.lang,
+    p_adverse_party: person.adverseParty,
+    p_other_parties: person.otherParties,
+    p_summary: person.summary,
   })
   if (holdError) throw new Error(`hold_consultation: ${holdError.message}`)
   const hold = (held as { id: string; host_id: string }[] | null)?.[0]
@@ -143,57 +148,69 @@ export async function book(req: BookingRequest, origin: string, now = new Date()
     return { ok: false, reason: 'taken' }
   }
 
-  let event: { eventId: string; meetUrl: string | null }
   try {
-    event = await createConsultationEvent(host.email, {
+    const event = await createConsultationEvent(host.email, {
       bookingId: hold.id,
-      start: req.start,
+      start,
       end,
       timeZone: OFFICE_TIME_ZONE,
-      summary: `${eventTitle('en')}: ${req.name}`,
-      description: calendarDescription(req, adminLink(origin)),
-      attendee: { email: req.email, name: req.name },
+      summary: `${eventTitle('en')}: ${person.name}`,
+      description: calendarDescription(person, adminLink(origin)),
+      attendee: { email: person.email, name: person.name },
     })
+    return { ok: true, id: hold.id, host, end, eventId: event.eventId, meetUrl: event.meetUrl }
   } catch (err) {
     console.error('consultation event:', err instanceof CalendarError || err instanceof Error ? err.message : err)
     await db.from('consultations').delete().eq('id', hold.id)
     return { ok: false, reason: 'unavailable' }
   }
+}
 
+export async function book(req: BookingRequest, origin: string, now = new Date()): Promise<BookingResult> {
+  if (!process.env.SESSION_SECRET) return { ok: false, reason: 'not-configured' }
+
+  if ((await upcomingFor(req.email, req.phone)) >= MAX_UPCOMING_PER_PERSON) return { ok: false, reason: 'limit' }
+
+  const { hosts, rows } = await hostAvailability(now)
+  const candidates = freeHostsAt(req.start, hosts, now)
+  if (!candidates.length) return { ok: false, reason: 'taken' }
+
+  const held = await holdWithEvent(req, req.start, candidates, rows, origin)
+  if (!held.ok) return held
+
+  const db = getSupabase()
   const { error: confirmError } = await db
     .from('consultations')
-    .update({ status: 'booked', google_event_id: event.eventId, meet_url: event.meetUrl })
-    .eq('id', hold.id)
+    .update({ status: 'booked', google_event_id: held.eventId, meet_url: held.meetUrl })
+    .eq('id', held.id)
   if (confirmError) {
     // The event exists and the row does not say so: take the event back off
     // rather than leave the host a meeting the portal does not know about.
     console.error('consultation confirm:', confirmError.message)
-    await deleteConsultationEvent(host.email, event.eventId).catch(() => {})
-    await db.from('consultations').delete().eq('id', hold.id)
+    await deleteConsultationEvent(held.host.email, held.eventId).catch(() => {})
+    await db.from('consultations').delete().eq('id', held.id)
     return { ok: false, reason: 'unavailable' }
   }
 
-  const conflicts = await runConflictCheck(hold.id, req)
-  const booking: BookingForEmail = {
-    ...forEmail(
-      {
-        id: hold.id,
-        starts_at: req.start.toISOString(),
-        ends_at: end.toISOString(),
-        name: req.name,
-        email: req.email,
-        phone: req.phone,
-        lang: req.lang,
-        meet_url: event.meetUrl,
-        adverse_party: req.adverseParty,
-        other_parties: req.otherParties,
-        summary: req.summary,
-        conflicts,
-        consultation_hosts: { name: host.name, email: host.email },
-      } as ConsultationRow,
-      origin
-    ),
-  }
+  const conflicts = await runConflictCheck(held.id, req)
+  const booking = forEmail(
+    {
+      id: held.id,
+      starts_at: req.start.toISOString(),
+      ends_at: held.end.toISOString(),
+      name: req.name,
+      email: req.email,
+      phone: req.phone,
+      lang: req.lang,
+      meet_url: held.meetUrl,
+      adverse_party: req.adverseParty,
+      other_parties: req.otherParties,
+      summary: req.summary,
+      conflicts,
+      consultation_hosts: { name: held.host.name, email: held.host.email },
+    } as ConsultationRow,
+    origin
+  )
   // Awaited: a function is frozen once it has answered, and an email still
   // being written then would never leave. Neither throws.
   await Promise.all([
@@ -201,7 +218,85 @@ export async function book(req: BookingRequest, origin: string, now = new Date()
     emailOfficeBooked(booking, adminLink(origin)),
   ])
 
-  return { ok: true, id: hold.id, start: req.start, end, meetUrl: event.meetUrl, manageUrl: booking.manageUrl }
+  return { ok: true, id: held.id, start: req.start, end: held.end, meetUrl: held.meetUrl, manageUrl: booking.manageUrl }
+}
+
+export type RescheduleResult =
+  | { ok: true; row: ConsultationRow }
+  | { ok: false; reason: 'taken' | 'unavailable' | 'not-booked' }
+
+/**
+ * Moves a booking to a new time, keeping its id — so the client's manage
+ * link, the conflict check and an attorney's review of it all carry over.
+ *
+ * The new time is taken first (a held row and a new event, exactly as a
+ * booking), then the booking is moved onto it and the old event comes off the
+ * calendar. The same host is kept when they are free at the new time. Their
+ * own booking still occupies the old time while this runs, so a time within
+ * the buffer of it is not offered to them by that host.
+ */
+export async function reschedule(row: ConsultationRow, start: Date, origin: string, now = new Date()): Promise<RescheduleResult> {
+  if (row.status !== 'booked' || Date.parse(row.starts_at) <= now.getTime()) return { ok: false, reason: 'not-booked' }
+  if (start.getTime() === Date.parse(row.starts_at)) return { ok: true, row }
+
+  const { hosts, rows } = await hostAvailability(now)
+  const candidates = freeHostsAt(start, hosts, now).sort(
+    (a, b) => Number(b === row.host_id) - Number(a === row.host_id)
+  )
+  if (!candidates.length) return { ok: false, reason: 'taken' }
+
+  const person: Person = {
+    name: row.name,
+    email: row.email,
+    phone: row.phone,
+    lang: toLang(row.lang),
+    adverseParty: row.adverse_party,
+    otherParties: row.other_parties,
+    summary: row.summary,
+  }
+  const held = await holdWithEvent(person, start, candidates, rows, origin)
+  if (!held.ok) return held
+
+  const db = getSupabase()
+  const { data: moved, error: moveError } = await db
+    .from('consultations')
+    .update({
+      host_id: held.host.id,
+      starts_at: start.toISOString(),
+      ends_at: held.end.toISOString(),
+      google_event_id: held.eventId,
+      meet_url: held.meetUrl,
+      reminded_at: null,
+    })
+    .eq('id', row.id)
+    .eq('status', 'booked')
+    .select('id')
+  // The held row only stood in for the new time while it was being taken.
+  await db.from('consultations').delete().eq('id', held.id)
+  if (moveError || !moved?.length) {
+    if (moveError) console.error('consultation reschedule:', moveError.message)
+    await deleteConsultationEvent(held.host.email, held.eventId).catch(() => {})
+    return { ok: false, reason: moveError ? 'unavailable' : 'not-booked' }
+  }
+
+  const previous = {
+    start: new Date(row.starts_at),
+    hostName: row.consultation_hosts?.name ?? 'the host',
+    hostEmail: row.consultation_hosts?.email ?? null,
+  }
+  if (previous.hostEmail && row.google_event_id) {
+    await deleteConsultationEvent(previous.hostEmail, row.google_event_id).catch(err =>
+      console.error('consultation old event delete:', err instanceof Error ? err.message : err)
+    )
+  }
+
+  const after = (await loadConsultation(row.id)) ?? row
+  const booking = forEmail(after, origin)
+  await Promise.all([
+    emailClient('rescheduled', booking, bookLink(origin, booking.lang)),
+    emailOfficeRescheduled(booking, previous, adminLink(origin)),
+  ])
+  return { ok: true, row: after }
 }
 
 /**

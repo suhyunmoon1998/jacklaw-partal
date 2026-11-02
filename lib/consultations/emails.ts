@@ -23,13 +23,18 @@ export interface BookingForEmail {
   meetUrl: string | null
   manageUrl: string
   hostName: string
+  /** The host's Workspace address: they are emailed with the office. */
+  hostEmail: string | null
   adverseParty: string
   otherParties: string
   summary: string
   conflicts: ConflictHit[] | null
 }
 
-export type ClientEmailKind = 'booked' | 'reminder' | 'cancelled-by-client' | 'cancelled-by-office'
+export type ClientEmailKind = 'booked' | 'rescheduled' | 'reminder' | 'cancelled-by-client' | 'cancelled-by-office'
+
+/** The kinds that carry the calendar file: the time is new to the client's calendar. */
+export const WITH_CALENDAR_FILE: ClientEmailKind[] = ['booked', 'rescheduled']
 
 const LOCALE: Record<Lang, string> = { en: 'en-US', es: 'es-US', zh: 'zh-CN', ko: 'ko-KR' }
 
@@ -58,12 +63,14 @@ const COPY = {
   en: {
     subject: {
       booked: (w: string) => `Your consultation is booked — ${w}`,
+      rescheduled: (w: string) => `Your consultation has a new time — ${w}`,
       reminder: (w: string) => `Reminder: your consultation is tomorrow — ${w}`,
       'cancelled-by-client': () => 'Your consultation is cancelled',
       'cancelled-by-office': () => 'Our office cancelled your consultation',
     },
     heading: {
       booked: 'Your consultation is booked',
+      rescheduled: 'Your consultation has a new time',
       reminder: 'Your consultation is tomorrow',
       'cancelled-by-client': 'Your consultation is cancelled',
       'cancelled-by-office': 'Your consultation is cancelled',
@@ -71,6 +78,7 @@ const COPY = {
     greeting: (n: string) => `Hello ${n},`,
     intro: {
       booked: 'Thank you for contacting our office. Your free consultation is confirmed.',
+      rescheduled: 'As you asked, your consultation is moved to the time below. The earlier time is cancelled.',
       reminder: 'This is a reminder of your free consultation with our office.',
       'cancelled-by-client': 'As you asked, we cancelled your consultation. Nothing else is needed from you.',
       'cancelled-by-office': 'We are sorry — our office had to cancel your consultation. Please choose a new time, or call us.',
@@ -95,12 +103,14 @@ const COPY = {
   es: {
     subject: {
       booked: (w: string) => `Su consulta está reservada — ${w}`,
+      rescheduled: (w: string) => `Su consulta tiene un nuevo horario — ${w}`,
       reminder: (w: string) => `Recordatorio: su consulta es mañana — ${w}`,
       'cancelled-by-client': () => 'Su consulta fue cancelada',
       'cancelled-by-office': () => 'Nuestra oficina canceló su consulta',
     },
     heading: {
       booked: 'Su consulta está reservada',
+      rescheduled: 'Su consulta tiene un nuevo horario',
       reminder: 'Su consulta es mañana',
       'cancelled-by-client': 'Su consulta fue cancelada',
       'cancelled-by-office': 'Su consulta fue cancelada',
@@ -108,6 +118,7 @@ const COPY = {
     greeting: (n: string) => `Hola ${n}:`,
     intro: {
       booked: 'Gracias por comunicarse con nuestra oficina. Su consulta gratuita está confirmada.',
+      rescheduled: 'Como lo pidió, cambiamos su consulta al horario de abajo. El horario anterior quedó cancelado.',
       reminder: 'Le recordamos su consulta gratuita con nuestra oficina.',
       'cancelled-by-client': 'Como lo pidió, cancelamos su consulta. No necesita hacer nada más.',
       'cancelled-by-office': 'Lo sentimos: nuestra oficina tuvo que cancelar su consulta. Por favor elija un nuevo horario o llámenos.',
@@ -132,12 +143,14 @@ const COPY = {
   zh: {
     subject: {
       booked: (w: string) => `您的咨询已预约 — ${w}`,
+      rescheduled: (w: string) => `您的咨询时间已更改 — ${w}`,
       reminder: (w: string) => `提醒：您的咨询在明天 — ${w}`,
       'cancelled-by-client': () => '您的咨询已取消',
       'cancelled-by-office': () => '本所取消了您的咨询',
     },
     heading: {
       booked: '您的咨询已预约',
+      rescheduled: '您的咨询时间已更改',
       reminder: '您的咨询在明天',
       'cancelled-by-client': '您的咨询已取消',
       'cancelled-by-office': '您的咨询已取消',
@@ -145,6 +158,7 @@ const COPY = {
     greeting: (n: string) => `${n} 您好：`,
     intro: {
       booked: '感谢您联系本所。您的免费咨询已确认。',
+      rescheduled: '已按您的要求把咨询改到下面的时间，原来的时间已取消。',
       reminder: '提醒您与本所的免费咨询。',
       'cancelled-by-client': '已按您的要求取消咨询，您无需再做任何事。',
       'cancelled-by-office': '非常抱歉，本所不得不取消您的咨询。请重新选择时间，或致电本所。',
@@ -169,12 +183,14 @@ const COPY = {
   ko: {
     subject: {
       booked: (w: string) => `상담 예약이 완료되었습니다 — ${w}`,
+      rescheduled: (w: string) => `상담 시간이 변경되었습니다 — ${w}`,
       reminder: (w: string) => `알림: 내일 상담이 있습니다 — ${w}`,
       'cancelled-by-client': () => '상담이 취소되었습니다',
       'cancelled-by-office': () => '사무실에서 상담을 취소했습니다',
     },
     heading: {
       booked: '상담 예약이 완료되었습니다',
+      rescheduled: '상담 시간이 변경되었습니다',
       reminder: '내일 상담이 있습니다',
       'cancelled-by-client': '상담이 취소되었습니다',
       'cancelled-by-office': '상담이 취소되었습니다',
@@ -182,6 +198,7 @@ const COPY = {
     greeting: (n: string) => `${n} 님, 안녕하세요.`,
     intro: {
       booked: '저희 사무실에 연락해 주셔서 감사합니다. 무료 상담이 확정되었습니다.',
+      rescheduled: '요청하신 대로 상담을 아래 시간으로 옮겼습니다. 이전 시간은 취소되었습니다.',
       reminder: '저희 사무실과의 무료 상담 일정을 알려 드립니다.',
       'cancelled-by-client': '요청하신 대로 상담을 취소했습니다. 따로 하실 일은 없습니다.',
       'cancelled-by-office': '죄송합니다. 사무실 사정으로 상담을 취소하게 되었습니다. 새 시간을 고르시거나 전화해 주세요.',
@@ -278,7 +295,7 @@ export function clientEmailHtml(kind: ClientEmailKind, b: BookingForEmail, bookU
     ${details}
     ${join}
     ${p(c.prepare)}
-    ${kind === 'booked' ? p(c.calendar, 'color:#6b7280;font-size:12px;') : ''}
+    ${WITH_CALENDAR_FILE.includes(kind) ? p(c.calendar, 'color:#6b7280;font-size:12px;') : ''}
     <div style="border-top:1px solid #e5e7eb;padding-top:20px;margin-top:8px;text-align:center;">
       <p style="margin:0 0 12px 0;color:#374151;font-size:13px;">${c.manage}</p>
       <a href="${escapeHtml(b.manageUrl)}" style="color:#C06010;font-size:14px;font-weight:700;">${c.manageCta}</a>
@@ -326,7 +343,13 @@ function fold(line: string): string {
   return out.join('\r\n')
 }
 
-/** The attachment that puts the consultation on the client's own calendar. */
+/**
+ * The attachment that puts the consultation on the client's own calendar.
+ *
+ * One UID per booking, kept through a reschedule, and a SEQUENCE that rises
+ * with the time it was written: a calendar that already has the event moves
+ * it instead of adding a second one.
+ */
 export function consultationIcs(b: BookingForEmail, now = new Date()): string {
   const c = COPY[b.lang]
   const description = [b.meetUrl ? `${c.join}: ${b.meetUrl}` : c.noLink, `${c.manageCta}: ${b.manageUrl}`].join('\n')
@@ -338,6 +361,7 @@ export function consultationIcs(b: BookingForEmail, now = new Date()): string {
     'METHOD:PUBLISH',
     'BEGIN:VEVENT',
     `UID:${b.id}@jacklaw-portal`,
+    `SEQUENCE:${Math.floor(now.getTime() / 60_000)}`,
     `DTSTAMP:${icsTime(now)}`,
     `DTSTART:${icsTime(b.start)}`,
     `DTEND:${icsTime(b.end)}`,
@@ -424,6 +448,22 @@ export function officeBookedHtml(b: BookingForEmail, adminUrl: string): string {
       ${officeRow('What happened', escapeHtml(b.summary).replace(/\n/g, '<br/>'))}
       ${officeRow('Video', b.meetUrl ? `<a href="${escapeHtml(b.meetUrl)}">${escapeHtml(b.meetUrl)}</a>` : 'No Meet link was made — send one by hand.')}
     </table>
+    ${button(adminUrl, 'Open in the admin panel')}`,
+    'Attorney-Client Confidential · Generated by JACKLAW Client Portal'
+  )
+}
+
+/** The client moved their booking: the new time first, the old one for the record. */
+export function officeRescheduledHtml(b: BookingForEmail, previousStart: Date, previousHost: string, adminUrl: string): string {
+  return shell(
+    'en',
+    `Consultation rescheduled — ${b.name}`,
+    `
+    <h2 style="margin:0 0 6px 0;color:#111827;font-size:20px;font-weight:800;">Consultation rescheduled</h2>
+    <p style="margin:0 0 4px 0;color:#111827;font-size:15px;font-weight:700;">${escapeHtml(formatWhen(b.start, 'en'))} · with ${escapeHtml(b.hostName)}</p>
+    <p style="margin:0 0 20px 0;color:#6b7280;font-size:13px;text-decoration:line-through;">${escapeHtml(formatWhen(previousStart, 'en'))} · with ${escapeHtml(previousHost)}</p>
+    <p style="margin:0 0 20px 0;color:#374151;font-size:14px;">${escapeHtml(b.name)} moved it from the link in their email. The old event is off the calendar; the conflict check and its review carry over unchanged.</p>
+    ${b.meetUrl ? `<p style="margin:0 0 20px 0;color:#374151;font-size:14px;">Video: <a href="${escapeHtml(b.meetUrl)}">${escapeHtml(b.meetUrl)}</a></p>` : ''}
     ${button(adminUrl, 'Open in the admin panel')}`,
     'Attorney-Client Confidential · Generated by JACKLAW Client Portal'
   )

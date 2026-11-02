@@ -1,10 +1,10 @@
-import { generateIntakeEmailHtml, generateClientThankYouEmailHtml } from '@/lib/emailTemplate'
+import { clientThankYouSubject, generateIntakeEmailHtml, generateClientThankYouEmailHtml } from '@/lib/emailTemplate'
 import { questionnaireSections } from '@/lib/questionnaireSections'
 import { module2Sections } from '@/lib/module2Sections'
 import { answersForReading } from '@/lib/modules'
 import { toEnglishForOffice } from '@/lib/officeTranslation'
 import { prepareSections } from '@/lib/repeatSections'
-import { toLang } from '@/lib/langs'
+import { resolveLang } from '@/lib/reminderSchedule'
 import { AnswerValue, QuestionnaireSection } from '@/types'
 
 /**
@@ -38,8 +38,13 @@ export async function sendIntakeNotificationEmails(
   moduleId: 'module1' | 'module2' = 'module1',
   /** The language the client reads the portal in; decides what is translated. */
   clientLanguage?: string | null,
-  /** The portal's own address, for the thank-you's booking link (/book). */
-  portalOrigin?: string
+  /**
+   * For the thank-you and its booking link (/book): the portal's address, and
+   * the language the client picked in the portal (clients.portal_lang). Not
+   * `clientLanguage`, which may be read off the answers — a message to the
+   * client goes in the language they chose, or English (resolveLang).
+   */
+  thankYou?: { origin: string; portalLang: string | null }
 ): Promise<void> {
   const apiKey = process.env.RESEND_API_KEY
   const firmEmail = process.env.FIRM_EMAIL
@@ -103,19 +108,19 @@ export async function sendIntakeNotificationEmails(
 
   // The thank-you and its booking link belong to finishing the intake. Sending
   // it again after every module would read as though they had just signed up.
-  // The link is the portal's own booking page now, opened in the client's
-  // language; CALENDLY_URL is only the fallback when no origin was passed.
+  // The link is the portal's own booking page now; the email and the page it
+  // opens are both in the client's language. CALENDLY_URL is only the
+  // fallback when no origin was passed.
   const clientEmail = typeof answers.email === 'string' ? answers.email.trim() : ''
-  const bookingUrl = portalOrigin
-    ? `${portalOrigin}/book?lang=${toLang(clientLanguage)}`
-    : process.env.CALENDLY_URL
+  const lang = resolveLang(thankYou?.portalLang)
+  const bookingUrl = thankYou ? `${thankYou.origin}/book?lang=${lang}` : process.env.CALENDLY_URL
   if (moduleId === 'module1' && clientEmail && clientEmail.includes('@') && bookingUrl) {
     try {
       await resend.emails.send({
         from: `JACKLAW Portal <${fromEmail}>`,
         to: [clientEmail],
-        subject: 'Thank You — Law Offices of Jack D. Josephson, APC',
-        html: generateClientThankYouEmailHtml(clientName, bookingUrl),
+        subject: clientThankYouSubject(lang),
+        html: generateClientThankYouEmailHtml(clientName, bookingUrl, lang),
       })
     } catch (err) {
       console.error('Client thank-you email failed:', err)

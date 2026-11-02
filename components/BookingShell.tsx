@@ -1,6 +1,6 @@
 'use client'
 
-import { ReactNode } from 'react'
+import { ReactNode, useEffect, useState } from 'react'
 import Image from 'next/image'
 import LanguagePicker from '@/components/LanguagePicker'
 import { FIRM_PHONE_DISPLAY, FIRM_PHONE_TEL } from '@/lib/contact'
@@ -62,12 +62,67 @@ export function ErrorNote({ children }: { children: ReactNode }) {
 
 const LOCALE = { en: 'en-US', es: 'es-US', zh: 'zh-CN', ko: 'ko-KR' } as const
 
-/** Formats in the office's zone: a consultation is at 10am Pacific wherever the client is. */
+const OFFICE_ZONE = 'America/Los_Angeles'
+
+const clock = (zone: string, at: Date) =>
+  new Intl.DateTimeFormat('en-US', { timeZone: zone, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).format(at)
+
+/**
+ * The visitor's own time zone, when its clock reads differently from the
+ * office's — null in California, and in Vancouver, which keeps the same time.
+ *
+ * Read after mount: the page is prerendered on a server whose zone is not the
+ * visitor's, and reading it during render would draw one thing and hydrate
+ * another.
+ */
+export function useVisitorZone(): string | null {
+  const [zone, setZone] = useState<string | null>(null)
+  useEffect(() => {
+    try {
+      const own = Intl.DateTimeFormat().resolvedOptions().timeZone
+      if (own && clock(own, new Date()) !== clock(OFFICE_ZONE, new Date())) setZone(own)
+    } catch {
+      /* no zone support: Pacific alone, as before */
+    }
+  }, [])
+  return zone
+}
+
+/**
+ * Formats in the office's zone: a consultation is at 10am Pacific wherever the
+ * client is, and the emails say so. The `local*` helpers add the visitor's own
+ * clock beside it, never instead of it.
+ */
 export function bookingFormat(lang: keyof typeof LOCALE) {
   const locale = LOCALE[lang]
-  const zone = 'America/Los_Angeles'
+  const zone = OFFICE_ZONE
   const at = (date: string) => new Date(`${date}T12:00:00Z`)
+  const ymd = (iso: string, z: string) => clock(z, new Date(iso)).slice(0, 10)
   return {
+    localTime: (iso: string, local: string) =>
+      new Intl.DateTimeFormat(locale, { timeZone: local, hour: 'numeric', minute: '2-digit' }).format(new Date(iso)),
+    /** +1 when the slot falls on the next day where the visitor is, -1 the day before. */
+    localDayShift: (iso: string, local: string) => {
+      const a = ymd(iso, local)
+      const b = ymd(iso, zone)
+      // MM/DD/YYYY from the en-US clock: compare as dates, not strings.
+      const toTime = (s: string) => Date.UTC(Number(s.slice(6, 10)), Number(s.slice(0, 2)) - 1, Number(s.slice(3, 5)))
+      return Math.round((toTime(a) - toTime(b)) / 86_400_000)
+    },
+    localWhen: (iso: string, local: string) =>
+      new Intl.DateTimeFormat(locale, {
+        timeZone: local,
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        timeZoneName: 'short',
+      }).format(new Date(iso)),
+    zoneName: (local: string) =>
+      new Intl.DateTimeFormat(locale, { timeZone: local, timeZoneName: 'long' })
+        .formatToParts(new Date())
+        .find(p => p.type === 'timeZoneName')?.value ?? local,
     time: (iso: string) => new Intl.DateTimeFormat(locale, { timeZone: zone, hour: 'numeric', minute: '2-digit' }).format(new Date(iso)),
     dayLong: (date: string) =>
       new Intl.DateTimeFormat(locale, { timeZone: 'UTC', weekday: 'long', month: 'long', day: 'numeric' }).format(at(date)),

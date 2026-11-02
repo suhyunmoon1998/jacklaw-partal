@@ -152,7 +152,10 @@ export async function POST(req: NextRequest) {
       // the portal in English and answered in Spanish, so neither alone is
       // enough.
       const lang = [client.portal_lang, submissionLanguage(answers)].find(l => l && l !== 'en') ?? 'en'
-      await sendIntakeNotificationEmails(client.name, client.case_type, answers, moduleId, lang, origin(req))
+      await sendIntakeNotificationEmails(client.name, client.case_type, answers, moduleId, lang, {
+        origin: origin(req),
+        portalLang: client.portal_lang,
+      })
     }
 
     // Module 2 is where the pay, the hours and the breaks are answered, so the

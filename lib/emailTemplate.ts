@@ -126,14 +126,59 @@ export function generateIntakeEmailHtml(
 </html>`.trim()
 }
 
-export function generateClientThankYouEmailHtml(clientName: string, bookingUrl: string): string {
+/**
+ * The thank-you for finishing the intake, and the invitation to book the
+ * consultation (/book), in the language the client reads the portal in. The
+ * emergency line and the footer are the assignment email's, so the two never
+ * say it differently.
+ */
+const THANK_YOU_COPY = {
+  en: {
+    subject: 'Thank You — Law Offices of Jack D. Josephson, APC',
+    heading: (n: string) => `Thank you, ${n}!`,
+    received:
+      "We've received your intake questionnaire. Our legal team will review your information, and we would like to schedule a consultation with you to discuss your case in more detail.",
+    pick: 'Please use the link below to pick a time that works for you:',
+    cta: 'Schedule Your Consultation',
+  },
+  es: {
+    subject: 'Gracias — Oficinas Legales de Jack D. Josephson, APC',
+    heading: (n: string) => `¡Gracias, ${n}!`,
+    received:
+      'Recibimos su cuestionario de admisión. Nuestro equipo legal revisará su información y nos gustaría programar una consulta con usted para hablar de su caso con más detalle.',
+    pick: 'Use el enlace de abajo para elegir un horario que le convenga:',
+    cta: 'Programar mi consulta',
+  },
+  zh: {
+    subject: '感谢您 — Jack D. Josephson 律师事务所',
+    heading: (n: string) => `${n}，谢谢您！`,
+    received: '我们已收到您填写的问卷。我们的法律团队会审阅您的资料，并希望与您安排一次咨询，进一步了解您的案件。',
+    pick: '请通过下面的链接选择您方便的时间：',
+    cta: '预约咨询',
+  },
+  ko: {
+    subject: '감사합니다 — Jack D. Josephson 법률사무소',
+    heading: (n: string) => `${n} 님, 감사합니다!`,
+    received: '접수 설문을 잘 받았습니다. 저희 법률팀이 내용을 검토한 뒤, 사건에 대해 자세히 이야기 나눌 상담 일정을 잡고자 합니다.',
+    pick: '아래 링크에서 편하신 시간을 골라 주세요:',
+    cta: '상담 예약하기',
+  },
+} as const
+
+export function clientThankYouSubject(lang: Lang = 'en'): string {
+  return THANK_YOU_COPY[lang].subject
+}
+
+export function generateClientThankYouEmailHtml(clientName: string, bookingUrl: string, lang: Lang = 'en'): string {
+  const c = THANK_YOU_COPY[lang]
+  const shared = ASSIGNMENT_EMAIL_COPY[lang]
   return `
 <!DOCTYPE html>
-<html lang="en">
+<html lang="${lang}">
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-  <title>Thank You — Law Offices of Jack D. Josephson, APC</title>
+  <title>${c.subject}</title>
 </head>
 <body style="margin:0;padding:0;background:#f3f4f6;font-family:'Helvetica Neue',Arial,sans-serif;">
 
@@ -145,30 +190,25 @@ export function generateClientThankYouEmailHtml(clientName: string, bookingUrl: 
 
   <!-- Body -->
   <div style="max-width:560px;margin:0 auto;padding:36px 24px;">
-    <h2 style="margin:0 0 12px 0;color:#111827;font-size:22px;font-weight:800;">Thank you, ${clientName}!</h2>
-    <p style="margin:0 0 16px 0;color:#374151;font-size:14px;line-height:1.7;">
-      We've received your intake questionnaire. Our legal team will review your information, and we would
-      like to schedule a consultation with you to discuss your case in more detail.
-    </p>
-    <p style="margin:0 0 24px 0;color:#374151;font-size:14px;line-height:1.7;">
-      Please use the link below to pick a time that works for you:
-    </p>
+    <h2 style="margin:0 0 12px 0;color:#111827;font-size:22px;font-weight:800;">${c.heading(escapeHtml(clientName))}</h2>
+    <p style="margin:0 0 16px 0;color:#374151;font-size:14px;line-height:1.7;">${c.received}</p>
+    <p style="margin:0 0 24px 0;color:#374151;font-size:14px;line-height:1.7;">${c.pick}</p>
 
     <div style="text-align:center;margin-bottom:28px;">
-      <a href="${bookingUrl}" style="display:inline-block;background:#E07820;color:#ffffff;font-size:15px;font-weight:700;text-decoration:none;padding:14px 32px;border-radius:99px;">
-        Schedule Your Consultation
+      <a href="${escapeHtml(bookingUrl)}" style="display:inline-block;background:#E07820;color:#ffffff;font-size:15px;font-weight:700;text-decoration:none;padding:14px 32px;border-radius:99px;">
+        ${c.cta}
       </a>
     </div>
 
     <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:12px 16px;margin-bottom:8px;">
-      <p style="margin:0;color:#b91c1c;font-size:12px;font-weight:700;">Do not use this portal or email for emergencies.</p>
-      <p style="margin:4px 0 0 0;color:#991b1b;font-size:12px;">For urgent matters, please call our office directly.</p>
+      <p style="margin:0;color:#b91c1c;font-size:12px;font-weight:700;">${shared.emergencyTitle}</p>
+      <p style="margin:4px 0 0 0;color:#991b1b;font-size:12px;">${shared.emergencyBody}</p>
     </div>
 
     <!-- Footer -->
     <div style="border-top:2px solid #e5e7eb;padding-top:20px;margin-top:24px;text-align:center;">
       <p style="margin:0;color:#111111;font-weight:800;font-size:14px;">Law Offices of Jack D. Josephson, APC</p>
-      <p style="margin:4px 0 0 0;color:#9ca3af;font-size:11px;">California Employment Law · Attorney-Client Confidential</p>
+      <p style="margin:4px 0 0 0;color:#9ca3af;font-size:11px;">${shared.footer}</p>
     </div>
   </div>
 
