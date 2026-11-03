@@ -19,7 +19,7 @@ import { DEFAULT_RULES, HostAvailability, freeHostsAt, openSlots } from '@/lib/c
 import { findConflicts, nameTokens, needsReview, sameName, splitNames, PartyOnFile } from '@/lib/consultations/conflicts'
 import { readBookingRequest } from '@/lib/consultations/request'
 import { consultationIcs, clientEmailHtml, clientEmailSubject, formatWhen, officeRescheduledHtml, BookingForEmail } from '@/lib/consultations/emails'
-import { officeRecipients } from '@/lib/consultations/notify'
+import { alertRecipients, officeRecipients } from '@/lib/consultations/notify'
 import { bookingFormat } from '@/components/BookingShell'
 import { DICTIONARIES, en } from '@/lib/translations'
 import { LANGUAGES, TRANSLATED_LANGS } from '@/lib/langs'
@@ -329,6 +329,16 @@ describe('who the office emails go to', () => {
     ])
     expect(officeRecipients(undefined, 'jack@jacklaw.com')).toEqual(['jack@jacklaw.com'])
     expect(officeRecipients(undefined, null, '')).toEqual([])
+  })
+
+  it('adds everyone named in CONSULTATION_ALERT_EMAILS, once', () => {
+    expect(alertRecipients('jack@jacklaw.com')).toEqual(['jack@jacklaw.com'])
+    expect(alertRecipients(' Jack@JackLaw.com, ops@jacklaw.com ;')).toEqual(['Jack@JackLaw.com', 'ops@jacklaw.com'])
+    expect(alertRecipients(undefined)).toEqual([])
+    expect(officeRecipients('intake@jacklaw.com', ...alertRecipients('Jack@JackLaw.com'), 'jack@jacklaw.com')).toEqual([
+      'intake@jacklaw.com',
+      'jack@jacklaw.com',
+    ])
   })
 })
 

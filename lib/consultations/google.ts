@@ -1,4 +1,5 @@
 import { SignJWT, importPKCS8 } from 'jose'
+import { getVercelOidcToken } from '@vercel/oidc'
 
 /**
  * The office's Google Workspace calendars, through one service account.
@@ -10,10 +11,24 @@ import { SignJWT, importPKCS8 } from 'jose'
  * do neither — without the portal ever holding anyone's password or refresh
  * token. Taking the delegation away in the admin console stops all of it.
  *
- *   GOOGLE_SERVICE_ACCOUNT_EMAIL        the account's client_email
- *   GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY  its private_key, PEM; "\n" may be escaped
+ * The delegation JWT has to be signed as the service account, and there are
+ * two ways to do that:
  *
- * No SDK: three REST calls and a signed JWT (jose, already used for MCP).
+ *   Keyless, in production. The jacklaw.com organization forbids service
+ *   account keys (iam.disableServiceAccountKeyCreation), so there is no key
+ *   to sign with. Instead the Vercel function's own OIDC token is traded at
+ *   Google's STS for a federated token (workload identity pool, locked to
+ *   this project's production deployments), and IAM signs the JWT for us
+ *   (signJwt; the pool's principal holds Service Account Token Creator on the
+ *   account). Nothing secret is stored anywhere.
+ *
+ *   With a key, for local development only, where there is no Vercel token.
+ *
+ *   GOOGLE_SERVICE_ACCOUNT_EMAIL        the service account
+ *   GOOGLE_WORKLOAD_IDENTITY_PROVIDER   projects/<number>/locations/global/workloadIdentityPools/<pool>/providers/<provider>
+ *   GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY  optional instead: its private_key, PEM; "\n" may be escaped
+ *
+ * No Google SDK: a handful of REST calls (jose signs the local-key JWT).
  */
 
 export const SCOPES = [
@@ -22,6 +37,8 @@ export const SCOPES = [
 ]
 
 const TOKEN_URL = 'https://oauth2.googleapis.com/token'
+const STS_URL = 'https://sts.googleapis.com/v1/token'
+const IAM_CREDENTIALS = 'https://iamcredentials.googleapis.com/v1'
 const API = 'https://www.googleapis.com/calendar/v3'
 
 export class CalendarError extends Error {
@@ -35,8 +52,104 @@ export function serviceAccountEmail(): string | null {
   return process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL?.trim() || null
 }
 
+const PROVIDER = /^projects\/\d+\/locations\/global\/workloadIdentityPools\/[a-z0-9-]+\/providers\/[a-z0-9-]+$/
+
+/** The workload identity provider's resource name, when it is set and well formed. */
+export function workloadIdentityProvider(): string | null {
+  const value = process.env.GOOGLE_WORKLOAD_IDENTITY_PROVIDER?.trim() ?? ''
+  return PROVIDER.test(value) ? value : null
+}
+
+function privateKey(): string | null {
+  return process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY?.replace(/\\n/g, '\n') || null
+}
+
 export function calendarConfigured(): boolean {
-  return Boolean(serviceAccountEmail() && process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY)
+  return Boolean(serviceAccountEmail() && (privateKey() || workloadIdentityProvider()))
+}
+
+/** What the delegation JWT says: this service account, acting as this host, for SCOPES. */
+export function delegationClaims(serviceAccount: string, hostEmail: string, now: number) {
+  return { iss: serviceAccount, sub: hostEmail, scope: SCOPES.join(' '), aud: TOKEN_URL, iat: now, exp: now + 3600 }
+}
+
+/** Google's answer as JSON, or a CalendarError that says which step refused and why. */
+async function googleJson(res: Response, step: string): Promise<Record<string, unknown>> {
+  const body: { error?: string | { message?: string }; error_description?: string } & Record<string, unknown> =
+    await res.json().catch(() => ({}))
+  if (res.ok) return body
+  const reason = (typeof body.error === 'object' ? body.error?.message : body.error) || body.error_description || ''
+  throw new CalendarError(`${step}: ${res.status}${reason ? ` ${reason}` : ''}`, res.status)
+}
+
+/** The federated token, kept until a minute before it lapses. One per process. */
+let federated: { value: string; expires: number } | null = null
+
+/** This Vercel deployment's own identity, traded at Google's STS for a federated token. */
+async function federatedToken(provider: string): Promise<string> {
+  if (federated && federated.expires > Date.now() + 60_000) return federated.value
+  let subjectToken: string
+  try {
+    subjectToken = await getVercelOidcToken()
+  } catch (err) {
+    throw new CalendarError(`No Vercel OIDC token (${err instanceof Error ? err.message : err}). Keyless sign-in only works on Vercel.`)
+  }
+  const body = await googleJson(
+    await fetch(STS_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        audience: `//iam.googleapis.com/${provider}`,
+        grantType: 'urn:ietf:params:oauth:grant-type:token-exchange',
+        requestedTokenType: 'urn:ietf:params:oauth:token-type:access_token',
+        scope: 'https://www.googleapis.com/auth/cloud-platform',
+        subjectTokenType: 'urn:ietf:params:oauth:token-type:jwt',
+        subjectToken,
+      }),
+    }),
+    // A refusal here means the pool or provider does not accept this
+    // deployment: wrong issuer, audience, or the condition on the subject.
+    'Google did not accept the Vercel identity'
+  )
+  if (typeof body.access_token !== 'string') throw new CalendarError('Google STS returned no token.')
+  federated = { value: body.access_token, expires: Date.now() + Number(body.expires_in ?? 3600) * 1000 }
+  return federated.value
+}
+
+/** The delegation JWT for one host, signed with the local key or, keylessly, by IAM. */
+async function delegationAssertion(hostEmail: string): Promise<string> {
+  const issuer = serviceAccountEmail()
+  if (!issuer) throw new CalendarError('Google Calendar is not configured.')
+  const now = Math.floor(Date.now() / 1000)
+  const claims = delegationClaims(issuer, hostEmail, now)
+
+  const pem = privateKey()
+  if (pem) {
+    const { scope, iss, sub, aud, iat, exp } = claims
+    return new SignJWT({ scope })
+      .setProtectedHeader({ alg: 'RS256', typ: 'JWT' })
+      .setIssuer(iss)
+      .setSubject(sub)
+      .setAudience(aud)
+      .setIssuedAt(iat)
+      .setExpirationTime(exp)
+      .sign(await importPKCS8(pem, 'RS256'))
+  }
+
+  const provider = workloadIdentityProvider()
+  if (!provider) throw new CalendarError('Google Calendar is not configured.')
+  const body = await googleJson(
+    await fetch(`${IAM_CREDENTIALS}/projects/-/serviceAccounts/${encodeURIComponent(issuer)}:signJwt`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${await federatedToken(provider)}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ payload: JSON.stringify(claims) }),
+    }),
+    // A 403 here means the pool's principal lacks Service Account Token
+    // Creator on the service account, or the IAM Credentials API is off.
+    `Signing as ${issuer} was refused`
+  )
+  if (typeof body.signedJwt !== 'string') throw new CalendarError('Google IAM returned no signed JWT.')
+  return body.signedJwt
 }
 
 /** One token per host, kept until a minute before it lapses. */
@@ -46,21 +159,7 @@ async function accessToken(hostEmail: string): Promise<string> {
   const cached = tokens.get(hostEmail)
   if (cached && cached.expires > Date.now() + 60_000) return cached.value
 
-  const issuer = serviceAccountEmail()
-  const pem = process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY?.replace(/\\n/g, '\n')
-  if (!issuer || !pem) throw new CalendarError('Google Calendar is not configured.')
-
-  const key = await importPKCS8(pem, 'RS256')
-  const now = Math.floor(Date.now() / 1000)
-  const assertion = await new SignJWT({ scope: SCOPES.join(' ') })
-    .setProtectedHeader({ alg: 'RS256', typ: 'JWT' })
-    .setIssuer(issuer)
-    .setSubject(hostEmail)
-    .setAudience(TOKEN_URL)
-    .setIssuedAt(now)
-    .setExpirationTime(now + 3600)
-    .sign(key)
-
+  const assertion = await delegationAssertion(hostEmail)
   const res = await fetch(TOKEN_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },

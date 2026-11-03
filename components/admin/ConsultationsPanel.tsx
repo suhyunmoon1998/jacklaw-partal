@@ -143,7 +143,7 @@ export default function ConsultationsPanel() {
         <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 text-sm text-amber-900 space-y-1">
           <p className="font-semibold">Online booking is closed until this is done:</p>
           {!data.calendar.configured && (
-            <p>• Set GOOGLE_SERVICE_ACCOUNT_EMAIL and GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY on this deployment.</p>
+            <p>• Set GOOGLE_SERVICE_ACCOUNT_EMAIL and GOOGLE_WORKLOAD_IDENTITY_PROVIDER on this deployment (docs/consultations.md).</p>
           )}
           {activeHosts === 0 && <p>• Add at least one host below.</p>}
           <p className="text-amber-800/80 pt-1">Until then /book tells clients to call the office.</p>

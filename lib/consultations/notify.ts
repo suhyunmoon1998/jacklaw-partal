@@ -55,14 +55,23 @@ export async function emailClient(kind: ClientEmailKind, b: BookingForEmail, boo
   }
 }
 
-/** FIRM_EMAIL and the host, once each. */
-export function officeRecipients(firmEmail: string | undefined, ...hosts: (string | null | undefined)[]): string[] {
-  const all = [firmEmail, ...hosts].map(a => a?.trim().toLowerCase()).filter((a): a is string => Boolean(a && a.includes('@')))
+/** FIRM_EMAIL, everyone else named for these alerts, and the host, once each. */
+export function officeRecipients(firmEmail: string | undefined, ...others: (string | null | undefined)[]): string[] {
+  const all = [firmEmail, ...others].map(a => a?.trim().toLowerCase()).filter((a): a is string => Boolean(a && a.includes('@')))
   return Array.from(new Set(all))
 }
 
+/**
+ * CONSULTATION_ALERT_EMAILS: who else hears of every booking, move and
+ * cancellation (jack@jacklaw.com), comma-separated. Kept apart from
+ * FIRM_EMAIL, which also receives every intake submission.
+ */
+export function alertRecipients(value = process.env.CONSULTATION_ALERT_EMAILS): string[] {
+  return (value ?? '').split(/[,;\s]+/).filter(Boolean)
+}
+
 async function emailOffice(subject: string, html: string, ...hosts: (string | null | undefined)[]): Promise<void> {
-  const to = officeRecipients(process.env.FIRM_EMAIL, ...hosts)
+  const to = officeRecipients(process.env.FIRM_EMAIL, ...alertRecipients(), ...hosts)
   const client = await resend()
   if (!client || !to.length) return
   try {

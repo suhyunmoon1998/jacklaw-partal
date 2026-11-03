@@ -78,7 +78,10 @@ export async function PATCH(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   if (!isAdmin(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   if (!calendarConfigured()) {
-    return NextResponse.json({ ok: false, message: 'GOOGLE_SERVICE_ACCOUNT_EMAIL and GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY are not set on this deployment.' })
+    return NextResponse.json({
+      ok: false,
+      message: 'GOOGLE_SERVICE_ACCOUNT_EMAIL and GOOGLE_WORKLOAD_IDENTITY_PROVIDER are not set on this deployment (see docs/consultations.md).',
+    })
   }
   const body = await req.json().catch(() => ({}))
   const id = typeof body?.id === 'string' && UUID.test(body.id) ? body.id : null
