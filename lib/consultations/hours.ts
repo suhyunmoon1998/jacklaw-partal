@@ -13,6 +13,15 @@ export type WeeklyHours = Partial<Record<'0' | '1' | '2' | '3' | '4' | '5' | '6'
 export const WEEKDAY_KEYS = ['0', '1', '2', '3', '4', '5', '6'] as const
 export const WEEKDAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 
+/** The office's hours, Monday to Friday, 9 to 5: where every new host starts. */
+export const OFFICE_HOURS: WeeklyHours = {
+  '1': [['09:00', '17:00']],
+  '2': [['09:00', '17:00']],
+  '3': [['09:00', '17:00']],
+  '4': [['09:00', '17:00']],
+  '5': [['09:00', '17:00']],
+}
+
 const HHMM = /^([01]\d|2[0-3]):([0-5]\d)$/
 
 const minutes = (hhmm: string) => Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3))

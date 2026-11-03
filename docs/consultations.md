@@ -98,7 +98,7 @@ portal already uses. `CALENDLY_URL` is no longer needed once this is live.
 
 In **Admin → Consultations → Hosts and hours**, add each person who takes
 consultations with their **@jacklaw.com** address. Each one starts with
-Mon–Fri 9–12 and 1–5. Press **Check calendar** next to each one. "Calendar
+Mon–Fri 9–5, the office hours. Press **Check calendar** next to each one. "Calendar
 read" means it works. Otherwise it says which step Google refused:
 "did not accept the Vercel identity" is the pool or provider (step 2.3),
 "Signing as … was refused" is the Token Creator grant or a disabled API (2.4,

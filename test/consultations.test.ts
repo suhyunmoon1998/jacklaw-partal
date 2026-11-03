@@ -14,7 +14,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { addDays, weekdayOf, zonedDate, zonedToUtc } from '@/lib/consultations/time'
-import { parseDayLine, parseWeeklyHours, readWeeklyHours } from '@/lib/consultations/hours'
+import { OFFICE_HOURS, parseDayLine, parseWeeklyHours, readWeeklyHours } from '@/lib/consultations/hours'
 import { DEFAULT_RULES, HostAvailability, freeHostsAt, openSlots } from '@/lib/consultations/slots'
 import { findConflicts, nameTokens, needsReview, sameName, splitNames, PartyOnFile } from '@/lib/consultations/conflicts'
 import { readBookingRequest } from '@/lib/consultations/request'
@@ -86,6 +86,13 @@ const mondayTimes = (hosts: HostAvailability[], now = FRIDAY_MORNING) =>
   openSlots(hosts, now).find(d => d.date === '2026-11-02')!.slots
 
 describe('the times offered', () => {
+  it('runs from 9:00 to the last half hour before 5, straight through, on office hours', () => {
+    const monday = mondayTimes([host({ hours: readWeeklyHours(OFFICE_HOURS) })])
+    expect(monday).toHaveLength(16)
+    expect(monday[0]).toBe('2026-11-02T17:00:00.000Z') // 9:00 AM Pacific
+    expect(monday[monday.length - 1]).toBe('2026-11-03T00:30:00.000Z') // 4:30 PM Pacific
+  })
+
   it('offers every half hour a 30-minute consultation fits in the hours', () => {
     expect(mondayTimes([host()])).toEqual([
       '2026-11-02T17:00:00.000Z',

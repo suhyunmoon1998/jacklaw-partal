@@ -399,7 +399,7 @@ function AddHost({ onAdded }: { onAdded: () => void }) {
 
   return (
     <div className="rounded-xl border border-dashed border-gray-300 p-4">
-      <p className="text-xs font-semibold text-gray-700 mb-2">Add a host (Mon–Fri 9–12, 1–5 to start)</p>
+      <p className="text-xs font-semibold text-gray-700 mb-2">Add a host (Mon–Fri 9–5 to start)</p>
       <div className="flex flex-col sm:flex-row gap-2">
         <input value={name} onChange={e => setName(e.target.value)} placeholder="Name" className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gold" />
         <input value={email} onChange={e => setEmail(e.target.value)} placeholder="name@jacklaw.com" className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gold" />

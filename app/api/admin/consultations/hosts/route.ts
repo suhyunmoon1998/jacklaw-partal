@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { isAdmin } from '@/lib/adminAuth'
 import { getSupabase } from '@/lib/supabase'
 import { UUID } from '@/lib/consultations/manageLink'
-import { parseWeeklyHours } from '@/lib/consultations/hours'
+import { OFFICE_HOURS, parseWeeklyHours } from '@/lib/consultations/hours'
 import { busyTimes, calendarConfigured } from '@/lib/consultations/google'
 
 /**
@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
 
   const { data, error } = await getSupabase()
     .from('consultation_hosts')
-    .insert({ name: name.data, email: email.data })
+    .insert({ name: name.data, email: email.data, weekly_hours: OFFICE_HOURS })
     .select('id, name, email, weekly_hours, active')
     .single()
   if (error) {
