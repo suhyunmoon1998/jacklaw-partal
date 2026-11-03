@@ -2,7 +2,17 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import BookingShell, { ErrorNote, Spinner, bookingFormat, useVisitorZone } from '@/components/BookingShell'
+import BookingShell, {
+  DarkBanner,
+  ErrorNote,
+  NoticeCard,
+  Shimmer,
+  Spinner,
+  StepCard,
+  VideoIcon,
+  bookingFormat,
+  useVisitorZone,
+} from '@/components/BookingShell'
 import SlotPicker, { SlotDay } from '@/components/SlotPicker'
 import { useLanguage } from '@/lib/i18n'
 
@@ -137,151 +147,157 @@ export default function ManageBookingPage() {
   }
 
   const yourTime = (iso: string) =>
-    visitorZone ? <p className="text-xs text-gray-500">{tf('book_your_time', { when: f.localWhen(iso, visitorZone) })}</p> : null
+    visitorZone ? <p className="text-sm text-gray-500">{tf('book_your_time', { when: f.localWhen(iso, visitorZone) })}</p> : null
+
+  const status = booking?.status
+  const chip =
+    status === 'booked'
+      ? { cls: 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/15', text: t('manage_status_booked') }
+      : status === 'cancelled'
+      ? { cls: 'bg-gray-100 text-gray-600', text: t('manage_status_cancelled') }
+      : { cls: 'bg-amber-50 text-amber-800 ring-1 ring-amber-600/15', text: t('manage_status_past') }
 
   return (
-    <BookingShell>
-      <div className="card animate-slide-up">
-        <h1 className="text-[22px] font-semibold tracking-tight text-gray-950 mb-4">{t('manage_title')}</h1>
+    <BookingShell title={t('manage_title')}>
+      {state === 'loading' && <Shimmer heights={['h-32', 'h-16', 'h-24']} />}
+      {state === 'missing' && <NoticeCard title={t('manage_not_found')} />}
+      {state === 'failed' && <NoticeCard title={t('book_load_failed')} />}
 
-        {state === 'loading' && (
-          <p className="flex items-center gap-2 text-sm text-gray-500 py-4 justify-center">
-            <Spinner />
-            {t('manage_loading')}
-          </p>
-        )}
-        {state === 'missing' && <ErrorNote>{t('manage_not_found')}</ErrorNote>}
-        {state === 'failed' && <ErrorNote>{t('book_load_failed')}</ErrorNote>}
-
-        {state === 'ready' && booking && (
-          <div className="space-y-5">
-            <div className="bg-canvas border border-line rounded-xl px-4 py-3">
-              <p className={`text-[17px] font-semibold text-gray-950 ${booking.status === 'cancelled' ? 'line-through text-gray-400' : ''}`}>
-                {f.when(booking.start)}
-              </p>
-              <p className="text-xs text-gray-500 mt-1">{t('book_times_in')}</p>
-              {booking.status !== 'cancelled' && yourTime(booking.start)}
+      {state === 'ready' && booking && (
+        <div className="space-y-2.5">
+          {/* When it is, and where it stands */}
+          <div className="card mb-2.5 animate-slide-up stagger-2">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="eyebrow mb-1">{t('manage_when')}</p>
+                <p className={`font-semibold text-lg leading-tight tracking-tight ${status === 'cancelled' ? 'line-through text-gray-400' : 'text-gray-950'}`}>
+                  {f.when(booking.start)}
+                </p>
+                <p className="text-sm text-gray-500 mt-1">{t('book_times_in')}</p>
+                {status !== 'cancelled' && yourTime(booking.start)}
+              </div>
+              <span className={`chip shrink-0 ${chip.cls}`}>{chip.text}</span>
             </div>
-
-            {notice && (
-              <div role="status" className="bg-green-50 border border-green-200 rounded-xl p-4 text-green-800 text-sm leading-snug">
-                {notice}
-              </div>
-            )}
-            {error && <ErrorNote>{error}</ErrorNote>}
-
-            {booking.status === 'cancelled' && (
-              <>
-                <p className="text-[15px] text-gray-700">{t('manage_cancelled')}</p>
-                <Link href={`/book?lang=${lang}`} className="btn-primary block text-center">{t('manage_book_again')}</Link>
-              </>
-            )}
-
-            {booking.status === 'past' && <p className="text-[15px] text-gray-700">{t('manage_past')}</p>}
-
-            {booking.status === 'booked' && mode === 'view' && (
-              <>
-                {booking.meetUrl && (
-                  <div>
-                    <a href={booking.meetUrl} target="_blank" rel="noopener noreferrer" className="btn-primary block text-center">
-                      {t('book_done_join')}
-                    </a>
-                    <p className="text-xs text-gray-500 mt-2 text-center">{t('book_done_join_hint')}</p>
-                  </div>
-                )}
-                <div className="pt-4 border-t border-line space-y-3">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setNotice('')
-                      setMode('pick')
-                      loadTimes()
-                    }}
-                    className="btn-secondary"
-                  >
-                    {t('manage_reschedule')}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setNotice('')
-                      setMode('cancel')
-                    }}
-                    className="w-full py-2 text-sm font-semibold text-red-600 hover:text-red-700"
-                  >
-                    {t('manage_cancel')}
-                  </button>
-                </div>
-              </>
-            )}
-
-            {booking.status === 'booked' && mode === 'cancel' && (
-              <div className="pt-4 border-t border-line space-y-3">
-                <p className="text-[15px] font-medium text-gray-950">{tf('manage_cancel_confirm', { when: f.when(booking.start) })}</p>
-                <div className="grid grid-cols-2 gap-3">
-                  <button type="button" onClick={() => setMode('view')} disabled={busy} className="btn-secondary">
-                    {t('manage_cancel_no')}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={cancelIt}
-                    disabled={busy}
-                    className="w-full bg-red-600 hover:bg-red-700 text-white py-3.5 rounded-xl text-[15px] font-semibold disabled:opacity-50"
-                  >
-                    {busy ? <span className="flex items-center justify-center gap-2"><Spinner />{t('manage_cancelling')}</span> : t('manage_cancel_yes')}
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {booking.status === 'booked' && mode === 'pick' && (
-              <div className="pt-4 border-t border-line">
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-[15px] font-semibold text-gray-950">{t('manage_reschedule_pick')}</h2>
-                  <button type="button" onClick={() => setMode('view')} className="text-sm font-semibold text-gray-500 hover:text-gray-900">
-                    {t('manage_reschedule_back')}
-                  </button>
-                </div>
-                {days === null ? (
-                  <p className="flex items-center gap-2 text-sm text-gray-500 py-4 justify-center">
-                    <Spinner />
-                    {t('book_loading')}
-                  </p>
-                ) : days.some(d => d.slots.length) ? (
-                  <SlotPicker
-                    days={days}
-                    day={day}
-                    onDay={setDay}
-                    visitorZone={visitorZone}
-                    onPick={s => {
-                      setNewStart(s)
-                      setError('')
-                      setMode('confirm-move')
-                    }}
-                  />
-                ) : (
-                  <ErrorNote>{t('book_no_times')}</ErrorNote>
-                )}
-              </div>
-            )}
-
-            {booking.status === 'booked' && mode === 'confirm-move' && newStart && (
-              <div className="pt-4 border-t border-line space-y-3">
-                <p className="text-[15px] font-medium text-gray-950">{tf('manage_reschedule_confirm', { when: f.when(newStart) })}</p>
-                {yourTime(newStart)}
-                <div className="grid grid-cols-2 gap-3">
-                  <button type="button" onClick={() => setMode('pick')} disabled={busy} className="btn-secondary">
-                    {t('manage_reschedule_back')}
-                  </button>
-                  <button type="button" onClick={moveIt} disabled={busy} className="btn-primary">
-                    {busy ? <span className="flex items-center justify-center gap-2"><Spinner />{t('manage_rescheduling')}</span> : t('manage_reschedule_yes')}
-                  </button>
-                </div>
-              </div>
-            )}
           </div>
-        )}
-      </div>
+
+          {notice && (
+            <div role="status" className="bg-emerald-50 border border-emerald-200/70 rounded-2xl p-4 text-emerald-800 text-sm leading-relaxed animate-slide-up">
+              {notice}
+            </div>
+          )}
+          {error && <ErrorNote>{error}</ErrorNote>}
+
+          {status === 'cancelled' && (
+            <div className="card">
+              <p className="text-[15px] text-gray-700">{t('manage_cancelled')}</p>
+              <Link href={`/book?lang=${lang}`} className="btn-primary block text-center mt-4">{t('manage_book_again')}</Link>
+            </div>
+          )}
+
+          {status === 'past' && <NoticeCard title={t('manage_past')} />}
+
+          {status === 'booked' && mode === 'view' && (
+            <>
+              {booking.meetUrl && (
+                <DarkBanner href={booking.meetUrl} icon={<VideoIcon />} title={t('book_done_join')} detail={t('book_done_join_hint')} action="→" />
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  setNotice('')
+                  setMode('pick')
+                  loadTimes()
+                }}
+                className="w-full bg-white border border-line rounded-xl px-4 py-3.5 text-left flex items-center gap-3 hover:border-gray-300 transition-colors"
+              >
+                <span className="w-8 h-8 rounded-full bg-gold/10 text-gold-dark flex items-center justify-center shrink-0">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                </span>
+                <span className="flex-1 font-medium text-gray-950">{t('manage_reschedule')}</span>
+                <svg className="w-4 h-4 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setNotice('')
+                  setMode('cancel')
+                }}
+                className="w-full bg-white border border-line rounded-xl px-4 py-3.5 text-left flex items-center gap-3 hover:border-red-200 transition-colors"
+              >
+                <span className="w-8 h-8 rounded-full bg-red-50 text-red-600 flex items-center justify-center shrink-0">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </span>
+                <span className="flex-1 font-medium text-red-600">{t('manage_cancel')}</span>
+              </button>
+            </>
+          )}
+
+          {status === 'booked' && mode === 'cancel' && (
+            <div className="card space-y-4 animate-slide-up">
+              <p className="text-[15px] font-medium text-gray-950">{tf('manage_cancel_confirm', { when: f.when(booking.start) })}</p>
+              <div className="grid grid-cols-2 gap-3">
+                <button type="button" onClick={() => setMode('view')} disabled={busy} className="btn-secondary">
+                  {t('manage_cancel_no')}
+                </button>
+                <button
+                  type="button"
+                  onClick={cancelIt}
+                  disabled={busy}
+                  className="w-full bg-red-600 hover:bg-red-700 text-white py-3.5 rounded-xl text-[15px] font-semibold disabled:opacity-50"
+                >
+                  {busy ? <span className="flex items-center justify-center gap-2"><Spinner />{t('manage_cancelling')}</span> : t('manage_cancel_yes')}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {status === 'booked' && mode === 'pick' && (
+            <StepCard n={1} title={t('manage_reschedule_pick')}>
+              {days === null ? (
+                <Shimmer heights={['h-56']} />
+              ) : days.some(d => d.slots.length) ? (
+                <SlotPicker
+                  days={days}
+                  day={day}
+                  onDay={setDay}
+                  visitorZone={visitorZone}
+                  onPick={s => {
+                    setNewStart(s)
+                    setError('')
+                    setMode('confirm-move')
+                  }}
+                />
+              ) : (
+                <p className="text-sm text-gray-600">{t('book_no_times')}</p>
+              )}
+              <button type="button" onClick={() => setMode('view')} className="btn-secondary mt-5">
+                {t('manage_reschedule_back')}
+              </button>
+            </StepCard>
+          )}
+
+          {status === 'booked' && mode === 'confirm-move' && newStart && (
+            <StepCard n={2} title={t('manage_reschedule')}>
+              <p className="text-[15px] font-medium text-gray-950">{tf('manage_reschedule_confirm', { when: f.when(newStart) })}</p>
+              {yourTime(newStart)}
+              <div className="grid grid-cols-2 gap-3 mt-5">
+                <button type="button" onClick={() => setMode('pick')} disabled={busy} className="btn-secondary">
+                  {t('manage_reschedule_back')}
+                </button>
+                <button type="button" onClick={moveIt} disabled={busy} className="btn-primary">
+                  {busy ? <span className="flex items-center justify-center gap-2"><Spinner />{t('manage_rescheduling')}</span> : t('manage_reschedule_yes')}
+                </button>
+              </div>
+            </StepCard>
+          )}
+        </div>
+      )}
     </BookingShell>
   )
 }

@@ -2,9 +2,21 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import BookingShell, { ErrorNote, Spinner, bookingFormat, useVisitorZone } from '@/components/BookingShell'
+import BookingShell, {
+  DarkBanner,
+  ErrorNote,
+  NoticeCard,
+  Shimmer,
+  Spinner,
+  StepCard,
+  StepRow,
+  VideoIcon,
+  bookingFormat,
+  useVisitorZone,
+} from '@/components/BookingShell'
 import SlotPicker, { SlotDay } from '@/components/SlotPicker'
 import { formatPhone } from '@/lib/auth'
+import { FIRM_PHONE_TEL } from '@/lib/contact'
 import { typedPhoneDigits } from '@/lib/phoneNumber'
 import { useLanguage } from '@/lib/i18n'
 import type { BookingField } from '@/lib/consultations/request'
@@ -12,11 +24,11 @@ import type { BookingField } from '@/lib/consultations/request'
 /**
  * /book — a free consultation, booked by the person themselves.
  *
- * Pick a day, pick a time, say who you are and who the dispute is with. The
- * times come from the hosts' Google calendars (api/consultations/slots); the
- * booking is checked against them again when it is made, so a time that went
- * while the form was being filled is refused and the page goes back to the
- * times.
+ * Two steps, drawn as the portal's dashboard draws its steps: the day and
+ * time, then who they are and who the dispute is with. The times come from
+ * the hosts' Google calendars (api/consultations/slots); the booking is
+ * checked against them again when it is made, so a time that went while the
+ * form was being filled is refused and step 1 opens again.
  *
  * Linked from the intake thank-you email and the portal's front page, in
  * place of the Calendly link the office used before. Times are Pacific; a
@@ -125,34 +137,39 @@ export default function BookPage() {
     }
   }
 
+  const callButton = (
+    <a href={FIRM_PHONE_TEL} className="btn-primary block text-center mt-4">
+      {t('book_call')}
+    </a>
+  )
+
   if (phase === 'done' && booked) {
     return (
-      <BookingShell>
-        <div className="card animate-slide-up text-center">
-          <div className="mx-auto mb-4 w-12 h-12 rounded-full bg-green-50 border border-green-200 flex items-center justify-center">
-            <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
+      <BookingShell title={t('book_done_title')} sub={tf('book_done_sub', { email })}>
+        <div className="mb-5 bg-emerald-50 border border-emerald-200/70 rounded-2xl p-4 flex gap-3 animate-slide-up">
+          <span className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0 font-semibold">✓</span>
+          <div className="min-w-0">
+            <p className="font-semibold text-emerald-900 text-[15px]">{f.when(booked.start)}</p>
+            <p className="text-sm text-emerald-800/80 mt-0.5">{t('book_times_in')}</p>
+            {visitorZone && (
+              <p className="text-sm text-emerald-800/80">{tf('book_your_time', { when: f.localWhen(booked.start, visitorZone) })}</p>
+            )}
           </div>
-          <h1 className="text-[22px] font-semibold tracking-tight text-gray-950 mb-1">{t('book_done_title')}</h1>
-          <p className="text-gray-950 font-semibold text-[17px] mt-3">{f.when(booked.start)}</p>
-          <p className="text-gray-500 text-sm mt-1">{t('book_times_in')}</p>
-          {visitorZone && (
-            <p className="text-gray-500 text-sm">{tf('book_your_time', { when: f.localWhen(booked.start, visitorZone) })}</p>
-          )}
-          <p className="text-gray-600 text-[15px] mt-4">{tf('book_done_sub', { email })}</p>
+        </div>
 
-          {booked.meetUrl && (
-            <div className="mt-6">
-              <a href={booked.meetUrl} target="_blank" rel="noopener noreferrer" className="btn-primary inline-block">
-                {t('book_done_join')}
-              </a>
-              <p className="text-xs text-gray-500 mt-2 leading-relaxed">{t('book_done_join_hint')}</p>
-            </div>
-          )}
+        {booked.meetUrl && (
+          <DarkBanner
+            href={booked.meetUrl}
+            icon={<VideoIcon />}
+            title={t('book_done_join')}
+            detail={t('book_done_join_hint')}
+            action="→"
+          />
+        )}
 
-          <p className="text-sm text-gray-500 mt-6">{t('book_done_manage')}</p>
-          <Link href="/" className="inline-block mt-6 text-sm font-medium text-gray-500 hover:text-gray-900">
+        <div className="card animate-slide-up stagger-2">
+          <p className="text-sm text-gray-600 leading-relaxed">{t('book_done_manage')}</p>
+          <Link href="/" className="btn-secondary block text-center mt-4">
             {t('book_done_home')}
           </Link>
         </div>
@@ -161,40 +178,31 @@ export default function BookPage() {
   }
 
   return (
-    <BookingShell>
-      <div className="card animate-slide-up">
-        <h1 className="text-[22px] font-semibold tracking-tight text-gray-950 mb-1">{t('book_title')}</h1>
-        <p className="text-gray-500 text-[15px] leading-relaxed">{t('book_sub')}</p>
-        <p className="text-gray-700 text-sm font-medium mt-3 flex items-center gap-2">
-          <svg className="w-4 h-4 text-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-          </svg>
-          {tf('book_duration', { minutes: slots?.durationMinutes ?? 30 })}
-        </p>
+    <BookingShell title={t('book_title')} sub={t('book_sub')}>
+      <DarkBanner
+        icon={<VideoIcon />}
+        title={tf('book_duration', { minutes: slots?.durationMinutes ?? 30 })}
+        detail={t('book_times_in')}
+      />
 
-        <div className="mt-6">
-          {phase === 'loading' && (
-            <p className="flex items-center gap-2 text-sm text-gray-500 py-6 justify-center">
-              <Spinner />
-              {t('book_loading')}
-            </p>
-          )}
+      {phase === 'loading' && <Shimmer heights={['h-72', 'h-16']} />}
 
-          {phase === 'failed' && (
-            <div className="space-y-3">
-              <ErrorNote>{t('book_load_failed')}</ErrorNote>
-              <button type="button" onClick={load} className="btn-secondary">{t('book_retry')}</button>
-            </div>
-          )}
+      {phase === 'failed' && (
+        <NoticeCard title={t('book_load_failed')}>
+          <button type="button" onClick={load} className="btn-primary mt-4">{t('book_retry')}</button>
+        </NoticeCard>
+      )}
 
-          {phase === 'ready' && slots && !slots.open && <ErrorNote>{t('book_closed')}</ErrorNote>}
-          {phase === 'ready' && slots?.open && !anyOpen && <ErrorNote>{t('book_no_times')}</ErrorNote>}
+      {phase === 'ready' && slots && !slots.open && <NoticeCard title={t('book_closed')}>{callButton}</NoticeCard>}
+      {phase === 'ready' && slots?.open && !anyOpen && <NoticeCard title={t('book_no_times')}>{callButton}</NoticeCard>}
 
-          {phase === 'ready' && slots?.open && anyOpen && (
+      {phase === 'ready' && slots?.open && anyOpen && (
+        <div className="space-y-2.5">
+          {error && <ErrorNote>{error}</ErrorNote>}
+
+          {!start ? (
             <>
-              {error && <div className="mb-4"><ErrorNote>{error}</ErrorNote></div>}
-
-              {!start ? (
+              <StepCard n={1} title={t('book_step_time')}>
                 <SlotPicker
                   days={slots.days}
                   day={day}
@@ -204,25 +212,24 @@ export default function BookPage() {
                     setStart(s)
                     setError('')
                     setBadField(null)
+                    window.scrollTo({ top: 0, behavior: 'smooth' })
                   }}
                 />
-              ) : (
+              </StepCard>
+              <StepRow n={2} title={t('book_details')} detail={t('book_step_details_wait')} done={false} />
+            </>
+          ) : (
+            <>
+              <StepRow
+                n={1}
+                title={t('book_step_time')}
+                detail={visitorZone ? `${f.when(start)} · ${tf('book_your_time', { when: f.localWhen(start, visitorZone) })}` : f.when(start)}
+                done
+                action={t('book_change')}
+                onAction={() => setStart(null)}
+              />
+              <StepCard n={2} title={t('book_details')}>
                 <form onSubmit={submit} className="space-y-5" noValidate>
-                  <div className="flex items-center justify-between gap-3 bg-canvas border border-line rounded-xl px-4 py-3">
-                    <div className="min-w-0">
-                      <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">{t('book_selected')}</p>
-                      <p className="text-[15px] font-semibold text-gray-950">{f.when(start)}</p>
-                      {visitorZone && (
-                        <p className="text-xs text-gray-500">{tf('book_your_time', { when: f.localWhen(start, visitorZone) })}</p>
-                      )}
-                    </div>
-                    <button type="button" onClick={() => setStart(null)} className="text-sm font-semibold text-gold-dark hover:text-gold shrink-0">
-                      {t('book_change')}
-                    </button>
-                  </div>
-
-                  <h2 className="text-sm font-semibold text-gray-950 pt-1">{t('book_details')}</h2>
-
                   <Field id="name" label={t('book_name')} error={badField === 'name' ? t('book_err_name') : ''}>
                     <input id="name" className="input-field" autoComplete="name" value={name} onChange={e => setName(e.target.value)} />
                   </Field>
@@ -261,7 +268,7 @@ export default function BookPage() {
                     <input id="website" tabIndex={-1} autoComplete="off" value={website} onChange={e => setWebsite(e.target.value)} />
                   </div>
 
-                  <div>
+                  <div className="bg-canvas border border-line rounded-xl p-4">
                     <label className="flex items-start gap-3 cursor-pointer">
                       <input
                         type="checkbox"
@@ -271,7 +278,7 @@ export default function BookPage() {
                       />
                       <span className="text-sm text-gray-700 leading-snug">{t('book_ack')}</span>
                     </label>
-                    {badField === 'ack' && <p className="text-sm text-red-600 mt-1.5">{t('book_err_ack')}</p>}
+                    {badField === 'ack' && <p className="text-sm text-red-600 mt-2">{t('book_err_ack')}</p>}
                   </div>
 
                   <button type="submit" disabled={submitting} className="btn-primary">
@@ -282,11 +289,11 @@ export default function BookPage() {
                     )}
                   </button>
                 </form>
-              )}
+              </StepCard>
             </>
           )}
         </div>
-      </div>
+      )}
     </BookingShell>
   )
 }

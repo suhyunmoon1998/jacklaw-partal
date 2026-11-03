@@ -47,15 +47,12 @@ export default function SlotPicker({
 
   return (
     <>
-      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 mb-3">
-        <h2 className="text-sm font-semibold text-gray-950">{t('book_pick_day')}</h2>
-        <p className="text-xs text-gray-500">{t('book_times_in')}</p>
-      </div>
-      <p className="text-xs font-medium text-gray-500 mb-2">
+      {/* No "times are Pacific" here: both pages say it above the picker. */}
+      <p className="text-sm font-semibold text-gray-950 mb-3">
         {f.month(first)}
         {f.month(last) !== f.month(first) && ` – ${f.month(last)}`}
       </p>
-      <div className="grid grid-cols-7 gap-1.5 text-center" role="grid">
+      <div className="grid grid-cols-7 gap-1.5 text-center" role="grid" aria-label={t('book_pick_day')}>
         {weekdayHeads.map(w => (
           <div key={w} className="text-[11px] font-medium text-gray-400 pb-1">{w}</div>
         ))}
