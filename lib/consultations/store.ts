@@ -156,7 +156,6 @@ async function holdWithEvent(person: Person, start: Date, candidates: string[], 
       timeZone: OFFICE_TIME_ZONE,
       summary: `${eventTitle('en')}: ${person.name}`,
       description: calendarDescription(person, adminLink(origin)),
-      attendee: { email: person.email, name: person.name },
     })
     return { ok: true, id: hold.id, host, end, eventId: event.eventId, meetUrl: event.meetUrl }
   } catch (err) {

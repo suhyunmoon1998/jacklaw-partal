@@ -381,8 +381,9 @@ export function consultationIcs(b: BookingForEmail, now = new Date()): string {
 }
 
 /**
- * What goes on the host's calendar event. The client is a guest on it and may
- * see it, so only what they gave us and a link that needs the admin password.
+ * What goes on the host's calendar event: what the client gave us and a link
+ * that needs the admin password. The client is not a guest on the event, so
+ * it never reaches their calendar (google.ts, createConsultationEvent).
  */
 export function calendarDescription(b: Pick<BookingForEmail, 'name' | 'phone' | 'email' | 'adverseParty'>, adminUrl: string): string {
   return [

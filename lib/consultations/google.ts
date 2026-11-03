@@ -213,9 +213,8 @@ export interface NewEvent {
   end: Date
   timeZone: string
   summary: string
-  /** Visible to the client too if the event reaches their calendar: nothing staff-only. */
+  /** On the host's calendar only: the client is not a guest (see createConsultationEvent). */
   description: string
-  attendee: { email: string; name: string }
 }
 
 function meetLink(event: {
@@ -232,9 +231,11 @@ function meetLink(event: {
 /**
  * Puts the consultation on the host's calendar with a Google Meet room.
  *
- * The client is listed as a guest, so Meet lets them straight in, but Google
- * is told not to email them (`sendUpdates=none`): the portal sends its own
- * confirmation, in their language.
+ * The client is deliberately not a guest on the event. A guest can see the
+ * organizer's address, and the office does not want clients to have the
+ * hosts' own email (owner, 2026-11-03: not jack@jacklaw.com). The client gets
+ * the Meet link from the portal's own confirmation instead, in their
+ * language, and the host admits them when they ask to join.
  */
 export async function createConsultationEvent(
   hostEmail: string,
@@ -247,9 +248,6 @@ export async function createConsultationEvent(
       description: event.description,
       start: { dateTime: event.start.toISOString(), timeZone: event.timeZone },
       end: { dateTime: event.end.toISOString(), timeZone: event.timeZone },
-      attendees: [{ email: event.attendee.email, displayName: event.attendee.name }],
-      guestsCanInviteOthers: false,
-      guestsCanSeeOtherGuests: false,
       visibility: 'private',
       conferenceData: {
         createRequest: { requestId: event.bookingId, conferenceSolutionKey: { type: 'hangoutsMeet' } },

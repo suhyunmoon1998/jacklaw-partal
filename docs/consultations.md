@@ -18,6 +18,10 @@ link, runs a conflict check, and emails both sides. Code is in
   intake's employer, supervisor and HR contact) and every earlier consultation,
   cancelled ones included. Matches are shown to the office to review. Nothing is
   declined automatically, and "no matches" means only that no names matched.
+- **Hosts' addresses stay private**: the client is not a guest on the host's
+  calendar event (a guest could see the organizer's address). They get the
+  Meet link from the portal's own emails, and the host admits them when they
+  ask to join.
 - **Emails**: confirmation (with a calendar file), a reminder the morning
   before (`/api/cron/consultation-reminders`, 16:00 UTC), and cancellation, in
   the client's language. The office gets every booking and cancellation in

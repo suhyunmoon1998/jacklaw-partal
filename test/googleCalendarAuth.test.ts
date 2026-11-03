@@ -40,6 +40,7 @@ function stubGoogle(overrides: { signJwt?: () => Response } = {}) {
         return json({ signedJwt: `signed-for-${JSON.parse(payload).sub}` })
       }
       if (u === TOKEN) return json({ access_token: 'calendar', expires_in: 3600 })
+      if (u.includes('/calendars/primary/events?')) return json({ id: 'evt1', hangoutLink: 'https://meet.google.com/abc-defg-hij' })
       if (u.endsWith('/freeBusy')) {
         return json({ calendars: { primary: { busy: [{ start: '2026-11-04T17:00:00Z', end: '2026-11-04T18:00:00Z' }] } } })
       }
@@ -120,5 +121,27 @@ describe('keyless sign-in to the hosts’ calendars', () => {
     vi.stubEnv('GOOGLE_WORKLOAD_IDENTITY_PROVIDER', 'vercel')
     const { calendarConfigured } = await import('@/lib/consultations/google')
     expect(calendarConfigured()).toBe(false)
+  })
+})
+
+describe('the event on the host’s calendar', () => {
+  it('never lists the client as a guest, so the host’s address never reaches them', async () => {
+    const calls = stubGoogle()
+    const { createConsultationEvent } = await import('@/lib/consultations/google')
+    const made = await createConsultationEvent('jack@jacklaw.com', {
+      bookingId: 'b1',
+      start: new Date('2026-11-04T17:00:00Z'),
+      end: new Date('2026-11-04T17:30:00Z'),
+      timeZone: 'America/Los_Angeles',
+      summary: 'Consultation — 866 JACK LAW: Ana Ruiz',
+      description: 'Free consultation booked on the JACKLAW portal.',
+    })
+    expect(made).toEqual({ eventId: 'evt1', meetUrl: 'https://meet.google.com/abc-defg-hij' })
+
+    const insert = calls.find(c => c.url.includes('/calendars/primary/events?'))!
+    expect(insert.url).toContain('sendUpdates=none')
+    const body = JSON.parse(String(insert.init.body))
+    expect(body).not.toHaveProperty('attendees')
+    expect(body.conferenceData.createRequest.conferenceSolutionKey.type).toBe('hangoutsMeet')
   })
 })
