@@ -10,7 +10,7 @@
  * number, or asked us to stop". Those are the tests.
  */
 
-import { existsSync, statSync } from 'node:fs'
+import { existsSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { invitationSms } from '@/lib/assignmentInvite'
 import { describe, expect, it } from 'vitest'
@@ -22,12 +22,14 @@ import {
   daysBetween,
   dueFor,
   isSendingTime,
+  nextTextRung,
   planReminders,
   resolveLang,
 } from '@/lib/reminderSchedule'
 import { CALL_VOICE, IMAGE_FOR, firstName, reminderBody } from '@/lib/reminderMessages'
 import { toE164 } from '@/lib/twilio'
 import { LANGUAGES } from '@/lib/langs'
+import { waitingSteps } from '@/lib/moduleSteps'
 
 const AT = (iso: string) => new Date(iso)
 /** A Wednesday, 10am in Los Angeles. */
@@ -94,8 +96,26 @@ describe('the ladder', () => {
 
   it('never repeats a rung it has already sent', () => {
     expect(dueFor(2, new Set<ReminderKind>(['day2']))).toBeNull()
-    expect(dueFor(5, new Set<ReminderKind>(['day5']))).toBe('day2')
+    expect(dueFor(5, new Set<ReminderKind>(['day5']))).toBeNull()
     expect(dueFor(12, new Set<ReminderKind>(['day2', 'day5', 'call']))).toBeNull()
+  })
+
+  it('never goes back down the ladder', () => {
+    // A real one: Step 2's day-5 text went out with no day-2 text before it, the
+    // next morning's run owed the day-2 text, and a client told "this is our last
+    // text" would have been sent the first one again.
+    expect(dueFor(7, new Set<ReminderKind>(['day5']))).toBeNull()
+    expect(dueFor(12, new Set<ReminderKind>(['call']))).toBeNull()
+    expect(dueFor(12, new Set<ReminderKind>(['day5']))).toBe('call')
+    // A re-send restarts the count, so the rungs not yet reached again are open.
+    expect(dueFor(2, new Set<ReminderKind>(['day5']))).toBe('day2')
+  })
+
+  it('offers the next text up when a reminder is sent early, never one passed over', () => {
+    expect(nextTextRung(new Set())?.kind).toBe('day2')
+    expect(nextTextRung(new Set<ReminderKind>(['day2']))?.kind).toBe('day5')
+    expect(nextTextRung(new Set<ReminderKind>(['day5']))).toBeNull()
+    expect(nextTextRung(new Set<ReminderKind>(['call']))).toBeNull()
   })
 
   it('walks one client from silence to a phone call', () => {
@@ -113,6 +133,14 @@ describe('the ladder', () => {
 })
 
 describe('who gets chased', () => {
+  it('leaves a step alone while it is locked behind an unfinished one', () => {
+    const { due, skipped } = plan({
+      steps: [sent({ chasing: 'module1' }), sent({ chasing: 'module2', locked: true })],
+    })
+    expect(due.map(d => d.chasing)).toEqual(['module1'])
+    expect(skipped).toContainEqual({ clientId: 'c1', chasing: 'module2', kind: null, reason: 'locked' })
+  })
+
   it('chases a client who was sent something and has not submitted', () => {
     const { due } = plan({ now: AT('2026-09-16T17:30:00Z') })
     expect(due).toHaveLength(1)
@@ -436,5 +464,19 @@ describe('the text that invites a client to a question set', () => {
     for (const lang of ['en', 'es', 'zh', 'ko'] as const) {
       expect(invitationSms(lang, 'Ana', 'https://x').length, lang).toBeGreaterThan(40)
     }
+  })
+})
+
+describe('which steps are locked', () => {
+  it('says what the client\'s own screen says', () => {
+    expect(waitingSteps(['module1', 'module2'], {})).toEqual(new Set(['module2']))
+    expect(waitingSteps(['module1', 'module2'], { module1: true })).toEqual(new Set())
+    // An unsent step is in nobody's way.
+    expect(waitingSteps(['module2'], {})).toEqual(new Set())
+  })
+
+  it('is what the morning run asks', () => {
+    const cron = readFileSync(join(process.cwd(), 'app/api/cron/reminders/route.ts'), 'utf8')
+    expect(cron).toMatch(/locked: waitingSteps\(/)
   })
 })

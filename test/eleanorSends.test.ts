@@ -139,6 +139,20 @@ describe('the next reminder text', () => {
     expect(!plan.ok && plan.reason).toBe('TextRemindersUsed')
   })
 
+  it('never goes back to a text the ladder has passed', async () => {
+    tables.client_reminders.push({ client_id: 'c1', module_id: 'module1', kind: 'day5' })
+    const plan = await planManualReminder('c1', 'module1')
+    expect(!plan.ok && plan.reason).toBe('TextRemindersUsed')
+  })
+
+  it('is refused for a step locked behind an unfinished one', async () => {
+    tables.client_module_sends.push({ client_id: 'c1', module_id: 'module2', sent_at: '2026-09-20T18:00:00Z', created_by: 'admin' })
+    expect(await planManualReminder('c1', 'module2')).toMatchObject({ ok: false, reason: 'StepLocked' })
+    tables.questionnaire_states[0].submitted = true
+    const open = await planManualReminder('c1', 'module2')
+    expect(open.ok).toBe(true)
+  })
+
   it('is refused for a step not sent, one submitted, or a client who said STOP', async () => {
     expect(await planManualReminder('c1', 'module2')).toMatchObject({ ok: false, reason: 'NotSent' })
     tables.questionnaire_states[0].submitted = true

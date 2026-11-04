@@ -72,6 +72,8 @@ export interface SentStep {
   /** When the office sent it. The day counting starts here. */
   sentAt: string
   submitted: boolean
+  /** Sent, but waiting behind an earlier step they have not finished. */
+  locked?: boolean
   /** The court fee waiver questions, which are chased in words of their own. */
   feeWaiver?: boolean
 }
@@ -101,6 +103,7 @@ export interface DueReminder {
 /** Why a step that is otherwise due is not being acted on. */
 export type SkipReason =
   | 'submitted'
+  | 'locked'
   | 'already sent'
   | 'no phone'
   | 'opted out'
@@ -187,8 +190,11 @@ export function daysBetween(from: string | Date, to: Date): number {
  * The highest rung this step has reached that has not been sent yet.
  *
  * Highest, not lowest: a client who was sent something eleven days ago and has
- * had nothing gets the call, not three texts in a row on the same morning. The
- * rungs below it are recorded as sent so they never fire retroactively.
+ * had nothing gets the call, not three texts in a row on the same morning.
+ *
+ * And never back down. A rung already sent closes the ones beneath it, so a
+ * client told "this is our last text" on day 5 is not sent the day-2 text the
+ * morning after. Nothing has to be recorded for the rungs passed over.
  */
 export function dueFor(
   daysWaiting: number,
@@ -196,9 +202,15 @@ export function dueFor(
 ): ReminderKind | null {
   for (let i = LADDER.length - 1; i >= 0; i--) {
     const rung = LADDER[i]
-    if (daysWaiting >= rung.afterDays && !alreadySent.has(rung.kind)) return rung.kind
+    if (daysWaiting >= rung.afterDays) return alreadySent.has(rung.kind) ? null : rung.kind
   }
   return null
+}
+
+/** The text a reminder sent early would be: the next one up, never one passed over. */
+export function nextTextRung(used: ReadonlySet<ReminderKind>) {
+  const highest = LADDER.reduce((top, rung, i) => (used.has(rung.kind) ? i : top), -1)
+  return LADDER.slice(highest + 1).find(rung => rung.channel === 'sms') ?? null
 }
 
 export const channelOf = (kind: ReminderKind): 'sms' | 'call' =>
@@ -229,6 +241,13 @@ export function planReminders(input: {
 
     if (step.submitted) {
       skipped.push({ ...ids(step), kind: null, reason: 'submitted' })
+      continue
+    }
+
+    // They cannot start it until the earlier step is done, so there is nothing
+    // to chase. The earlier step's own reminders are the ones that ask.
+    if (step.locked) {
+      skipped.push({ ...ids(step), kind: null, reason: 'locked' })
       continue
     }
 

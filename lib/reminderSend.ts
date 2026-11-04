@@ -3,13 +3,14 @@ import { withLang } from '@/lib/langLink'
 import { getSupabase } from '@/lib/supabase'
 import { numberOptedOut } from '@/lib/numberOptOut'
 import { ModuleId } from '@/lib/modules'
+import { waitingSteps } from '@/lib/moduleSteps'
 import {
   Chasing,
   DueReminder,
-  LADDER,
   ReminderKind,
   assignmentOf,
   channelOf,
+  nextTextRung,
   chasedFrom,
   daysBetween,
   resolveLang,
@@ -126,6 +127,7 @@ export async function deliverReminder(
 export type ManualReminderRefusal =
   | 'NotSent'
   | 'AlreadySubmitted'
+  | 'StepLocked'
   | 'UnknownClient'
   | 'OptedOut'
   | 'NoPhone'
@@ -135,6 +137,7 @@ export type ManualReminderRefusal =
 const refusalText: Record<ManualReminderRefusal, string> = {
   NotSent: 'That step has not been sent to this client, so there is nothing to remind them about.',
   AlreadySubmitted: 'They have already submitted it.',
+  StepLocked: 'They cannot start this step until they finish the one before it, so a reminder about it would ask for something they cannot do.',
   UnknownClient: 'No such client.',
   OptedOut: 'They replied STOP to our texts, so this office cannot text them.',
   NoPhone: 'There is no usable phone number on file for them.',
@@ -176,16 +179,22 @@ export async function planManualReminder(
     feeWaiver = data.question_set_id === FEE_WAIVER_SET_ID
   } else {
     const moduleId = chasing as ModuleId
-    const [sendRes, stateRes] = await Promise.all([
+    const [sendRes, stateRes, allSendsRes] = await Promise.all([
       db.from('client_module_sends').select('sent_at, created_by').eq('client_id', clientId).eq('module_id', moduleId).maybeSingle(),
       db.from('questionnaire_states').select('submitted, m2_submitted').eq('client_id', clientId).maybeSingle(),
+      db.from('client_module_sends').select('module_id').eq('client_id', clientId),
     ])
-    if (sendRes.error || stateRes.error) return refuse('Unreadable')
+    if (sendRes.error || stateRes.error || allSendsRes.error) return refuse('Unreadable')
     // Opened as the client was added is not sent: see chasedFrom.
     const since = sendRes.data ? chasedFrom(sendRes.data) : null
     if (!since) return refuse('NotSent')
     sentAt = since
     submitted = moduleId === 'module2' ? Boolean(stateRes.data?.m2_submitted) : Boolean(stateRes.data?.submitted)
+    const waiting = waitingSteps(
+      (allSendsRes.data ?? []).map(row => row.module_id as ModuleId),
+      { module1: Boolean(stateRes.data?.submitted), module2: Boolean(stateRes.data?.m2_submitted) }
+    )
+    if (!submitted && waiting.has(moduleId)) return refuse('StepLocked')
   }
   if (submitted) return refuse('AlreadySubmitted')
 
@@ -206,7 +215,7 @@ export async function planManualReminder(
   if (stopped) return refuse('OptedOut')
 
   const used = new Set((loggedRes.data ?? []).map(row => row.kind as ReminderKind))
-  const next = LADDER.find(rung => rung.channel === 'sms' && !used.has(rung.kind))
+  const next = nextTextRung(used)
   if (!next) return refuse('TextRemindersUsed')
 
   return {

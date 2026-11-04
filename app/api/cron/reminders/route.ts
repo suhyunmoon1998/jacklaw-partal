@@ -4,6 +4,7 @@ import { getSupabase } from '@/lib/supabase'
 import { optedOutNumbers } from '@/lib/numberOptOut'
 import { phoneKey } from '@/lib/phoneNumber'
 import { ModuleId } from '@/lib/modules'
+import { waitingSteps } from '@/lib/moduleSteps'
 import {
   Chasing,
   LADDER,
@@ -132,6 +133,11 @@ export async function GET(req: NextRequest) {
     (states ?? []).map(s => [s.client_id, { module1: !!s.submitted, module2: !!s.m2_submitted }])
   )
 
+  const sentTo = new Map<string, ModuleId[]>()
+  for (const s of sends ?? []) {
+    sentTo.set(s.client_id, [...(sentTo.get(s.client_id) ?? []), s.module_id as ModuleId])
+  }
+
   const steps: SentStep[] = [
     // Only a step somebody sent: one merely opened as the client was added
     // was never announced to them, so there is nothing to remind them of.
@@ -146,6 +152,7 @@ export async function GET(req: NextRequest) {
           s.module_id === 'module2'
             ? Boolean(submitted.get(s.client_id)?.module2)
             : Boolean(submitted.get(s.client_id)?.module1),
+        locked: waitingSteps(sentTo.get(s.client_id) ?? [], submitted.get(s.client_id) ?? {}).has(s.module_id as ModuleId),
       }]
     }),
     // A round is finished when the assignment is, which the client's own

@@ -177,6 +177,23 @@ export function stepViews(
   return views
 }
 
+/**
+ * The steps a client has been sent and cannot start yet, from bare rows: the
+ * same answer their screen gives, for code that has no progress to hand.
+ */
+export function waitingSteps(
+  sent: ModuleId[],
+  submitted: Partial<Record<ModuleId, boolean>>
+): Set<ModuleId> {
+  const sends: Partial<Record<ModuleId, ModuleSend>> = {}
+  const progress: Partial<Record<ModuleId, ModuleProgress>> = {}
+  for (const id of sent) {
+    sends[id] = { sentAt: '', openedAt: null }
+    progress[id] = { submitted: Boolean(submitted[id]), completedSections: [], totalSections: 0 }
+  }
+  return new Set(stepViews(sends, progress).filter(v => v.state === 'waiting').map(v => v.id))
+}
+
 /** The one step the client should be doing, if there is one. */
 export const currentStep = (views: StepView[]): StepView | null =>
   views.find(v => v.state === 'open') ?? null
