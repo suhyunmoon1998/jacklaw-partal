@@ -12,6 +12,19 @@ const nextConfig = {
   // a plain Node require instead, so __dirname stays pdfkit's real folder.
   // (Next 15 moved this out of `experimental` and renamed it.)
   serverExternalPackages: ['pdfkit'],
+  async redirects() {
+    return [
+      {
+        // The firm's own address for booking, given out by text and on other
+        // sites. Its front door is the booking page; everything else stays at
+        // the same path. Temporary, so no browser remembers it.
+        source: '/',
+        has: [{ type: 'host', value: 'book.866jacklaw.com' }],
+        destination: '/book',
+        permanent: false,
+      },
+    ]
+  },
   async headers() {
     return [
       {

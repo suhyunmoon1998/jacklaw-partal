@@ -35,6 +35,15 @@ import type { BookingField } from '@/lib/consultations/request'
  * visitor elsewhere sees their own clock beside them (components/SlotPicker).
  */
 
+/**
+ * On book.866jacklaw.com "/" leads straight back to this page, so the way back
+ * to the portal has to name the portal's own address. Only reached once a
+ * booking is made, so always in the browser.
+ */
+function portalHome(): string {
+  return window.location.hostname === 'book.866jacklaw.com' ? 'https://jacklaw-portal.vercel.app/' : '/'
+}
+
 interface Slots {
   open: boolean
   durationMinutes: number
@@ -169,7 +178,7 @@ export default function BookPage() {
 
         <div className="card animate-slide-up stagger-2">
           <p className="text-sm text-gray-600 leading-relaxed">{t('book_done_manage')}</p>
-          <Link href="/" className="btn-secondary block text-center mt-4">
+          <Link href={portalHome()} className="btn-secondary block text-center mt-4">
             {t('book_done_home')}
           </Link>
         </div>
