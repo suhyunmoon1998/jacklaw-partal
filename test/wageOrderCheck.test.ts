@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import { WageOrderChoice, checkChoice, isUsable } from '@/lib/wageOrderChoice'
+import { ORDERS, WageOrderChoice, checkChoice, isUsable, orderNumber, tidyChoice } from '@/lib/wageOrderChoice'
+import { proposedOrder } from '@/lib/caseReading'
+import { section } from '@/lib/authority'
 
 const choice = (over: Partial<WageOrderChoice['proposal']> = {}, dlse: WageOrderChoice['dlse'] = null): WageOrderChoice => ({
   proposal: {
@@ -64,5 +66,61 @@ describe('checking a Wage Order proposal before ten claims are read under it', (
   it('says nothing about a proposal that reached no Order', () => {
     expect(checkChoice(choice({ order: '' }))).toEqual([])
     expect(isUsable(choice({ order: '' }))).toBe(false)
+  })
+})
+
+describe('the Order as a number, however the model wrote it', () => {
+  it('reads every way a stored reading has written it', () => {
+    for (const written of ['5', 'IWC Wage Order 5', 'Wage Order 5', 'Order 5', 'IWC 5', 'Order 5 (Public Housekeeping)', '5 (Public Housekeeping)', 'IWC Wage Order 5-2001', 'Order 5, Section 2(R)']) {
+      expect(orderNumber(written), written).toBe('5')
+    }
+  })
+
+  it('leaves a bare number exactly as it is, so no current reading goes stale and is paid for again', () => {
+    for (const order of ORDERS) expect(orderNumber(order)).toBe(order)
+  })
+
+  it('is empty when there is no one Order in the text', () => {
+    for (const written of ['', 'none', 'MW', '18', '0', '5 or 7', 'Order 5 and Order 7', '5/7', 'Public Housekeeping', null, undefined]) {
+      expect(orderNumber(written), String(written)).toBe('')
+    }
+  })
+
+  it('corrects a stored reading, so the Order on file is found', () => {
+    // A real one. Written this way the lookup missed, and the matrix was told the
+    // Order was NOT ON FILE on a file whose Order is in the library.
+    const stored = tidyChoice(choice({
+      order: 'IWC Wage Order 5',
+      rejected: [{ order: 'IWC Wage Order 7 (Mercantile Industry)', why: 'x' }, { order: 'not a number', why: 'y' }],
+    }))
+    expect(stored.proposal.order).toBe('5')
+    expect(stored.proposal.rejected.map(r => r.order)).toEqual(['7', 'not a number'])
+    expect(stored.caveat).toBe('Proposed IWC Wage Order 5, not confirmed by an attorney. Every rest-period and hours finding below depends on it.')
+    const order = proposedOrder({ wageOrder: stored })
+    expect(order).toBe('5')
+    expect(section('IWC', `${order} sec 12`)).toBeTruthy()
+    expect(section('IWC', 'IWC Wage Order 5 sec 12')).toBeNull()
+  })
+
+  it('says plainly when none was proposed', () => {
+    const stored = tidyChoice(choice({ order: 'none' }))
+    expect(stored.proposal.order).toBe('')
+    expect(stored.caveat).toContain('No Wage Order proposed')
+    expect(isUsable(stored)).toBe(false)
+  })
+
+  it('passes over anything that is not a proposal', () => {
+    expect(tidyChoice(null)).toBeNull()
+    expect(tidyChoice({})).toEqual({})
+  })
+
+  it('catches an Order proposed and ruled out, in whatever words', () => {
+    const contradictory = choice({ order: 'IWC Wage Order 7', reliedOn: '', rejected: [{ order: 'Order 7 (Mercantile)', why: 'x' }] })
+    expect(checkChoice(contradictory).some(p => p.says.includes('ruled out'))).toBe(true)
+    expect(isUsable(contradictory)).toBe(false)
+  })
+
+  it('catches a provision cited the way the schema asks for it', () => {
+    expect(checkChoice(choice({ order: '7', rejected: [], reliedOn: 'IWC 5 sec 2' })).some(p => p.says.includes('relied on is Order 5'))).toBe(true)
   })
 })

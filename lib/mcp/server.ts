@@ -1,6 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import { getSupabase } from '@/lib/supabase'
+import { tidyChoice } from '@/lib/wageOrderNumber'
 import { QUESTIONNAIRE_SECTIONS } from '@/lib/questionnaireData'
 import { MODULE_2_SECTIONS } from '@/lib/module2Data'
 import { LEGACY_QUESTIONS } from '@/lib/questionnaireLegacy'
@@ -108,7 +109,7 @@ export function createPortalMcpServer() {
     if (error) throw new Error('Portal data could not be read. Retry; do not interpret this as an empty record.')
     return { client, recordExists: Boolean(data), updatedAt: data?.updated_at ?? null,
       freshness: 'not_revalidated', fingerprint: data?.fingerprint ?? null, section,
-      reading: data?.result?.[section] ?? null, failed: data?.result?.failed ?? [], fehaSkipped: data?.result?.fehaSkipped ?? null }
+      reading: section === 'wageOrder' ? tidyChoice(data?.result?.wageOrder ?? null) : data?.result?.[section] ?? null, failed: data?.result?.failed ?? [], fehaSkipped: data?.result?.fehaSkipped ?? null }
   }))
 
   server.registerTool('list_client_assignments', {

@@ -43,13 +43,11 @@ import { LedgerEntry } from '@/lib/factLedger'
 import { factSheet } from '@/lib/claimMatrix'
 import { plainly } from '@/lib/modelErrors'
 import { Meter } from '@/lib/spend'
+import { ORDERS, orderNumber, tidyChoice } from '@/lib/wageOrderNumber'
 
 import { CHOICE_MODEL } from '@/lib/models'
 
-export { CHOICE_MODEL }
-
-/** The seventeen industry orders. MW is the minimum wage order and governs nobody's industry. */
-export const ORDERS = Array.from({ length: 17 }, (_, i) => String(i + 1))
+export { CHOICE_MODEL, ORDERS, orderNumber, tidyChoice }
 
 type Dlse = {
   guide: string
@@ -276,15 +274,13 @@ export async function proposeWageOrder(entries: LedgerEntry[], meter?: Meter): P
   const proposal = response.parsed_output
   if (!proposal) throw new Error('The Wage Order reading came back unreadable.')
 
-  return {
+  const order = orderNumber(proposal.order)
+  return tidyChoice<WageOrderChoice>({
     proposal,
-    dlse: proposal.order ? dlseOn(proposal.businessIs, proposal.order) : null,
+    dlse: order ? dlseOn(proposal.businessIs, order) : null,
     confirmed: false,
-    caveat:
-      proposal.order
-        ? `Proposed IWC Wage Order ${proposal.order}, not confirmed by an attorney. Every rest-period and hours finding below depends on it.`
-        : 'No Wage Order proposed. The rest-period duty cannot be stated until one is settled.',
-  }
+    caveat: '',
+  })
 }
 
 /**
@@ -308,23 +304,26 @@ export interface ChoiceProblem {
 export function checkChoice(choice: WageOrderChoice): ChoiceProblem[] {
   const { proposal } = choice
   const found: ChoiceProblem[] = []
-  if (!proposal.order) return found
+  const order = orderNumber(proposal.order)
+  if (!order) return found
 
   // The provision it relied on names an Order. If that is a different Order,
   // the field and the reasoning disagree and one of them is wrong.
-  const named = Array.from(proposal.reliedOn.matchAll(/Order\s+(\d{1,2})\b/gi)).map(m => m[1])
-  if (named.length && !named.includes(proposal.order)) {
+  const named = Array.from(proposal.reliedOn.matchAll(/(?:Order|IWC)\s+(\d{1,2})\b/gi)).map(m => m[1])
+  if (named.length && !named.includes(order)) {
     found.push({
       severity: 'blocking',
-      says: `It proposes Order ${proposal.order} but the provision it relied on is Order ${named.join(' / ')}.`,
+      says: `It proposes Order ${order} but the provision it relied on is Order ${named.join(' / ')}.`,
     })
   }
 
   // An Order cannot be both the answer and one of the answers ruled out.
-  if (proposal.rejected.some(r => r.order === proposal.order)) {
+  // Compared as numbers: the model writes "7" one day and "Order 7 (Mercantile)"
+  // the next, and a comparison of the words let both through.
+  if (proposal.rejected.some(r => orderNumber(r.order) === order)) {
     found.push({
       severity: 'blocking',
-      says: `Order ${proposal.order} is proposed and is also in the list of Orders it ruled out.`,
+      says: `Order ${order} is proposed and is also in the list of Orders it ruled out.`,
     })
   }
 
@@ -342,7 +341,7 @@ export function checkChoice(choice: WageOrderChoice): ChoiceProblem[] {
   if (choice.dlse && !choice.dlse.agrees) {
     found.push({
       severity: 'warning',
-      says: `The Labor Commissioner's index puts "${choice.dlse.entry}" under Order ${choice.dlse.orders}, not ${proposal.order}.`,
+      says: `The Labor Commissioner's index puts "${choice.dlse.entry}" under Order ${choice.dlse.orders}, not ${order}.`,
     })
   }
 
@@ -351,5 +350,5 @@ export function checkChoice(choice: WageOrderChoice): ChoiceProblem[] {
 
 /** Whether the claims may be read under this proposal at all. */
 export function isUsable(choice: WageOrderChoice): boolean {
-  return Boolean(choice.proposal.order) && !checkChoice(choice).some(p => p.severity === 'blocking')
+  return Boolean(orderNumber(choice.proposal.order)) && !checkChoice(choice).some(p => p.severity === 'blocking')
 }

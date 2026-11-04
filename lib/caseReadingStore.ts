@@ -18,6 +18,7 @@
 
 import { getSupabase } from '@/lib/supabase'
 import { Stage, StoredReading, staleStages } from '@/lib/caseReadingShape'
+import { tidyChoice } from '@/lib/wageOrderNumber'
 
 export interface ReadingRow {
   reading: StoredReading
@@ -44,8 +45,9 @@ export async function readReading(clientId: string, against: string): Promise<Re
     .maybeSingle()
   if (error) throw new Error(`Could not read the case reading: ${error.message}`)
   if (!data) return null
+  const reading = (data.result ?? {}) as StoredReading
   return {
-    reading: (data.result ?? {}) as StoredReading,
+    reading: reading.wageOrder ? { ...reading, wageOrder: tidyChoice(reading.wageOrder) } : reading,
     fingerprint: data.fingerprint,
     stale: data.fingerprint !== against,
     updatedAt: data.updated_at,
