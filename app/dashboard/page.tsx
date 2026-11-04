@@ -54,7 +54,8 @@ export default function DashboardPage() {
         fetch(`/api/modules?clientId=${encodeURIComponent(clientId)}`).then(r => r.json()),
       ])
 
-      if (modules?.ok !== true) {
+      // Without its state a finished step would be drawn as one still to do.
+      if (modules?.ok !== true || state?.error) {
         setLoadFailed(true)
         return
       }

@@ -103,6 +103,7 @@ export default function ModuleQuestionnaire({
    * the locked screen.
    */
   const [step, setStep] = useState<StepView | null>(null)
+  const [loadFailed, setLoadFailed] = useState(false)
   const [toast, setToast] = useState<{ title: string; sub: string; celebrate: boolean } | null>(null)
   const router = useRouter()
   const { lang, t, tf } = useLanguage()
@@ -137,6 +138,14 @@ export default function ModuleQuestionnaire({
       fetch(`/api/questionnaire?clientId=${encodeURIComponent(s.clientId)}`).then(r => r.json()),
     ])
       .then(([modules, { state }]) => {
+        // No state means the read failed, not that nothing has been answered.
+        // Drawn as a blank form, the autosave below would write that blank over
+        // everything this client has told us.
+        if (!state || modules?.ok !== true) {
+          setLoadFailed(true)
+          return
+        }
+
         if (state) {
           const mine = moduleId === 'module2' && state.module2 ? state.module2 : state
           setQState({
@@ -191,7 +200,7 @@ export default function ModuleQuestionnaire({
           }).catch(() => {})
         }
       })
-      .catch(() => setStep(null))
+      .catch(() => setLoadFailed(true))
   }, [router]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const section = SECTIONS[currentSection]
@@ -237,7 +246,8 @@ export default function ModuleQuestionnaire({
           completedSections: qState.completedSections,
           submitted: qState.submitted,
         }),
-      }).then(() => {
+      }).then(res => {
+        if (!res.ok) return
         setAutoSaved(true)
         setTimeout(() => setAutoSaved(false), 2000)
       })
@@ -359,6 +369,14 @@ export default function ModuleQuestionnaire({
     // The firm's email notification fires server-side from persistState's save
     // (see /api/questionnaire), keyed off the DB transition to submitted=true.
     router.push(submitHref)
+  }
+
+  if (loadFailed) {
+    return (
+      <div className="min-h-screen bg-canvas flex items-center justify-center px-6">
+        <p role="alert" className="max-w-sm text-center text-sm text-gray-600">{t('questionnaire_load_failed')}</p>
+      </div>
+    )
   }
 
   if (!session || step === null) return null

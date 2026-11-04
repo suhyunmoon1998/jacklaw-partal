@@ -5,6 +5,7 @@ import { origin } from '@/lib/assignmentInvite'
 import { submissionLanguage } from '@/lib/machineTranslate'
 import { denyClient } from '@/lib/clientAuth'
 import { claimModule2Submission, readDamagesWhileTimeAllows } from '@/lib/damagesAuto'
+import { wouldEraseAnswers } from '@/lib/answerGuard'
 
 /**
  * Long enough for the damages reading begun after a Module 2 submission
@@ -37,11 +38,18 @@ export async function GET(req: NextRequest) {
   const denied = await denyClient(req, clientId)
   if (denied) return denied
 
-  const { data } = await getSupabase()
+  const { data, error } = await getSupabase()
     .from('questionnaire_states')
     .select('*')
     .eq('client_id', clientId)
     .maybeSingle()
+
+  // A failed read is not a blank questionnaire. Answered as one, the page draws
+  // an empty form and its autosave writes that emptiness over the client's file.
+  if (error) {
+    console.error('questionnaire read error:', error)
+    return NextResponse.json({ error: 'Could not read the questionnaire.' }, { status: 500 })
+  }
 
   if (!data) {
     return NextResponse.json({
@@ -96,11 +104,21 @@ export async function POST(req: NextRequest) {
   const column = PROGRESS_COLUMNS[moduleId]
   const supabase = getSupabase()
 
-  const { data: existing } = await supabase
+  const { data: existing, error: readError } = await supabase
     .from('questionnaire_states')
-    .select('submitted, m2_submitted')
+    .select('answers, submitted, m2_submitted')
     .eq('client_id', clientId)
     .maybeSingle()
+  // Without this read a submitted file looks unsubmitted, and nothing below can
+  // tell what the save is about to replace.
+  if (readError) {
+    console.error('questionnaire save: could not read the file first:', readError)
+    return NextResponse.json({ error: 'Save failed' }, { status: 503 })
+  }
+  if (wouldEraseAnswers(existing?.answers, answers)) {
+    console.error(`questionnaire save refused: a blank record over answers on file for ${clientId}`)
+    return NextResponse.json({ error: 'Refused: this save would erase answers on file.' }, { status: 409 })
+  }
   const wasSubmitted = Boolean(
     moduleId === 'module1' ? existing?.submitted : existing?.m2_submitted
   )
@@ -140,6 +158,20 @@ export async function POST(req: NextRequest) {
   // Keyed off the DB's prior state rather than the client's request, so it fires exactly once even if
   // the client retries the save or the browser is closed right after submit.
   if (nowSubmitted && !wasSubmitted) {
+    // A Step 2 handed over while Step 1 was unfinished has been locked until
+    // this moment, so its reminders count from now. Counted from the day it was
+    // handed over, a client who took three weeks over Step 1 would be rung about
+    // Step 2 the next morning. A step they have already been into is left alone.
+    if (moduleId === 'module1') {
+      const { error: clockError } = await supabase
+        .from('client_module_sends')
+        .update({ sent_at: new Date().toISOString() })
+        .eq('client_id', clientId)
+        .eq('module_id', 'module2')
+        .is('opened_at', null)
+      if (clockError) console.error('questionnaire save: could not restart the Step 2 clock:', clockError)
+    }
+
     const { data: client } = await supabase
       .from('clients')
       .select('name, case_type, portal_lang')
