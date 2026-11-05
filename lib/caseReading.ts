@@ -80,6 +80,9 @@ export function readingFingerprint(entries: LedgerEntry[]): string {
  * invalidates them and a different model choosing the same Order does not.
  */
 export function stampFor(entries: LedgerEntry[], stage: Stage, stored: StoredReading): string {
+  // An attorney's choice was not read from the facts or by a model, so neither
+  // of them moving makes it stale.
+  if (stage === 'wage order' && attorneyChose(stored)) return `attorney: ${proposedOrder(stored)}`
   const h = createHash('sha256')
   h.update(readingFingerprint(entries))
   h.update(stage)
@@ -198,12 +201,17 @@ export function fehaRaised(entries: LedgerEntry[]): { raised: boolean; because: 
   return { raised: because.length > 0, because }
 }
 
+/** Whether the Order on file is one an attorney chose, rather than the model's proposal. */
+export function attorneyChose(stored: StoredReading): boolean {
+  return (stored.wageOrder as WageOrderChoice | undefined)?.confirmed === true
+}
+
 /**
- * The Order the claims are read under — the PROPOSED one — or undefined.
+ * The Order the claims are read under, or undefined.
  *
- * A proposal, never a decision: only an attorney confirms which Order governs,
- * and nothing in the portal records that they have. So the matrix is told it
- * is a proposal and marks every element that rests on it.
+ * The model's proposal unless an attorney has chosen one. Only an attorney
+ * decides which Order governs, so the matrix is told which of the two it has
+ * and marks every element that rests on it.
  *
  * Undefined rather than a default. A guess here would silently change what
  * duty the employer owed, and the matrix reports the element as needing
@@ -243,6 +251,11 @@ export async function runStage(
   })
 
   if (stage === 'wage order') {
+    // An attorney has decided this, and a read that starts over must not undo
+    // it or pay a model to disagree. Taking the choice back is how it reopens.
+    if (attorneyChose(stored)) {
+      return { wageOrder: stored.wageOrder, stamps: { [stage]: stampFor(entries, stage, stored) } }
+    }
     return took({ wageOrder: await proposeWageOrder(entries, meter) })
   }
 
@@ -256,12 +269,12 @@ export async function runStage(
           : 'No FEHA claims are defined.',
       })
     }
-    const matrix = await buildMatrix(entries, FEHA_CLAIMS, { wageOrder: proposedOrder(stored), meter })
+    const matrix = await buildMatrix(entries, FEHA_CLAIMS, { wageOrder: proposedOrder(stored), wageOrderChosen: attorneyChose(stored), meter })
     return claimsRead(stage, { claims3: matrix.findings, fehaSkipped: undefined }, matrix)
   }
 
   if (stage === 'claims 1' || stage === 'claims 2') {
-    const matrix = await buildMatrix(entries, claimsFor(stage), { wageOrder: proposedOrder(stored), meter })
+    const matrix = await buildMatrix(entries, claimsFor(stage), { wageOrder: proposedOrder(stored), wageOrderChosen: attorneyChose(stored), meter })
     return claimsRead(stage, stage === 'claims 1' ? { claims1: matrix.findings } : { claims2: matrix.findings }, matrix)
   }
 

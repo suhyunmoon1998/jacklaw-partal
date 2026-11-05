@@ -13,9 +13,10 @@
  * classification, so this module does not make it. It reads the Orders' own
  * applicability and definition language against the facts and PROPOSES one,
  * with the provision it relied on, the facts it relied on, and the orders it
- * rejected and why. An attorney confirms it or does not. Nothing downstream
- * treats an unconfirmed proposal as settled, and the proposal travels with
- * every finding that rests on it.
+ * rejected and why. An attorney confirms it or chooses another, in the panel
+ * (chooseOrder in lib/wageOrderNumber.ts). Nothing downstream treats an
+ * unconfirmed proposal as settled, and the proposal travels with every finding
+ * that rests on it.
  *
  * Two sources, deliberately unequal:
  *
@@ -43,11 +44,11 @@ import { LedgerEntry } from '@/lib/factLedger'
 import { factSheet } from '@/lib/claimMatrix'
 import { plainly } from '@/lib/modelErrors'
 import { Meter } from '@/lib/spend'
-import { ORDERS, orderNumber, tidyChoice } from '@/lib/wageOrderNumber'
+import { ORDERS, chooseOrder, orderNumber, takeBackOrder, tidyChoice } from '@/lib/wageOrderNumber'
 
 import { CHOICE_MODEL } from '@/lib/models'
 
-export { CHOICE_MODEL, ORDERS, orderNumber, tidyChoice }
+export { CHOICE_MODEL, ORDERS, chooseOrder, orderNumber, takeBackOrder, tidyChoice }
 
 type Dlse = {
   guide: string
@@ -93,8 +94,10 @@ export interface WageOrderChoice {
   proposal: Proposal
   /** What the DLSE pamphlet says for the industry proposed, or null. */
   dlse: { entry: string; orders: string; agrees: boolean } | null
-  /** Always false here. Only an attorney sets it, and only elsewhere. */
-  confirmed: false
+  /** False from the model, always. Only an attorney sets it, from the panel. */
+  confirmed: boolean
+  /** Set with `confirmed`: when, and what the model had proposed before. */
+  chosen?: { at: string; modelSaid: string }
   /** Carried into every finding that rests on the choice. */
   caveat: string
 }
@@ -302,6 +305,9 @@ export interface ChoiceProblem {
 }
 
 export function checkChoice(choice: WageOrderChoice): ChoiceProblem[] {
+  // These check the model's work. An attorney's choice is not the model's, and
+  // choosing an Order the model ruled out is a thing an attorney may do.
+  if (choice.confirmed) return []
   const { proposal } = choice
   const found: ChoiceProblem[] = []
   const order = orderNumber(proposal.order)
@@ -351,4 +357,21 @@ export function checkChoice(choice: WageOrderChoice): ChoiceProblem[] {
 /** Whether the claims may be read under this proposal at all. */
 export function isUsable(choice: WageOrderChoice): boolean {
   return Boolean(orderNumber(choice.proposal.order)) && !checkChoice(choice).some(p => p.severity === 'blocking')
+}
+
+/**
+ * Why the claims may not be read under this proposal, or '' when they may.
+ *
+ * Two different states that once shared one sentence. Four clients were held
+ * for up to five weeks as "the proposal contradicts itself" when the model had
+ * done what rule 6 tells it to: left the Order empty because the facts did not
+ * reach one. Reading it again would change nothing. A person has to settle it.
+ */
+export function whyNotUsable(choice: WageOrderChoice): string {
+  if (isUsable(choice)) return ''
+  if (!orderNumber(choice.proposal.order)) {
+    return 'No Wage Order was proposed, because the facts on file do not settle which one governs this employer. The wage claims cannot be read until an attorney chooses one or the client answers what is missing.'
+  }
+  const blocking = checkChoice(choice).filter(p => p.severity === 'blocking').map(p => p.says)
+  return `The Wage Order proposal contradicts itself, so the claims cannot be read under it. ${blocking.join(' ')}`.trim()
 }

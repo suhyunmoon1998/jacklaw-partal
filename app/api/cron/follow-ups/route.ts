@@ -9,9 +9,11 @@ import { askFollowUps } from '@/lib/followUp'
 import { savePlan } from '@/lib/followUpStore'
 import { STAGES, Stage, StoredReading, allClaims, isRead, isReadExceptFeha, nextStage } from '@/lib/caseReadingShape'
 import { snapshotNow } from '@/lib/briefVersions'
-import { WageOrderChoice, checkChoice, isUsable } from '@/lib/wageOrderChoice'
+import { WageOrderChoice, isUsable, whyNotUsable } from '@/lib/wageOrderChoice'
+import { openOrderQuestion } from '@/lib/wageOrderNumber'
+import { tellOfficeOrderIsOpen } from '@/lib/officeNotice'
 import { readingFingerprint, runStage } from '@/lib/caseReading'
-import { readReading, saveStage } from '@/lib/caseReadingStore'
+import { readReading, saveStage, whatStands } from '@/lib/caseReadingStore'
 import { ClaimFinding } from '@/lib/claimMatrix'
 import { SpineReading } from '@/lib/evidenceSpine'
 import { Meter, describeSpend, totalSpend } from '@/lib/spend'
@@ -304,7 +306,7 @@ async function readDamages(next: Waiting, began: number): Promise<Outcome> {
 }
 
 /** As many stages of the reading as the run's clock allows. */
-async function readCase(next: Waiting, began: number): Promise<Outcome> {
+async function readCase(next: Waiting, began: number, origin: string): Promise<Outcome> {
   // AS MANY STAGES AS THE CLOCK ALLOWS, not one a night.
   //
   // The staging is not negotiable — the plan caps a request at 300 seconds
@@ -323,7 +325,8 @@ async function readCase(next: Waiting, began: number): Promise<Outcome> {
   }
   const fingerprint = readingFingerprint(entries)
   const row = await readReading(next.clientId, fingerprint)
-  let stored = row && !row.stale ? row.reading : {}
+  // Facts that moved restart the reading, under an attorney's Order if there is one.
+  let stored = whatStands(row)
   const ran: Stage[] = []
   // Only stages never read. A stage that is merely stale — its model, its
   // Order, its claims or its authority moved since — is shown as stale on
@@ -346,12 +349,21 @@ async function readCase(next: Waiting, began: number): Promise<Outcome> {
 
     // A proposal that contradicts itself must not become the law ten
     // claims are read under — one proposed Order 7 while quoting the
-    // provision naming restaurants in Order 5. The panel refuses this;
-    // so does the night.
+    // provision naming restaurants in Order 5 — and with no Order at all the
+    // duties that come from one cannot be read. The panel refuses both; so
+    // does the night, and the night says so once, when it finds out.
     if (stage === 'claims 1' || stage === 'claims 2') {
       const choice = stored.wageOrder as WageOrderChoice
       if (!isUsable(choice)) {
-        stoppedFor = 'the Wage Order proposal contradicts itself'
+        stoppedFor = whyNotUsable(choice)
+        if (ran.includes('wage order')) {
+          await tellOfficeOrderIsOpen({
+            clientName: next.name,
+            problem: stoppedFor,
+            whatWouldSettleIt: openOrderQuestion(choice),
+            origin,
+          })
+        }
         break
       }
     }
@@ -470,7 +482,7 @@ export async function GET(req: NextRequest) {
             : next.needs === 'additions'
               ? await readAdditions(next)
               : next.needs === 'reading'
-                ? await readCase(next, began)
+                ? await readCase(next, began, req.nextUrl.origin)
                 : next.needs === 'damages'
                   ? await readDamages(next, began)
                   : await writeRound(next)

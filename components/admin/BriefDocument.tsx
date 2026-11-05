@@ -360,7 +360,9 @@ function Body({
                 </span>
                 {'restsOnProposedOrder' in el && el.restsOnProposedOrder ? (
                   <p className="text-[12px] text-amber-800">
-                    Rests on the proposed Wage Order {String(el.restsOnProposedOrder)}, not confirmed by an attorney.
+                    {brief.wageOrder?.confirmed
+                      ? `Rests on Wage Order ${String(el.restsOnProposedOrder)}, chosen by an attorney.`
+                      : `Rests on the proposed Wage Order ${String(el.restsOnProposedOrder)}, not confirmed by an attorney.`}
                   </p>
                 ) : null}
                 <p className="text-[14px] leading-[1.7] text-gray-800">{el.reasoning}</p>

@@ -6,6 +6,7 @@ import { Meter, describeSpend } from '@/lib/spend'
 import { readContradictions, readLedger } from '@/lib/factStore'
 import { standing } from '@/lib/factLedger'
 import { allClaims } from '@/lib/caseReadingShape'
+import { openOrderQuestion } from '@/lib/wageOrderNumber'
 import { readingFingerprint } from '@/lib/caseReading'
 import { readReading } from '@/lib/caseReadingStore'
 import { askFollowUps, vetAll } from '@/lib/followUp'
@@ -55,6 +56,7 @@ async function gather(clientId: string) {
     lang: (client.portal_lang as Lang) ?? 'en',
     findings: allClaims<ClaimFinding>(reading),
     spine: (reading?.spine as SpineReading | undefined) ?? null,
+    wageOrderOpen: openOrderQuestion(reading?.wageOrder),
   }
 }
 
@@ -128,6 +130,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
       contradictions: input.contradictions,
       lang: input.lang,
       limit,
+      wageOrderOpen: input.wageOrderOpen,
       meter,
     })
   } catch (err) {

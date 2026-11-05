@@ -192,15 +192,23 @@ export interface FollowUpRequest {
   lang: Lang
   /** The most questions to produce. The corpus asks for the smallest useful set. */
   limit?: number
+  /** What would settle the Wage Order, while none is settled (openOrderQuestion). */
+  wageOrderOpen?: string
   /** Counts what the run used, when the caller wants to know. */
   meter?: Meter
 }
 
-function brief(g: Gaps, entries: LedgerEntry[], lang: Lang, limit: number): string {
+function brief(g: Gaps, entries: LedgerEntry[], lang: Lang, limit: number, wageOrderOpen = ''): string {
   const list = (title: string, rows: string[]) =>
     rows.length ? `${title}\n${rows.map(r => `  - ${r}`).join('\n')}` : ''
 
   const parts = [
+    // First, because the wage claims cannot be read at all until this is known.
+    // It was written for a lawyer, so the model is told what to take from it.
+    list(
+      'WHAT THE BUSINESS ACTUALLY DOES, WHICH DECIDES WHAT LAW COVERS THE JOB. ASK THIS FIRST. THIS WAS WRITTEN FOR A LAWYER: ASK HER ONLY WHAT SHE COULD SEE FOR HERSELF AT WORK, AND LEAVE OUT ANY PART THAT IS A LEGAL QUESTION OR THAT SHE COULD NOT KNOW.',
+      wageOrderOpen ? [wageOrderOpen] : []
+    ),
     list('ELEMENTS THE OFFICE CANNOT ANSWER', g.elements.map(e => `${e.claimId}:${e.element} (${e.state}) — would be settled by: ${e.need}`)),
     list('NUMBERS A DAMAGES FIGURE NEEDS AND DOES NOT HAVE', g.damagesMissing.map(d => `${d.claimId}: ${d.need}`)),
     list("THE CLIENT'S OWN ANSWERS THAT DISAGREE", g.contradictions.map(c => `${c.about} — one answer: ${c.oneAnswer} | another: ${c.otherAnswer} | resolve by: ${c.howToResolve}`)),
@@ -257,7 +265,7 @@ export async function askFollowUps(req: FollowUpRequest): Promise<FollowUpSet> {
         system: SYSTEM,
         thinking,
         output_config: { ...effort, format: zodOutputFormat(FollowUpSetShape) },
-        messages: [{ role: 'user', content: brief(g, req.entries, req.lang, limit) }],
+        messages: [{ role: 'user', content: brief(g, req.entries, req.lang, limit, req.wageOrderOpen) }],
       })
       .finalMessage()
   } catch (err) {

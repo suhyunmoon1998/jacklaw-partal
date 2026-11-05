@@ -43,6 +43,9 @@ export type Choice = {
   proposal: { order: string; industry: string; businessIs: string; reliedOn: string; because: string }
   dlse: { entry: string; orders: string; agrees: boolean } | null
   caveat: string
+  /** An attorney chose this Order in the panel. */
+  confirmed?: boolean
+  chosen?: { at: string; modelSaid: string }
 }
 
 /**
@@ -168,7 +171,7 @@ function Heading({ children }: { children: React.ReactNode }) {
 }
 
 /** One claim, set as prose. */
-function Claim({ f }: { f: Finding }) {
+function Claim({ f, orderChosen }: { f: Finding; orderChosen: boolean }) {
   const quiet = f.standing === 'not raised by these facts'
   return (
     <article className="break-inside-avoid mt-9 first:mt-0">
@@ -205,7 +208,9 @@ function Claim({ f }: { f: Finding }) {
           </p>
           {e.restsOnProposedOrder && (
             <p className="mt-1 font-sans text-[11px] text-amber-800 bg-amber-50 inline-block px-1.5 py-0.5 rounded">
-              Rests on the proposed Wage Order {e.restsOnProposedOrder}, which an attorney has not confirmed.
+              {orderChosen
+                ? `Rests on Wage Order ${e.restsOnProposedOrder}, chosen by an attorney.`
+                : `Rests on the proposed Wage Order ${e.restsOnProposedOrder}, which an attorney has not confirmed.`}
             </p>
           )}
           <p className="mt-1.5 text-[15px] leading-[1.75] text-gray-800">{shortRef(e.reasoning)}</p>
@@ -307,7 +312,7 @@ export default function ReadingDocument({
             <strong className="font-semibold">IWC Wage Order {choice.proposal.order}</strong> —{' '}
             {choice.proposal.industry}.{' '}
             <span className="text-amber-800 bg-amber-50 px-1 rounded">
-              This is proposed, not confirmed; an attorney settles it.
+              {choice.confirmed ? 'An attorney chose this Order.' : 'This is proposed, not confirmed; an attorney settles it.'}
             </span>{' '}
             Every rest-period and hours finding below depends on it.
           </p>
@@ -388,7 +393,7 @@ export default function ReadingDocument({
         {/* ── The claims themselves ───────────────────────────────── */}
         <Heading>The claims, one by one</Heading>
         {findings.map(f => (
-          <Claim key={f.claimId} f={f} />
+          <Claim key={f.claimId} f={f} orderChosen={choice?.confirmed === true} />
         ))}
 
         {choice?.proposal?.reliedOn && (

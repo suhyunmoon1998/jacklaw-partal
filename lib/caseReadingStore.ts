@@ -55,6 +55,27 @@ export async function readReading(clientId: string, against: string): Promise<Re
 }
 
 /**
+ * What survives the facts moving: an attorney's choice of Wage Order, and
+ * nothing else.
+ *
+ * Every other stage read a ledger that no longer exists. The Order an attorney
+ * chose was not read from the ledger at all, and a model must not quietly
+ * overrule it because a client answered one more question.
+ */
+export function attorneyOrderOf(reading: StoredReading): StoredReading {
+  const choice = reading.wageOrder as { confirmed?: boolean } | undefined
+  if (!choice?.confirmed) return {}
+  const stamp = reading.stamps?.['wage order']
+  return { wageOrder: choice, ...(stamp ? { stamps: { 'wage order': stamp } } : {}) }
+}
+
+/** What a stage may build on: the reading, or what survives if the facts have moved. */
+export function whatStands(row: ReadingRow | null): StoredReading {
+  if (!row) return {}
+  return row.stale ? attorneyOrderOf(row.reading) : row.reading
+}
+
+/**
  * One stage's result laid over what is on file.
  *
  * Three layers, newest last: what the caller had when the stage began

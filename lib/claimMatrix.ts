@@ -189,7 +189,9 @@ RULES
    confirmed it. Read the duty out of its text, and in the reasoning of every element that
    rests on it, say that it rests on the proposed Order. Do not write that the Order applies,
    governs or has been settled. Where an element instead says no Order has been proposed, that
-   is the 'needs authority' state — do not reason about which Order it would be.
+   is the 'needs authority' state — do not reason about which Order it would be. Where an
+   Order is marked as CHOSEN BY AN ATTORNEY, the attorney has settled it: read the duty out of
+   its text and say the element rests on the Order the attorney chose.
 
 8. NEVER SUPPLY A FIGURE. Rates, caps, penalty amounts and minimum wages are read off the
    statute or they are not stated. If the section in front of you gives a figure, you may use
@@ -226,7 +228,7 @@ function refOf(ref: string): { law: string; num: string } {
  * what is missing — quoting seventeen Orders and inviting the model to pick
  * would be handing it the legal classification the office reserves.
  */
-function brief(claim: Claim, wageOrder?: string): string {
+function brief(claim: Claim, wageOrder?: string, wageOrderChosen = false): string {
   const refs = Array.from(new Set([...claim.sections, ...claim.elements.map(e => e.from)]))
   const quoted = quote(
     refs.filter(r => !unsettled(r, wageOrder)).map(r => refOf(resolve(r, wageOrder)))
@@ -254,7 +256,7 @@ function brief(claim: Claim, wageOrder?: string): string {
           waiting
             ? 'an IWC Wage Order, none proposed yet'
             : e.from.includes('{order}')
-              ? `${cite(ref.law, ref.num)} (the Order PROPOSED for this employer; not confirmed by an attorney)`
+              ? `${cite(ref.law, ref.num)} (${wageOrderChosen ? 'the Order CHOSEN BY AN ATTORNEY for this employer' : 'the Order PROPOSED for this employer; not confirmed by an attorney'})`
               : cite(ref.law, ref.num)
         }` +
         (cases.length ? `\n  decided by: ${cases.map(h => h.id).join(', ')}` : '') +
@@ -339,16 +341,15 @@ export interface MatrixOptions {
   meter?: Meter
 
   /**
-   * The Wage Order PROPOSED for this employer, as '5'.
-   *
-   * Proposed by lib/wageOrderChoice.ts; only an attorney confirms it, and
-   * nothing in the portal records that they have. Passing it lets the Wage
-   * Order duties be read — every element that rests on it is marked so
-   * (`restsOnProposedOrder`), and the model is told it is a proposal. Leaving
-   * it out makes them report as needing authority, which is the honest state
-   * of a case whose industry nobody has classified yet.
+   * The Wage Order for this employer, as '5': the one proposed by
+   * lib/wageOrderChoice.ts, or the one an attorney chose (`wageOrderChosen`).
+   * Passing it lets the Wage Order duties be read — every element that rests on
+   * it is marked so (`restsOnProposedOrder`), and the model is told which of
+   * the two it has. Leaving it out makes them report as needing authority,
+   * which is the honest state of a case whose industry nobody has classified.
    */
   wageOrder?: string
+  wageOrderChosen?: boolean
 }
 
 /**
@@ -405,7 +406,7 @@ export async function buildMatrix(
                   text: `=== FACTS ON FILE ===\n\n${facts}`,
                   cache_control: { type: 'ephemeral' },
                 },
-                { type: 'text', text: brief(claim, opts.wageOrder) },
+                { type: 'text', text: brief(claim, opts.wageOrder, opts.wageOrderChosen) },
               ],
             },
           ],

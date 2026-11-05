@@ -11,6 +11,7 @@ import {
   nextStage,
 } from '@/lib/caseReadingShape'
 import ReadingDocument, { Choice, Finding } from '@/components/admin/ReadingDocument'
+import { ORDERS, ORDER_NAMES } from '@/lib/wageOrderNumber'
 
 /**
  * Reading a case against the authority: the Wage Order, the claims, the spine.
@@ -23,9 +24,10 @@ import ReadingDocument, { Choice, Finding } from '@/components/admin/ReadingDocu
  *
  * What this panel is careful to say out loud:
  *
- *   WHICH ORDER, AND THAT NOBODY HAS CONFIRMED IT. Every rest-period and hours
- *   finding below depends on it, and it is a legal classification this system
- *   proposes rather than decides.
+ *   WHICH ORDER, AND WHETHER AN ATTORNEY HAS DECIDED IT. Every rest-period and
+ *   hours finding below depends on it, and it is a legal classification this
+ *   system proposes rather than decides. Where it cannot propose one, the claims
+ *   wait, and this panel is where an attorney chooses.
  *
  *   WHICH CLAIMS COULD NOT BE READ. A run that loses one to a flake and
  *   returns nine looks exactly like a complete reading of a nine-claim case.
@@ -36,6 +38,11 @@ import ReadingDocument, { Choice, Finding } from '@/components/admin/ReadingDocu
  */
 
 const headers = { 'Content-Type': 'application/json' }
+
+/** The Labor Commissioner's own index of businesses. Secondary, and it says so. */
+const DLSE_PAMPHLET = 'https://www.dir.ca.gov/dlse/whichiwcorderclassifications.pdf'
+
+type OrderProposal = Choice['proposal'] & { whatWouldSettleIt?: string }
 
 function Elapsed() {
   const [seconds, setSeconds] = useState(0)
@@ -58,6 +65,10 @@ export default function CaseReading({ clientId, clientName }: { clientId: string
   const [error, setError] = useState('')
   const [loaded, setLoaded] = useState(false)
   const [updatedAt, setUpdatedAt] = useState<string | null>(null)
+  /** Why the claims cannot be read yet. The screen cannot run the checks. */
+  const [orderProblem, setOrderProblem] = useState('')
+  const [orderPick, setOrderPick] = useState('')
+  const [savingOrder, setSavingOrder] = useState(false)
 
   const load = useCallback(async () => {
     try {
@@ -70,6 +81,7 @@ export default function CaseReading({ clientId, clientName }: { clientId: string
       setNext((body.next as Stage | null) ?? null)
       setFacts(body.facts ?? 0)
       setUpdatedAt(body.updatedAt ?? null)
+      setOrderProblem(body.orderProblem ?? '')
     } catch (err) {
       setError((err as Error).message)
     } finally {
@@ -99,8 +111,11 @@ export default function CaseReading({ clientId, clientName }: { clientId: string
         setReading(body.reading)
         setStale(false)
         setOutdated(body.staleStages ?? [])
-        stage = body.next as Stage | null
-        setNext(stage)
+        setOrderProblem(body.orderProblem ?? '')
+        setNext((body.next as Stage | null) ?? null)
+        // A Wage Order that cannot be used stops the walk here, whichever way it
+        // is wrong: the panel says so, and reading it again is a person's choice.
+        stage = body.orderProblem ? null : (body.next as Stage | null)
       } catch (err) {
         setError((err as Error).message)
         break
@@ -136,6 +151,30 @@ export default function CaseReading({ clientId, clientName }: { clientId: string
     void load()
   }
 
+  /** An attorney's Order, or an empty one to take it back. Nothing is read or paid for here. */
+  const saveOrder = async (order: string) => {
+    const asked = order
+      ? `Use Wage Order ${order} (${ORDER_NAMES[order]}) for ${clientName}? Only an attorney should choose this. The claims are then read under it, about $1.65, tonight or when you press Read the case.`
+      : 'Take back this choice and go back to what the reading proposed?'
+    if (!window.confirm(asked)) return
+    setError('')
+    setSavingOrder(true)
+    try {
+      const res = await fetch(`/api/admin/clients/${clientId}/reading`, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify({ order }),
+      })
+      const body = await res.json()
+      if (!res.ok) throw new Error(body?.error || 'The Wage Order could not be saved.')
+      setOrderPick('')
+    } catch (err) {
+      setError((err as Error).message)
+    }
+    setSavingOrder(false)
+    void load()
+  }
+
   const start = async () => {
     // A stale reading is read again from the beginning: stages read against
     // different ledgers must not be stitched into one reading true of neither.
@@ -153,6 +192,7 @@ export default function CaseReading({ clientId, clientName }: { clientId: string
   }
 
   const choice = reading?.wageOrder as Choice | undefined
+  const proposal = choice?.proposal as OrderProposal | undefined
   const findings = allClaims<Finding>(reading)
   const spine = reading?.spine as { events?: unknown[]; anomalies?: unknown[]; records?: unknown[] } | undefined
 
@@ -199,7 +239,15 @@ export default function CaseReading({ clientId, clientName }: { clientId: string
           disabled={Boolean(running) || (!next && !stale)}
           className={`${loaded ? '' : 'ml-auto '}text-xs font-semibold px-3 py-1.5 rounded-lg bg-black text-white disabled:opacity-40 hover:bg-gray-800 transition-colors`}
         >
-          {running ? 'Reading…' : stale ? 'Read again' : next ? 'Read the case' : 'Read in full'}
+          {running
+            ? 'Reading…'
+            : stale
+              ? 'Read again'
+              : next
+                ? 'Read the case'
+                : orderProblem
+                  ? 'Waiting on the Wage Order'
+                  : 'Read in full'}
         </button>
       </div>
 
@@ -222,6 +270,73 @@ export default function CaseReading({ clientId, clientName }: { clientId: string
           claim definitions or the authority they were read against changed since. Everything else
           stands and will not be run again.
         </p>
+      )}
+
+      {!running && orderProblem && !stale && (
+        <div className="text-xs rounded-lg px-3 py-3 mb-3 bg-amber-50 border border-amber-200 text-amber-900 space-y-2">
+          <p className="font-semibold">{orderProblem}</p>
+          {proposal?.whatWouldSettleIt && (
+            <p>
+              <span className="font-semibold">What would settle it: </span>
+              {proposal.whatWouldSettleIt}
+            </p>
+          )}
+          {proposal?.because && (
+            <details>
+              <summary className="cursor-pointer font-semibold">What the reading found</summary>
+              <p className="mt-1">{proposal.because}</p>
+            </details>
+          )}
+          <div className="flex items-center gap-2 flex-wrap pt-1">
+            <select
+              aria-label="Wage Order"
+              value={orderPick}
+              onChange={e => setOrderPick(e.target.value)}
+              className="max-w-full rounded-md border border-amber-300 bg-white px-2 py-1 text-xs text-gray-800"
+            >
+              <option value="">Choose a Wage Order…</option>
+              {ORDERS.map(order => (
+                <option key={order} value={order}>
+                  Order {order}: {ORDER_NAMES[order]}
+                </option>
+              ))}
+            </select>
+            <button
+              onClick={() => saveOrder(orderPick)}
+              disabled={!orderPick || savingOrder}
+              className="font-semibold px-2.5 py-1 rounded-md bg-black text-white disabled:opacity-40 hover:bg-gray-800"
+            >
+              {savingOrder ? 'Saving…' : 'Use this Order'}
+            </button>
+            <a href={DLSE_PAMPHLET} target="_blank" rel="noopener noreferrer" className="underline">
+              Labor Commissioner&apos;s index (secondary)
+            </a>
+          </div>
+          <p>
+            Only an attorney should choose. To ask the client instead, press{' '}
+            <span className="font-semibold">Write the next questions</span> below: this question goes
+            into the draft, and you read it before it is sent.
+          </p>
+        </div>
+      )}
+
+      {!running && choice?.confirmed && choice.chosen && (
+        <div className="text-xs rounded-lg px-3 py-2 mb-3 bg-gray-50 border border-gray-200 text-gray-700 flex items-start gap-3">
+          <p className="flex-1">
+            <span className="font-semibold">
+              Wage Order {choice.proposal.order} ({ORDER_NAMES[choice.proposal.order]}), chosen by an attorney
+            </span>{' '}
+            on {new Date(choice.chosen.at).toLocaleDateString()}. The reading had proposed{' '}
+            {choice.chosen.modelSaid ? `Order ${choice.chosen.modelSaid}` : 'no Order'}.
+          </p>
+          <button
+            onClick={() => saveOrder('')}
+            disabled={savingOrder}
+            className="shrink-0 font-semibold px-2.5 py-1 rounded-md border border-gray-300 bg-white hover:bg-gray-100 disabled:opacity-40"
+          >
+            Take back
+          </button>
+        </div>
       )}
 
       {!stale && !running && reading && Boolean(reading.wageOrder) && (!reading.claims3 || Boolean(reading.fehaSkipped)) && (

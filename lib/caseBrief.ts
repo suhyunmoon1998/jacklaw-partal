@@ -42,6 +42,8 @@ export interface WageOrderChoice {
   proposal: { order: string; industry: string; businessIs: string; reliedOn: string; because: string }
   dlse: { entry: string; orders: string; agrees: boolean } | null
   caveat: string
+  /** An attorney chose this Order. Absent on anything read before that was possible. */
+  confirmed?: boolean
 }
 
 export interface SpineReading {
@@ -208,7 +210,13 @@ export function shortFact(s: string): string {
 export function reviewItems(input: BriefInput): ReviewItem[] {
   const items: ReviewItem[] = []
 
-  if (input.wageOrder) {
+  if (input.wageOrder && !input.wageOrder.proposal.order) {
+    items.push({
+      what: 'No Wage Order is settled',
+      why: 'The facts on file do not settle which Order governs this employer. The rest-period and hours duties cannot be stated until an attorney chooses one or the client answers what is missing.',
+      from: 'Wage order reading',
+    })
+  } else if (input.wageOrder && !input.wageOrder.confirmed) {
     items.push({
       what: `Wage Order ${input.wageOrder.proposal.order} — ${input.wageOrder.proposal.industry}`,
       why:
