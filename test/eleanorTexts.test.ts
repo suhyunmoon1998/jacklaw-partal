@@ -25,7 +25,7 @@ vi.mock('@/lib/supabase', () => ({
     },
   }),
 }))
-vi.mock('@/lib/inboundNotice', () => ({ tellOfficePossibleStop: vi.fn(async () => undefined) }))
+vi.mock('@/lib/officeNotice', () => ({ tellOfficeOfReply: vi.fn(async () => undefined) }))
 
 import { eleanorMemberPhones, isCarrierKeyword, isEleanorMember, relayToEleanor } from '@/lib/eleanorTexts'
 import { POST } from '@/app/api/twilio/inbound/route'

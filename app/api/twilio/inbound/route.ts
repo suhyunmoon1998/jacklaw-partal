@@ -4,7 +4,7 @@ import { getSupabase } from '@/lib/supabase'
 import { toE164 } from '@/lib/twilio'
 import { readReply } from '@/lib/optOut'
 import { maskPhone } from '@/lib/eleanorService'
-import { tellOfficePossibleStop } from '@/lib/inboundNotice'
+import { TextedFile, tellOfficeOfReply } from '@/lib/officeNotice'
 import { phoneKey, phoneVariants } from '@/lib/phoneNumber'
 import { isCarrierKeyword, isEleanorMember, relayToEleanor } from '@/lib/eleanorTexts'
 
@@ -29,7 +29,8 @@ import { isCarrierKeyword, isEleanorMember, relayToEleanor } from '@/lib/eleanor
  *
  * Twilio expects TwiML or an empty 200. Nothing is replied here: the carrier
  * sends its own confirmation for STOP, and a second message on top of it reads
- * as the firm arguing with the opt-out.
+ * as the firm arguing with the opt-out. Any other reply is emailed to the office
+ * (lib/officeNotice.ts), whose answer is the one the client is waiting for.
  */
 
 export const dynamic = 'force-dynamic'
@@ -102,16 +103,18 @@ export async function POST(req: NextRequest) {
   const masked = maskPhone(digits || from)
 
   if (!stopping && !starting) {
-    // Everything else is a client talking to their lawyer — "I already sent it",
-    // "who is this", a question in Korean. It is not for this endpoint to
-    // answer. One that might be a request to stop goes to the office to read.
-    if (maybeStop && digits.length >= 10) {
-      const { data: rows } = await getSupabase().from('clients').select('name').in('phone', phoneVariants(digits))
-      await tellOfficePossibleStop({ from: digits, body, clients: (rows ?? []).map(r => String(r.name ?? '')).filter(Boolean) })
-      console.warn(`twilio inbound: reply from ${masked} may mean stop; sent to the office to read`)
-    } else {
-      console.warn(`twilio inbound: reply from ${masked} not a keyword (${body.length} characters)`)
-    }
+    // Everything else is a client talking to their lawyer: "I already sent it",
+    // "who is this", a question about the fee, a photo of a pay stub. It is not
+    // for this endpoint to answer, so all of it goes to the office to read.
+    await tellOfficeOfReply({
+      from: digits.length === 10 ? digits : from,
+      body,
+      clients: await whoIsAt(digits),
+      maybeStop,
+      files: textedFiles(form),
+      origin: `https://${req.headers.get('x-forwarded-host') ?? req.headers.get('host') ?? ''}`,
+    })
+    console.info(`twilio inbound: reply from ${masked} sent to the office to read${maybeStop ? ' (may mean stop)' : ''}`)
     return empty()
   }
 
@@ -152,6 +155,23 @@ export async function POST(req: NextRequest) {
 
   console.info(`twilio inbound: ${stopping ? 'STOP' : 'START'} from ${masked} applied to ${data.length} row(s)`)
   return empty()
+}
+
+/** Whoever is on file at this number. Null when the lookup failed, which is not the same as nobody. */
+async function whoIsAt(digits: string): Promise<string[] | null> {
+  if (digits.length < 10) return []
+  const { data, error } = await getSupabase().from('clients').select('name').in('phone', phoneVariants(digits))
+  if (error) return null
+  return (data ?? []).map(r => String(r.name ?? '')).filter(Boolean)
+}
+
+/** Twilio numbers an MMS's files from zero, as MediaUrl0 and MediaContentType0. */
+function textedFiles(form: FormData): TextedFile[] {
+  const count = Math.min(Number(form.get('NumMedia') ?? 0) || 0, 10)
+  return Array.from({ length: count }, (_, i) => ({
+    url: String(form.get(`MediaUrl${i}`) ?? ''),
+    contentType: String(form.get(`MediaContentType${i}`) ?? ''),
+  })).filter(file => file.url)
 }
 
 const empty = () =>
