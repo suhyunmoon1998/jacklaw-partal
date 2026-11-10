@@ -90,3 +90,34 @@ describe('a case Authority Pack', () => {
     expect(withCaci.filter(c => c.caci!.onFile).length).toBeGreaterThan(10)
   })
 })
+
+describe('the claims only the pack carries (step 2)', () => {
+  it('reads each out of a section held in full, and the joint-employer claim out of the settled Order', async () => {
+    const { PACK_CLAIMS } = await import('@/lib/authority/claims')
+    const ids = PACK_CLAIMS.map(c => c.id)
+    expect(ids).toEqual(['piece-rate', 'unlawful-deductions', 'client-employer', 'joint-employer', 'misclassification'])
+    const pack = buildAuthorityPack(reading(settled), '2026-11-09', ids)
+    for (const c of pack.claims.filter(c => ids.includes(c.claimId))) {
+      expect(c.standing, c.claimId).toBeNull()
+      for (const p of c.provisions) expect(p.onFile, `${c.claimId} ${p.key}`).toBe(true)
+    }
+    const joint = pack.claims.find(c => c.claimId === 'joint-employer')!
+    expect(joint.provisions.map(p => p.key)).toEqual(['IWC 9 sec 2', 'LAB 1194'])
+    expect(joint.holdings.map(h => h.id)).toContain('martinez-three-definitions-of-employ')
+    expect(joint.holdings.every(h => h.verbatim)).toBe(true)
+    expect(pack.claims.find(c => c.claimId === 'client-employer')!.provisions.map(p => p.key)).toEqual(['LAB 2810.3'])
+  })
+
+  it('without a settled Order, the joint-employer claim names the gap instead of quoting an Order', () => {
+    const joint = buildAuthorityPack(reading(proposed), '2026-11-09', ['joint-employer']).claims.find(c => c.claimId === 'joint-employer')!
+    expect(joint.provisions.map(p => p.key)).toEqual(['LAB 1194'])
+    expect(joint.gaps.some(g => /Wage Order 9 is proposed, not settled/.test(g))).toBe(true)
+  })
+
+  it('leaves the case reading as it is: no reading stage reads them, so no stored reading goes stale', async () => {
+    const { PACK_CLAIMS } = await import('@/lib/authority/claims')
+    const { claimsFor } = await import('@/lib/caseReading')
+    const read = new Set([...claimsFor('claims 1'), ...claimsFor('claims 2'), ...claimsFor('claims 3')].map(c => c.id))
+    for (const c of PACK_CLAIMS) expect(read.has(c.id), c.id).toBe(false)
+  })
+})

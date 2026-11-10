@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { ALL_CLAIMS, CLAIMS, FEHA_CLAIMS, claimById, sectionsUsed } from '@/lib/authority/claims'
+import { ALL_CLAIMS, CLAIMS, FEHA_CLAIMS, PACK_CLAIMS, claimById, sectionsUsed } from '@/lib/authority/claims'
 import { ORDERS } from '@/lib/wageOrderChoice'
 import { parseKey, section } from '@/lib/authority'
 
@@ -208,6 +208,6 @@ describe('the FEHA claims', () => {
   it('keeps the FEHA claims apart from the wage-and-hour stages', () => {
     const ids = new Set(CLAIMS.map(c => c.id))
     for (const c of FEHA_CLAIMS) expect(ids.has(c.id)).toBe(false)
-    expect(ALL_CLAIMS).toHaveLength(CLAIMS.length + FEHA_CLAIMS.length)
+    expect(ALL_CLAIMS).toHaveLength(CLAIMS.length + FEHA_CLAIMS.length + PACK_CLAIMS.length)
   })
 })

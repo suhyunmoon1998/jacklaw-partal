@@ -718,8 +718,166 @@ export const FEHA_CLAIMS: Claim[] = [
   },
 ]
 
-/** Every claim the portal reads, wage-and-hour first. */
-export const ALL_CLAIMS: Claim[] = [...CLAIMS, ...FEHA_CLAIMS]
+/**
+ * Claims the Authority Pack carries (lib/authorityPack.ts) and the case reading does not read yet.
+ *
+ * Kept out of CLAIMS on purpose. The reading's claims stages read CLAIMS in two
+ * halves (lib/caseReading.ts): adding these there would make every stored
+ * reading's second stage stale — a paid re-read of every client — and push a
+ * stage that already runs close to the request limit past it. Moving one in is
+ * the office's decision, made with the cost said first.
+ *
+ * Written like the others, from sections held in full: piece-rate pay
+ * (226.2), deductions (221, 224), the client employer's shared liability
+ * (2810.3), the ABC test (2775) and the Wage Order's definition of an employer.
+ * The last three are about WHO is liable or WHETHER the worker is an employee;
+ * the wages themselves are recovered under the claims above.
+ */
+export const PACK_CLAIMS: Claim[] = [
+  {
+    id: 'piece-rate',
+    name: 'Piece-rate rest periods and nonproductive time',
+    sections: ['LAB 226.2'],
+    elements: [
+      {
+        key: 'paid-by-piece',
+        says: 'The employee was compensated on a piece-rate basis for work performed during the pay period.',
+        from: 'LAB 226.2',
+      },
+      {
+        key: 'rest-not-paid-separately',
+        says:
+          'Rest and recovery periods were not compensated separate from the piece-rate compensation, at a regular hourly rate no less than the higher of the average hourly rate for the workweek and the applicable minimum wage.',
+        from: 'LAB 226.2',
+      },
+      {
+        key: 'nonproductive-not-paid',
+        says:
+          "Other nonproductive time — time under the employer's control, exclusive of rest and recovery periods, not directly related to the activity compensated on a piece-rate basis — was not compensated separate from the piece rate at no less than the applicable minimum wage.",
+        from: 'LAB 226.2',
+      },
+      {
+        key: 'statement-omits',
+        says:
+          'The itemized wage statement did not separately state the total hours, rate and gross wages for compensable rest and recovery periods and for other nonproductive time.',
+        from: 'LAB 226.2',
+      },
+    ],
+    remedy:
+      'Compensation for the rest and recovery periods and other nonproductive time at the rates section 226.2 sets; the statement items are subject to section 226 (LAB 226.2(a)(2)).',
+    expectedDefense:
+      'That nonproductive time was paid on a reasonable estimate, or that an error in it was made in good faith, which removes penalties but not the wages (LAB 226.2(a)(5)–(6)).',
+  },
+  {
+    id: 'unlawful-deductions',
+    name: 'Unlawful deductions from wages',
+    sections: ['LAB 221', 'LAB 224'],
+    elements: [
+      {
+        key: 'collected-back',
+        says: 'The employer collected or received from the employee part of wages it had already paid the employee.',
+        from: 'LAB 221',
+      },
+      {
+        key: 'not-permitted',
+        says:
+          'The withholding or diversion was not required or empowered by state or federal law, and was not a deduction the employee expressly authorized in writing for insurance premiums, hospital or medical dues, or another deduction not amounting to a rebate or deduction from the standard wage.',
+        from: 'LAB 224',
+      },
+    ],
+    remedy:
+      'Recovery of the wages taken. What penalty or private remedy attaches turns on the provisions the claim is brought under, which this entry does not settle.',
+    expectedDefense: 'That law required the deduction, or that the employee authorized it in writing (LAB 224).',
+  },
+  {
+    id: 'client-employer',
+    name: 'Client employer shared liability (Labor Code § 2810.3)',
+    sections: ['LAB 2810.3'],
+    elements: [
+      {
+        key: 'client-employer',
+        says:
+          'The defendant is a business entity that obtains or is provided workers to perform labor within its usual course of business from a labor contractor — its regular and customary work, performed within or upon its premises or worksite.',
+        from: 'LAB 2810.3',
+      },
+      {
+        key: 'not-excluded',
+        says:
+          'The defendant is not excluded: its workforce is 25 workers or more, counting those it hires directly and those any labor contractor supplies; more than five workers are supplied to it by labor contractors at a given time; and it is not the state or a political subdivision.',
+        from: 'LAB 2810.3',
+      },
+      {
+        key: 'supplied-by-contractor',
+        says: "The worker was supplied by the labor contractor to perform labor within the client employer's usual course of business.",
+        from: 'LAB 2810.3',
+      },
+      {
+        key: 'non-exempt',
+        says: 'The worker is not exempt from overtime as an executive, administrative, or professional employee.',
+        from: 'LAB 2810.3',
+      },
+      {
+        key: 'wages-unpaid',
+        says: 'Wages are owed to the worker for that labor, wages including all sums payable based upon a failure to pay wages.',
+        from: 'LAB 2810.3',
+      },
+      {
+        key: 'notice-given',
+        says:
+          "At least 30 days before filing a civil action against the client employer, the worker or the worker's representative notified it of the violations.",
+        from: 'LAB 2810.3',
+      },
+    ],
+    remedy:
+      "The client employer shares with the labor contractor all civil legal responsibility and civil liability for the payment of wages and for failing to secure workers' compensation coverage (LAB 2810.3(b)). It is in addition to any other theory of liability (subdivision (f)), so joint employment is pleaded beside it, not instead of it.",
+    expectedDefense:
+      'That the work was not within its usual course of business or not on its premises or worksite, that it falls under the workforce thresholds, or that the 30-day notice was not given.',
+  },
+  {
+    id: 'joint-employer',
+    name: 'Employer status under the Wage Order (joint employment)',
+    sections: ['IWC {order} sec 2', 'LAB 1194'],
+    elements: [
+      {
+        key: 'employer-status',
+        says:
+          "The defendant employed the worker under any one of the Wage Order's definitions: directly or indirectly, or through an agent or any other person, it exercised control over the worker's wages, hours, or working conditions; or it engaged, suffered, or permitted the worker to work.",
+        from: 'IWC {order} sec 2',
+      },
+      {
+        key: 'wages-owed',
+        says: 'The worker received less than the legal minimum wage or the legal overtime compensation.',
+        from: 'LAB 1194',
+      },
+    ],
+    remedy:
+      'Each employer is liable in the action under section 1194 for the unpaid balance; employer status is the predicate, not a separate recovery.',
+    expectedDefense:
+      'That another company — the payroll or staffing contractor — alone set and paid wages, so the defendant neither controlled wages, hours, or working conditions nor suffered or permitted the work.',
+  },
+  {
+    id: 'misclassification',
+    name: 'Misclassification as an independent contractor (ABC test)',
+    sections: ['LAB 2775'],
+    elements: [
+      { key: 'labor-for-pay', says: 'The person provided labor or services for remuneration.', from: 'LAB 2775' },
+      {
+        key: 'abc-not-shown',
+        says:
+          "The hiring entity cannot demonstrate all three: the person was free from its control and direction in performing the work, under the contract and in fact; the work was outside the usual course of its business; and the person was customarily engaged in an independently established trade, occupation, or business of the same nature.",
+        from: 'LAB 2775',
+        needsAuthority:
+          'Whether an exemption in sections 2776–2784 applies, so that Borello and not the ABC test decides employment status, is not settled by this entry.',
+      },
+    ],
+    remedy:
+      'Employee status, from which the Labor Code and Wage Order protections follow; the unpaid wages, premiums and expenses are pleaded under their own claims.',
+    expectedDefense: 'That the person ran an independent business, or that an exemption in sections 2776–2784 applies.',
+  },
+]
+
+/** Every claim the portal holds: those the reading reads, wage-and-hour first, then those only the Authority Pack carries. */
+export const ALL_CLAIMS: Claim[] = [...CLAIMS, ...FEHA_CLAIMS, ...PACK_CLAIMS]
 
 export const claimById = (id: string) => ALL_CLAIMS.find(c => c.id === id)
 
