@@ -29,6 +29,7 @@ import { defenceRecords } from '@/lib/defenceRecord'
 import { LedgerFact } from '@/lib/factualBrief'
 import { trialReadiness } from '@/lib/trialReadiness'
 import DraftedSections from '@/components/admin/DraftedSections'
+import AuthorityPackPanel from '@/components/admin/AuthorityPackPanel'
 import type { StoredDraft } from '@/lib/briefDraftShape'
 
 const headers = {}
@@ -296,6 +297,7 @@ export default function ReadingSheetPage() {
           />
         </div>
       )}
+      {!empty && <AuthorityPackPanel clientId={clientId} />}
     </main>
   )
 }
