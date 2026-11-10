@@ -173,7 +173,7 @@ export function buildAuthorityPack(
       name: claim.name,
       standing,
       provisions,
-      caci: claim.caci ? provision(claim.caci) : null,
+      caci: claim.caci ? provision(`CACI ${claim.caci}`) : null,
       holdings,
       adverse: {
         note: adverseHeld.length

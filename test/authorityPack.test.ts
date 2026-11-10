@@ -80,6 +80,15 @@ describe('a case Authority Pack', () => {
     expect(pack.claims.map(c => c.claimId)).toEqual(PACK_CLAIM_IDS)
     for (const c of pack.claims) expect(c.provisions.length, c.claimId).toBeGreaterThan(0)
   })
+
+  it('reads each claim\'s CACI instruction from the instructions held', () => {
+    const pack = buildAuthorityPack(reading(settled), '2026-11-09', PACK_CLAIM_IDS)
+    const withCaci = pack.claims.filter(c => c.caci)
+    expect(withCaci.length).toBeGreaterThan(10)
+    // Every instruction the library names is looked up as "CACI <number>"; one not held says so instead.
+    for (const c of withCaci) expect(c.caci!.key).toMatch(/^CACI \d{4}[A-B]?$/)
+    expect(withCaci.filter(c => c.caci!.onFile).length).toBeGreaterThan(10)
+  })
 })
 
 describe('the claims only the pack carries (step 2)', () => {
