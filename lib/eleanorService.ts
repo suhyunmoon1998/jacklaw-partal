@@ -26,6 +26,11 @@ import { createHmac, timingSafeEqual } from 'crypto'
  *   /api/eleanor/claims     the hand-written claim catalog. No client data.
  *   /api/eleanor/authority  the California authority on file, searched or read
  *                           word for word (lib/authority/lookup.ts). No client data.
+ *   /api/eleanor/authority-pack  a client's Authority Pack, built from the reading on file.
+ *   /api/eleanor/opinions   stores an opinion or DLSE precedent Eleanor fetched from the
+ *                           issuing body (closed list of sources). Public law only.
+ *   /api/eleanor/holdings   proposes a holding from one; refused unless its quote is in
+ *                           the stored text word for word. Only an attorney approves.
  *
  * It cannot change a file, send anything the admin panel would not, or reach
  * anything else.

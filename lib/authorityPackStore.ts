@@ -11,6 +11,7 @@ import { readingFingerprint } from '@/lib/caseReading'
 import { readReading } from '@/lib/caseReadingStore'
 import { buildAuthorityPack } from '@/lib/authorityPack'
 import type { AuthorityPack } from '@/lib/authorityPackShape'
+import { holdingsWithStatus } from '@/lib/authority/fetchedOpinionStore'
 
 /** The office's calendar day. */
 export function officeToday(now = new Date()): string {
@@ -30,7 +31,7 @@ export async function readClientAuthorityPack(clientId: string, alsoClaims: stri
   const fingerprint = readingFingerprint(await readLedger(clientId))
   const row = await readReading(clientId, fingerprint)
   return {
-    pack: buildAuthorityPack(row?.reading ?? {}, officeToday(), alsoClaims),
+    pack: buildAuthorityPack(row?.reading ?? {}, officeToday(), alsoClaims, await holdingsWithStatus('Approved')),
     hasReading: Boolean(row),
     readingStale: row?.stale ?? false,
     readingUpdatedAt: row?.updatedAt ?? null,
