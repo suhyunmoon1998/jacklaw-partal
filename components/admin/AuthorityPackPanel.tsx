@@ -7,13 +7,15 @@
  */
 
 import { useEffect, useState } from 'react'
-import type { AuthorityPack } from '@/lib/authorityPackShape'
+import type { AuthorityPack, PackHolding } from '@/lib/authorityPackShape'
+import HoldingsReview from '@/components/admin/HoldingsReview'
 
 type Loaded = { pack: AuthorityPack; hasReading: boolean; readingStale: boolean; readingUpdatedAt: string | null }
 
 export default function AuthorityPackPanel({ clientId }: { clientId: string }) {
   const [data, setData] = useState<Loaded | null>(null)
   const [error, setError] = useState('')
+  const [reload, setReload] = useState(0)
 
   useEffect(() => {
     let live = true
@@ -24,7 +26,7 @@ export default function AuthorityPackPanel({ clientId }: { clientId: string }) {
     return () => {
       live = false
     }
-  }, [clientId])
+  }, [clientId, reload])
 
   if (error) return <p className="mx-auto w-full max-w-[52rem] px-6 py-4 text-xs text-red-600">Authority Pack: {error}</p>
   if (!data) return null
@@ -49,6 +51,7 @@ export default function AuthorityPackPanel({ clientId }: { clientId: string }) {
         {data.readingStale && <li>The facts moved since the reading: its claims may no longer be this case&rsquo;s.</li>}
         {!data.hasReading && <li>No reading on file yet: no claims to list.</li>}
       </ul>
+      <HoldingsReview onDecided={() => setReload(n => n + 1)} />
       {pack.claims.map(c => (
         <div key={c.claimId} className="mb-6">
           <h3 className="font-semibold">
@@ -64,17 +67,9 @@ export default function AuthorityPackPanel({ clientId }: { clientId: string }) {
               </li>
             ))}
           </ul>
-          {c.holdings.map(h => (
-            <div key={h.id} className="text-sm mt-2 pl-3 border-l-2 border-gray-200">
-              <p>
-                <strong>{h.cite}</strong>
-                {h.pinpoint ? `, ${h.pinpoint}` : ''} <span className="text-xs text-gray-500">({h.opinionPart}{h.verbatim ? ', quote checked' : ', QUOTE NOT FOUND'})</span>
-              </p>
-              <p>{h.proposition}</p>
-              <p className="text-xs text-gray-500">Does not decide: {h.limits}</p>
-            </div>
-          ))}
+          {c.holdings.map(h => <Holding key={h.id} h={h} />)}
           <p className="text-xs text-gray-500 mt-2">{c.adverse.note}</p>
+          {c.adverse.holdings.map(h => <Holding key={h.id} h={h} adverse />)}
           {c.gaps.length > 0 && (
             <ul className="text-xs text-red-700 mt-1 list-disc pl-5">
               {c.gaps.map(g => (
@@ -85,5 +80,33 @@ export default function AuthorityPackPanel({ clientId }: { clientId: string }) {
         </div>
       ))}
     </section>
+  )
+}
+
+function Holding({ h, adverse }: { h: PackHolding; adverse?: boolean }) {
+  return (
+    <div className={`text-sm mt-2 pl-3 border-l-2 ${adverse ? 'border-red-300' : 'border-gray-200'}`}>
+      <p>
+        {adverse && <span className="text-xs font-semibold text-red-700">CONTRARY </span>}
+        <strong>{h.cite}</strong>
+        {h.pinpoint ? `, ${h.pinpoint}` : ''}{' '}
+        <span className="text-xs text-gray-500">
+          ({h.kind === 'agency precedent' ? 'DLSE precedent, not a court decision; ' : ''}
+          {h.opinionPart}
+          {h.verbatim ? ', quote checked' : ', QUOTE NOT FOUND'})
+        </span>
+      </p>
+      <p>{h.proposition}</p>
+      <p className="text-xs text-gray-500">Does not decide: {h.limits}</p>
+      <p className="text-xs text-gray-400">
+        {h.origin}
+        {h.sourceUrl && (
+          <>
+            {' '}
+            <a className="underline" href={h.sourceUrl} target="_blank" rel="noreferrer">source</a>
+          </>
+        )}
+      </p>
+    </div>
   )
 }
