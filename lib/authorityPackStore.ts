@@ -31,7 +31,8 @@ export async function readClientAuthorityPack(clientId: string, alsoClaims: stri
   const fingerprint = readingFingerprint(await readLedger(clientId))
   const row = await readReading(clientId, fingerprint)
   return {
-    pack: buildAuthorityPack(row?.reading ?? {}, officeToday(), alsoClaims, await holdingsWithStatus('Approved')),
+    // Before migration 0029 is applied the table is missing: the pack still builds, from the repository's holdings alone.
+    pack: buildAuthorityPack(row?.reading ?? {}, officeToday(), alsoClaims, await holdingsWithStatus('Approved').catch(() => [])),
     hasReading: Boolean(row),
     readingStale: row?.stale ?? false,
     readingUpdatedAt: row?.updatedAt ?? null,
