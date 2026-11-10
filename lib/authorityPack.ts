@@ -19,6 +19,8 @@ import { HOLDINGS, caseRecord, citeCase, isVerbatim } from '@/lib/authority/case
 import { ALL_CLAIMS, claimById } from '@/lib/authority/claims'
 import { orderNumber } from '@/lib/wageOrderNumber'
 import type { StoredReading } from '@/lib/caseReadingShape'
+import { quoteIsIn } from '@/lib/authority/fetchedOpinions'
+import type { HoldingWithOpinion } from '@/lib/authority/fetchedOpinionStore'
 import {
   ANNOTATIONS_STATUS,
   CITATOR_STATUS,
@@ -26,6 +28,7 @@ import {
   REVERIFY_DAYS,
   type AuthorityPack,
   type PackClaim,
+  type PackHolding,
   type PackProvision,
 } from '@/lib/authorityPackShape'
 
@@ -86,7 +89,9 @@ export function buildAuthorityPack(
   reading: StoredReading,
   today: string,
   /** Claim ids to include beyond what the reading raises (a claim pleaded before it is read). */
-  alsoClaims: string[] = []
+  alsoClaims: string[] = [],
+  /** Holdings Eleanor fetched and an attorney approved (lib/authority/fetchedOpinionStore.ts). */
+  approved: HoldingWithOpinion[] = []
 ): AuthorityPack {
   const wageOrder = settledOrder(reading)
   const raised = claimsRaised(reading)
@@ -118,7 +123,7 @@ export function buildAuthorityPack(
     const provisions = keys.map(provision)
     for (const p of provisions) if (!p.onFile) gaps.push(`${p.cite}: not on file — do not state what it says.`)
 
-    const holdings = HOLDINGS.filter(h => h.bearsOn.some(b => b.startsWith(`${claimId}:`))).map(h => {
+    const holdings: PackHolding[] = HOLDINGS.filter(h => h.bearsOn.some(b => b.startsWith(`${claimId}:`))).map(h => {
       const record = caseRecord(h.case)
       return {
         id: h.id,
@@ -130,9 +135,37 @@ export function buildAuthorityPack(
         verbatim: isVerbatim(h),
         fetched: record ? { on: record.fetchedOn, from: record.source } : null,
         bearsOn: h.bearsOn.filter(b => b.startsWith(`${claimId}:`)).map(b => b.slice(claimId.length + 1)),
+        kind: 'court opinion' as const,
+        origin: 'Held in the repository; quote checked in the build.',
+        sourceUrl: null,
       }
     })
-    for (const h of holdings) if (!h.verbatim) gaps.push(`${h.cite}: its quotation is not in the opinion held — do not rely on it.`)
+    // Approved holdings from opinions Eleanor fetched; the quote is checked again against the stored text here.
+    const fetched: { holding: PackHolding; adverse: boolean }[] = approved
+      .filter(a => a.bearsOn.some(b => b.startsWith(`${claimId}:`)))
+      .map(a => ({
+        adverse: a.adverse,
+        holding: {
+          id: a.id,
+          cite: `${a.opinion.name} ${a.opinion.citation}`,
+          proposition: a.proposition,
+          pinpoint: a.pinpoint,
+          opinionPart: a.opinionPart,
+          limits: a.limits,
+          verbatim: quoteIsIn(a.opinion.text, a.quote),
+          fetched: { on: a.opinion.fetchedOn, from: a.opinion.sourceUrl },
+          bearsOn: a.bearsOn.filter(b => b.startsWith(`${claimId}:`)).map(b => b.slice(claimId.length + 1)),
+          kind: a.opinion.kind,
+          origin: `Fetched by Eleanor from the issuing body; approved by ${a.decidedBy ?? 'an attorney'}.`,
+          sourceUrl: a.opinion.sourceUrl,
+        },
+      }))
+    holdings.push(...fetched.filter(f => !f.adverse).map(f => f.holding))
+    const adverseHeld = fetched.filter(f => f.adverse).map(f => f.holding)
+    for (const h of [...holdings, ...adverseHeld]) {
+      if (h.kind === 'agency precedent') gaps.push(`${h.cite}: a DLSE precedential decision — an agency's precedent, not a court's decision.`)
+    }
+    for (const h of [...holdings, ...adverseHeld]) if (!h.verbatim) gaps.push(`${h.cite}: its quotation is not in the opinion held — do not rely on it.`)
     if (!holdings.length) gaps.push('No holding on file bears on this claim.')
 
     return {
@@ -142,7 +175,12 @@ export function buildAuthorityPack(
       provisions,
       caci: claim.caci ? provision(`CACI ${claim.caci}`) : null,
       holdings,
-      adverse: { note: 'No contrary authority is held for this claim. Search for it before relying on the pack.' },
+      adverse: {
+        note: adverseHeld.length
+          ? 'Contrary authority held below. Search for more before relying on the pack.'
+          : 'No contrary authority is held for this claim. Search for it before relying on the pack.',
+        holdings: adverseHeld,
+      },
       gaps,
     }
   })

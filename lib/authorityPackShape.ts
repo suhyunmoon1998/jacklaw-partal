@@ -42,6 +42,11 @@ export interface PackHolding {
   fetched: { on: string; from: string } | null
   /** The elements of this claim it bears on. */
   bearsOn: string[]
+  /** A court's decision, or a DLSE precedential decision — an agency's precedent, not binding as a court's would be. */
+  kind: 'court opinion' | 'agency precedent'
+  /** Held in the repository and checked in the build, or fetched by Eleanor and approved by an attorney. */
+  origin: string
+  sourceUrl: string | null
 }
 
 export interface PackClaim {
@@ -52,8 +57,8 @@ export interface PackClaim {
   provisions: PackProvision[]
   caci: PackProvision | null
   holdings: PackHolding[]
-  /** Contrary authority. None is held yet, so this says so rather than staying silent. */
-  adverse: { note: string }
+  /** Contrary authority: what is held, and a plain note when nothing is. */
+  adverse: { note: string; holdings: PackHolding[] }
   /** What the pack cannot settle: elements needing authority, provisions not on file, an Order not yet settled. */
   gaps: string[]
 }

@@ -451,6 +451,17 @@ export const HOLDINGS: Holding[] = [
     appliedTo: "Use it for the employer's side of 'suffer or permit': an employer that does not prevent work it knows of is responsible for it. For whether off-the-clock time counts, read it with Brinker's knew-or-should-have-known standard, which does not require proof the employer actually knew. The same opinion sets out the three wage-order definitions of 'employ' (control over wages, hours or working conditions; suffer or permit to work; engage), which decide who the employer is where more than one entity is involved.",
   },
   {
+    id: "martinez-three-definitions-of-employ",
+    case: "martinez",
+    proposition: "Under the IWC wage orders, to 'employ' has three alternative definitions — control over wages, hours or working conditions; suffering or permitting work; or engaging, which creates a common law employment relationship — and any one makes the defendant an employer for an action under section 1194.",
+    quote: "To employ, then, under the IWC’s definition, has three alternative definitions. It means: (a) to exercise control over the wages, hours or working conditions, or (b) to suffer or permit to work, or (c) to engage, thereby creating a common law employment relationship.",
+    pinpoint: "",
+    opinionPart: "majority",
+    bearsOn: ["joint-employer:employer-status"],
+    limits: "Decided on whether produce merchants who bought a grower's crop employed the grower's workers; on those facts they did not, under any of the three. It was decided before Dynamex and Labor Code section 2775, so it says nothing of the ABC test, and before section 2810.3, so nothing of a client employer's shared liability. It does not decide how much control over wages, hours or working conditions is enough; that is read on each case's facts.",
+    appliedTo: "The predicate for holding a second company liable for unpaid minimum wage and overtime: prove any one of the three. That a payroll or staffing company issued the paychecks does not by itself end the inquiry into the other company's control over hours or working conditions, which is argued on the record.",
+  },
+  {
     id: "morillion-control-clause",
     case: "morillion",
     proposition: "The wage order's two 'hours worked' clauses are independent: time under the employer's control is compensable even if the employee is not working.",
